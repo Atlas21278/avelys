@@ -58,6 +58,11 @@ Référence publique · `customerId` · pickup/dropoff (libellé + lat/lng) · d
 
 Format `VTC-XXXXXXXX` : 8 caractères base32 Crockford (`0-9A-HJKMNP-TV-Z`, sans I/L/O/U), générés par `crypto.randomInt`/`randomBytes`, contrainte d'unicité en base, nouvel essai en cas de collision. Jamais séquentielle.
 
+- Préfixe **provisoire** (DEC-22 ouverte : `VTC-` ou `AVL-`) : défini une seule fois, `BOOKING_REFERENCE_PREFIX` dans `src/domain/booking/reference.ts`. À modifier là, avant la première réservation réelle, si DEC-22 en décide autrement.
+- Module : `src/domain/booking/reference.ts` (pur, source d'aléa injectée) — `createReference`, `formatReference`, `normalizeReference`, `isValidReference`, erreur `INVALID_BOOKING_REFERENCE`. Génération serveur : `generateReference()` de `src/server/booking/reference.ts`, branché sur `node:crypto`. `Math.random` est interdit dans `src/domain` et `src/server` (règle ESLint).
+- Saisie tolérante (`normalizeReference`) : casse ignorée ; espaces et tirets retirés ; `O` lu `0`, `I` et `L` lus `1` ; préfixe facultatif. Tout autre caractère (dont `U`, lettres accentuées, ponctuation) ou une longueur différente de 8 est rejeté. `isValidReference` ne vérifie que la forme canonique stockée.
+- Hors périmètre de ce module : colonne `reference` et contrainte d'unicité (modèle Booking), boucle de nouvel essai (service de création).
+
 ## Aéroports et gares
 
 - Aéroport : numéro de vol, provenance facultative, terminal/meeting point.
