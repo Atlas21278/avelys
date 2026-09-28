@@ -9,7 +9,8 @@ export type Currency = (typeof CURRENCIES)[number];
 export type Money = Readonly<{ amountCents: number; currency: Currency }>;
 
 /** Rounding is always an explicit choice of the caller: no business rule is implied here. */
-export type RoundingMode = "floor" | "ceil" | "halfUp" | "halfEven";
+export const ROUNDING_MODES = ["floor", "ceil", "halfUp", "halfEven"] as const;
+export type RoundingMode = (typeof ROUNDING_MODES)[number];
 
 export type MoneyErrorCode = "NOT_AN_INTEGER" | "CURRENCY_MISMATCH" | "UNSAFE_AMOUNT";
 
