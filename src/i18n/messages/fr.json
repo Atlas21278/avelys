@@ -3,9 +3,300 @@
     "title": "Avelys — Chauffeur privé premium à Paris",
     "description": "Chauffeur privé premium à Paris. Réservation anticipée, prix connu avant confirmation."
   },
+  "Site": {
+    "homeLabel": "Avelys, accueil",
+    "navLabel": "Navigation principale",
+    "menu": "Menu",
+    "book": "Réserver",
+    "nav": {
+      "services": "Services",
+      "business": "Entreprises",
+      "fleet": "Flotte",
+      "about": "À propos",
+      "contact": "Contact"
+    },
+    "footer": {
+      "tagline": "Chauffeur privé premium à Paris, conduit par ses deux fondateurs.",
+      "navTitle": "Le site",
+      "legalTitle": "Informations légales",
+      "legal": {
+        "legalNotice": "Mentions légales",
+        "privacy": "Confidentialité",
+        "cookies": "Cookies",
+        "terms": "Conditions générales de vente"
+      },
+      "identityTitle": "Société et contact",
+      "identity": {
+        "companyName": "Raison sociale",
+        "address": "Adresse",
+        "siren": "SIREN",
+        "vtcRegistration": "N° d’inscription au registre VTC",
+        "insurance": "Assurance",
+        "phone": "Téléphone",
+        "email": "Email"
+      },
+      "provisional": "À confirmer (provisoire — {decisions})"
+    }
+  },
   "Home": {
-    "title": "Avelys",
-    "tagline": "Chauffeur privé premium à Paris"
+    "hero": {
+      "title": "Votre chauffeur privé à Paris",
+      "lead": "Les deux fondateurs d’Avelys vous conduisent eux-mêmes, en berline électrique. Le prix est fixé avant la réservation, à partir du trajet routier réel."
+    },
+    "search": {
+      "title": "Préparer votre trajet",
+      "pickup": "Départ",
+      "dropoff": "Destination",
+      "placePlaceholder": "Adresse, gare, aéroport ou hôtel",
+      "date": "Date",
+      "time": "Heure",
+      "timeHint": "Heure de Paris",
+      "passengers": "Passagers",
+      "luggage": "Bagages",
+      "submit": "Voir le prix",
+      "note": "Le prix est calculé à l’étape suivante, sur le trajet routier réel.",
+      "invalid": "Vérifiez la date, l’heure et les nombres saisis : au moins 1 passager, et 0 bagage ou plus."
+    },
+    "services": {
+      "title": "Services",
+      "intro": "Des trajets préparés à l’avance, d’une adresse à une autre, dans Paris et au-delà.",
+      "more": "Voir tous les services",
+      "items": {
+        "airports": {
+          "title": "Aéroports",
+          "text": "Charles-de-Gaulle et Orly, à l’arrivée comme au départ."
+        },
+        "door": {
+          "title": "Adresse à adresse",
+          "text": "Un trajet direct, de l’adresse de votre choix à votre destination."
+        },
+        "stations": {
+          "title": "Gares et hôtels",
+          "text": "Entre votre hôtel et les gares parisiennes."
+        },
+        "excursions": {
+          "title": "Disneyland et Versailles",
+          "text": "Depuis Paris, à l’aller comme au retour."
+        },
+        "hourly": {
+          "title": "Mise à disposition",
+          "text": "Un chauffeur à vos côtés pour 2 h, 4 h, 8 h, la journée ou une durée sur mesure."
+        },
+        "longDistance": {
+          "title": "Longue distance",
+          "text": "Des trajets plus longs, au départ ou à destination de Paris."
+        },
+        "business": {
+          "title": "Déplacements professionnels",
+          "text": "Rendez-vous, collaborateurs et invités de votre entreprise."
+        },
+        "events": {
+          "title": "Événements et mariages",
+          "text": "Sur devis, selon votre programme."
+        }
+      }
+    },
+    "advantages": {
+      "title": "Pourquoi Avelys",
+      "items": {
+        "founders": {
+          "title": "Les fondateurs au volant",
+          "text": "Vous êtes conduit par l’un des deux associés d’Avelys, pas par une flotte anonyme."
+        },
+        "fixedPrice": {
+          "title": "Un prix fixé à l’avance",
+          "text": "Calculé sur le trajet routier réel et connu avant de réserver, sans majoration selon la demande."
+        },
+        "electric": {
+          "title": "100 % électrique",
+          "text": "Deux berlines BYD Seal, silencieuses et sans émissions à l’échappement."
+        },
+        "simple": {
+          "title": "Une réservation simple",
+          "text": "Sans compte obligatoire, en français ou en anglais. Chaque demande est examinée par nos soins avant confirmation."
+        }
+      }
+    },
+    "fleet": {
+      "title": "La flotte",
+      "model": "BYD Seal",
+      "text": "Deux berlines 100 % électriques, conduites par leurs propriétaires.",
+      "detailsPending": "Capacité en passagers et en bagages : à confirmer.",
+      "photoPlaceholder": "Photo à venir — emplacement provisoire",
+      "more": "Découvrir la flotte"
+    },
+    "destinations": {
+      "title": "Destinations fréquentes",
+      "intro": "Indiquez votre point de départ : le prix est calculé à l’étape suivante.",
+      "cta": "Préparer ce trajet",
+      "ctaTarget": "vers {name}",
+      "items": {
+        "cdg": {
+          "name": "Aéroport Charles-de-Gaulle",
+          "detail": "Roissy, au nord de Paris"
+        },
+        "orly": {
+          "name": "Aéroport d’Orly",
+          "detail": "Au sud de Paris"
+        },
+        "disneyland": {
+          "name": "Disneyland Paris",
+          "detail": "Marne-la-Vallée, à l’est de Paris"
+        },
+        "versailles": {
+          "name": "Château de Versailles",
+          "detail": "À l’ouest de Paris"
+        }
+      }
+    },
+    "business": {
+      "title": "Entreprises",
+      "text": "Déplacements de vos équipes, accueil de vos invités, séminaires : parlons de vos besoins.",
+      "cta": "Découvrir l’offre entreprises"
+    },
+    "faq": {
+      "title": "Questions fréquentes",
+      "contactPrompt": "Une autre question ?",
+      "contactLink": "Contactez-nous",
+      "items": {
+        "account": {
+          "question": "Faut-il créer un compte pour réserver ?",
+          "answer": "Non. Vous réservez sans compte. Vous pourrez en créer un après votre réservation, si vous le souhaitez."
+        },
+        "languages": {
+          "question": "Dans quelles langues le service est-il assuré ?",
+          "answer": "En français et en anglais : le site, les emails de réservation et les échanges avec votre chauffeur."
+        },
+        "validation": {
+          "question": "Comment ma réservation est-elle confirmée ?",
+          "answer": "Chaque demande est examinée par l’un des deux associés, qui l’accepte ou la refuse. Vous êtes informé par email."
+        },
+        "payment": {
+          "question": "Le paiement est-il sécurisé ?",
+          "answer": "Oui. Le paiement est traité par Stripe et vos données de carte ne sont jamais stockées chez nous. Votre carte est enregistrée lors de la demande et n’est débitée qu’après acceptation de la réservation."
+        }
+      }
+    }
+  },
+  "Provisional": {
+    "label": "Contenu provisoire",
+    "labelWithDecisions": "Contenu provisoire — {decisions}"
+  },
+  "Pages": {
+    "services": {
+      "metaTitle": "Services — Avelys",
+      "metaDescription": "Chauffeur privé à Paris : aéroports, gares et hôtels, trajets adresse à adresse, mise à disposition, longue distance et déplacements professionnels.",
+      "title": "Services",
+      "lead": "Des trajets préparés à l’avance, d’une adresse à une autre, dans Paris et au-delà. Chaque trajet est conduit par l’un des deux associés d’Avelys.",
+      "priceTitle": "Le prix",
+      "priceText": "Le prix est calculé pour chaque trajet à partir du trajet routier réel. Il est connu avant la réservation, sans majoration selon la demande. Les événements et mariages font l’objet d’un devis.",
+      "cta": "Préparer un trajet"
+    },
+    "business": {
+      "metaTitle": "Entreprises — Avelys",
+      "metaDescription": "Chauffeur privé à Paris pour les entreprises : déplacements des collaborateurs, accueil des invités, séminaires. Offre en préparation.",
+      "title": "Entreprises",
+      "lead": "Déplacements de vos équipes, accueil de vos invités, séminaires : Avelys prépare une offre dédiée aux entreprises.",
+      "needsTitle": "Pour vos besoins",
+      "needs": {
+        "team": "Les rendez-vous et déplacements de vos collaborateurs.",
+        "guests": "L’accueil de vos invités et clients, à l’aéroport, à la gare ou à l’hôtel.",
+        "events": "Vos séminaires et événements, sur devis."
+      },
+      "pending": "L’offre entreprises est en préparation : ses conditions et son contact dédié seront publiés sur cette page.",
+      "contactPrompt": "Une question dès maintenant ?",
+      "contactLink": "Contactez-nous"
+    },
+    "fleet": {
+      "metaTitle": "La flotte — Avelys",
+      "metaDescription": "Deux berlines BYD Seal 100 % électriques, conduites par les deux associés d’Avelys à Paris.",
+      "title": "La flotte",
+      "lead": "Deux berlines 100 % électriques, conduites par leurs propriétaires.",
+      "model": "BYD Seal",
+      "text": "Une berline électrique, silencieuse et sans émissions à l’échappement.",
+      "photoPlaceholder": "Photo à venir — emplacement provisoire",
+      "pending": "Finition, capacité en passagers et capacité en bagages : à confirmer."
+    },
+    "about": {
+      "metaTitle": "À propos — Avelys",
+      "metaDescription": "Avelys, chauffeur privé premium à Paris, fondé et conduit par deux associés.",
+      "title": "À propos",
+      "lead": "Avelys est un service de chauffeur privé à Paris, fondé par deux associés qui conduisent eux-mêmes.",
+      "items": {
+        "founders": {
+          "title": "Les fondateurs au volant",
+          "text": "Vous êtes conduit par l’un des deux associés d’Avelys, au volant de l’une de leurs deux BYD Seal électriques."
+        },
+        "validation": {
+          "title": "Chaque demande examinée",
+          "text": "Chaque demande de réservation est examinée par l’un des associés, qui l’accepte ou la refuse. Votre carte n’est débitée qu’après acceptation."
+        },
+        "languages": {
+          "title": "En français et en anglais",
+          "text": "Le site, les emails de réservation et les échanges avec votre chauffeur."
+        }
+      }
+    },
+    "contact": {
+      "metaTitle": "Contact — Avelys",
+      "metaDescription": "Contacter Avelys, chauffeur privé à Paris.",
+      "title": "Contact",
+      "lead": "Pour une question sur un trajet, une réservation ou l’offre entreprises.",
+      "channelsTitle": "Nous joindre",
+      "pending": "Les coordonnées de contact direct seront publiées sur cette page dès leur confirmation."
+    },
+    "booking": {
+      "metaTitle": "Réservation — Avelys",
+      "metaDescription": "Réserver un chauffeur privé à Paris avec Avelys. Réservation en ligne en préparation.",
+      "title": "Réservation",
+      "lead": "La réservation en ligne est en préparation. Le prix de votre trajet sera calculé sur cette page, à partir du trajet routier réel, avant toute confirmation.",
+      "pending": "La réservation en ligne n’est pas encore ouverte : aucune demande ne peut être envoyée depuis ce site pour le moment.",
+      "searchTitle": "Votre trajet",
+      "fields": {
+        "pickup": "Départ",
+        "dropoff": "Destination",
+        "date": "Date",
+        "time": "Heure (heure de Paris)",
+        "passengers": "Passagers",
+        "luggage": "Bagages"
+      },
+      "passengersValue": "{count, plural, one {# passager} other {# passagers}}",
+      "luggageValue": "{count, plural, =0 {Aucun bagage} one {# bagage} other {# bagages}}",
+      "empty": "Aucun trajet renseigné pour le moment.",
+      "edit": "Modifier le trajet",
+      "contactPrompt": "Une question sur votre trajet ?",
+      "contactLink": "Contactez-nous"
+    },
+    "legalNotice": {
+      "metaTitle": "Mentions légales — Avelys",
+      "metaDescription": "Mentions légales du site Avelys.",
+      "title": "Mentions légales",
+      "pending": "Les mentions légales sont en cours de finalisation. Les informations ci-dessous seront complétées dès leur confirmation.",
+      "publisherTitle": "Éditeur du site"
+    },
+    "privacy": {
+      "metaTitle": "Confidentialité — Avelys",
+      "metaDescription": "Politique de confidentialité du site Avelys.",
+      "title": "Politique de confidentialité",
+      "pending": "La politique de confidentialité est en cours de rédaction.",
+      "contactPrompt": "Une question sur vos données personnelles ?",
+      "contactLink": "Contactez-nous"
+    },
+    "cookies": {
+      "metaTitle": "Cookies — Avelys",
+      "metaDescription": "Politique cookies du site Avelys.",
+      "title": "Cookies",
+      "pending": "La politique cookies est en cours de rédaction.",
+      "current": "Ce site ne dépose aujourd’hui aucun cookie de mesure d’audience ni publicitaire. Aucun cookie de ce type ne sera déposé sans votre consentement."
+    },
+    "terms": {
+      "metaTitle": "Conditions générales de vente — Avelys",
+      "metaDescription": "Conditions générales de vente d’Avelys.",
+      "title": "Conditions générales de vente",
+      "pending": "Les conditions générales de vente sont en cours de validation juridique. Elles seront publiées sur cette page.",
+      "mediatorTitle": "Médiateur de la consommation",
+      "mediatorPending": "À confirmer (provisoire — {decisions})"
+    }
   },
   "LocaleSwitcher": {
     "label": "Langue",

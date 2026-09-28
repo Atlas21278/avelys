@@ -3,9 +3,300 @@
     "title": "Avelys — Premium private driver in Paris",
     "description": "Premium private driver in Paris. Book ahead, with the price known before confirmation."
   },
+  "Site": {
+    "homeLabel": "Avelys, home",
+    "navLabel": "Main navigation",
+    "menu": "Menu",
+    "book": "Book",
+    "nav": {
+      "services": "Services",
+      "business": "Business",
+      "fleet": "Fleet",
+      "about": "About",
+      "contact": "Contact"
+    },
+    "footer": {
+      "tagline": "Premium private driver in Paris, driven by its two founders.",
+      "navTitle": "The site",
+      "legalTitle": "Legal information",
+      "legal": {
+        "legalNotice": "Legal notice",
+        "privacy": "Privacy",
+        "cookies": "Cookies",
+        "terms": "Terms and conditions of sale"
+      },
+      "identityTitle": "Company and contact",
+      "identity": {
+        "companyName": "Company name",
+        "address": "Address",
+        "siren": "SIREN",
+        "vtcRegistration": "VTC register number",
+        "insurance": "Insurance",
+        "phone": "Phone",
+        "email": "Email"
+      },
+      "provisional": "To be confirmed (provisional — {decisions})"
+    }
+  },
   "Home": {
-    "title": "Avelys",
-    "tagline": "Premium private driver in Paris"
+    "hero": {
+      "title": "Your private driver in Paris",
+      "lead": "The two founders of Avelys drive you themselves, in an electric saloon. The price is set before you book, from the actual road route."
+    },
+    "search": {
+      "title": "Plan your trip",
+      "pickup": "From",
+      "dropoff": "To",
+      "placePlaceholder": "Address, station, airport or hotel",
+      "date": "Date",
+      "time": "Time",
+      "timeHint": "Paris time",
+      "passengers": "Passengers",
+      "luggage": "Luggage",
+      "submit": "Get a quote",
+      "note": "The price is calculated at the next step, from the actual road route.",
+      "invalid": "Check the date, time and numbers entered: at least 1 passenger, and 0 or more pieces of luggage."
+    },
+    "services": {
+      "title": "Services",
+      "intro": "Trips arranged in advance, from one address to another, in Paris and beyond.",
+      "more": "See all services",
+      "items": {
+        "airports": {
+          "title": "Airports",
+          "text": "Charles de Gaulle and Orly, on arrival and on departure."
+        },
+        "door": {
+          "title": "Door to door",
+          "text": "A direct trip, from the address of your choice to your destination."
+        },
+        "stations": {
+          "title": "Stations and hotels",
+          "text": "Between your hotel and the Paris railway stations."
+        },
+        "excursions": {
+          "title": "Disneyland and Versailles",
+          "text": "From Paris, there and back."
+        },
+        "hourly": {
+          "title": "Chauffeur by the hour",
+          "text": "A driver at your side for 2, 4 or 8 hours, a full day or a custom length of time."
+        },
+        "longDistance": {
+          "title": "Long distance",
+          "text": "Longer trips to or from Paris."
+        },
+        "business": {
+          "title": "Business travel",
+          "text": "Meetings, staff and guests of your company."
+        },
+        "events": {
+          "title": "Events and weddings",
+          "text": "On quotation, to fit your programme."
+        }
+      }
+    },
+    "advantages": {
+      "title": "Why Avelys",
+      "items": {
+        "founders": {
+          "title": "The founders drive",
+          "text": "You are driven by one of the two partners of Avelys, not by an anonymous fleet."
+        },
+        "fixedPrice": {
+          "title": "A price set in advance",
+          "text": "Calculated from the actual road route and known before you book, with no surge pricing."
+        },
+        "electric": {
+          "title": "100% electric",
+          "text": "Two BYD Seal saloons, quiet and with zero tailpipe emissions."
+        },
+        "simple": {
+          "title": "Simple booking",
+          "text": "No account required, in English or French. We review every request before confirming it."
+        }
+      }
+    },
+    "fleet": {
+      "title": "The fleet",
+      "model": "BYD Seal",
+      "text": "Two 100% electric saloons, driven by their owners.",
+      "detailsPending": "Passenger and luggage capacity: to be confirmed.",
+      "photoPlaceholder": "Photo to come — provisional placeholder",
+      "more": "Discover the fleet"
+    },
+    "destinations": {
+      "title": "Popular destinations",
+      "intro": "Enter your starting point: the price is calculated at the next step.",
+      "cta": "Plan this trip",
+      "ctaTarget": "to {name}",
+      "items": {
+        "cdg": {
+          "name": "Charles de Gaulle Airport",
+          "detail": "Roissy, north of Paris"
+        },
+        "orly": {
+          "name": "Orly Airport",
+          "detail": "South of Paris"
+        },
+        "disneyland": {
+          "name": "Disneyland Paris",
+          "detail": "Marne-la-Vallée, east of Paris"
+        },
+        "versailles": {
+          "name": "Palace of Versailles",
+          "detail": "West of Paris"
+        }
+      }
+    },
+    "business": {
+      "title": "Business",
+      "text": "Travel for your teams, welcoming your guests, off-site meetings: tell us what you need.",
+      "cta": "Discover our business offer"
+    },
+    "faq": {
+      "title": "Frequently asked questions",
+      "contactPrompt": "Another question?",
+      "contactLink": "Contact us",
+      "items": {
+        "account": {
+          "question": "Do I need an account to book?",
+          "answer": "No. You book without an account. You can create one after your booking if you wish."
+        },
+        "languages": {
+          "question": "Which languages is the service provided in?",
+          "answer": "English and French: the website, the booking emails and your exchanges with your driver."
+        },
+        "validation": {
+          "question": "How is my booking confirmed?",
+          "answer": "One of the two partners reviews each request and accepts or declines it. You are informed by email."
+        },
+        "payment": {
+          "question": "Is payment secure?",
+          "answer": "Yes. Payment is handled by Stripe and your card details are never stored by us. Your card is saved when you make the request and is only charged once the booking is accepted."
+        }
+      }
+    }
+  },
+  "Provisional": {
+    "label": "Provisional content",
+    "labelWithDecisions": "Provisional content — {decisions}"
+  },
+  "Pages": {
+    "services": {
+      "metaTitle": "Services — Avelys",
+      "metaDescription": "Private driver in Paris: airports, stations and hotels, door-to-door rides, hourly hire, long distance and business travel.",
+      "title": "Services",
+      "lead": "Rides planned ahead, from one address to another, in Paris and beyond. Every ride is driven by one of the two partners of Avelys.",
+      "priceTitle": "The price",
+      "priceText": "The price of each ride is calculated from the actual road route. You know it before you book, with no demand-based surcharge. Events and weddings are quoted on request.",
+      "cta": "Plan a ride"
+    },
+    "business": {
+      "metaTitle": "Business — Avelys",
+      "metaDescription": "Private driver in Paris for companies: staff travel, guest reception, seminars. Offer in preparation.",
+      "title": "Business",
+      "lead": "Travel for your teams, reception of your guests, seminars: Avelys is preparing an offer for companies.",
+      "needsTitle": "For your needs",
+      "needs": {
+        "team": "Meetings and travel for your staff.",
+        "guests": "Welcoming your guests and clients at the airport, the station or the hotel.",
+        "events": "Your seminars and events, quoted on request."
+      },
+      "pending": "The business offer is in preparation: its terms and dedicated contact will be published on this page.",
+      "contactPrompt": "A question right now?",
+      "contactLink": "Contact us"
+    },
+    "fleet": {
+      "metaTitle": "The fleet — Avelys",
+      "metaDescription": "Two fully electric BYD Seal saloons, driven by the two partners of Avelys in Paris.",
+      "title": "The fleet",
+      "lead": "Two fully electric saloons, driven by their owners.",
+      "model": "BYD Seal",
+      "text": "An electric saloon, quiet and with zero tailpipe emissions.",
+      "photoPlaceholder": "Photo to come — provisional placeholder",
+      "pending": "Trim level, passenger capacity and luggage capacity: to be confirmed."
+    },
+    "about": {
+      "metaTitle": "About — Avelys",
+      "metaDescription": "Avelys, premium private driver in Paris, founded and driven by two partners.",
+      "title": "About",
+      "lead": "Avelys is a private driver service in Paris, founded by two partners who drive themselves.",
+      "items": {
+        "founders": {
+          "title": "The founders at the wheel",
+          "text": "You are driven by one of the two partners of Avelys, in one of their two electric BYD Seal."
+        },
+        "validation": {
+          "title": "Every request reviewed",
+          "text": "Every booking request is reviewed by one of the partners, who accepts or declines it. Your card is only charged after acceptance."
+        },
+        "languages": {
+          "title": "In French and English",
+          "text": "The website, the booking emails and your conversations with your driver."
+        }
+      }
+    },
+    "contact": {
+      "metaTitle": "Contact — Avelys",
+      "metaDescription": "Contact Avelys, private driver in Paris.",
+      "title": "Contact",
+      "lead": "For a question about a ride, a booking or the business offer.",
+      "channelsTitle": "Reach us",
+      "pending": "Direct contact details will be published on this page once confirmed."
+    },
+    "booking": {
+      "metaTitle": "Booking — Avelys",
+      "metaDescription": "Book a private driver in Paris with Avelys. Online booking in preparation.",
+      "title": "Booking",
+      "lead": "Online booking is in preparation. The price of your ride will be calculated on this page, from the actual road route, before any confirmation.",
+      "pending": "Online booking is not open yet: no request can be sent from this website for now.",
+      "searchTitle": "Your ride",
+      "fields": {
+        "pickup": "Pick-up",
+        "dropoff": "Destination",
+        "date": "Date",
+        "time": "Time (Paris time)",
+        "passengers": "Passengers",
+        "luggage": "Luggage"
+      },
+      "passengersValue": "{count, plural, one {# passenger} other {# passengers}}",
+      "luggageValue": "{count, plural, =0 {No luggage} one {# piece of luggage} other {# pieces of luggage}}",
+      "empty": "No ride entered yet.",
+      "edit": "Change the ride",
+      "contactPrompt": "A question about your ride?",
+      "contactLink": "Contact us"
+    },
+    "legalNotice": {
+      "metaTitle": "Legal notice — Avelys",
+      "metaDescription": "Legal notice of the Avelys website.",
+      "title": "Legal notice",
+      "pending": "The legal notice is being finalised. The information below will be completed once confirmed.",
+      "publisherTitle": "Website publisher"
+    },
+    "privacy": {
+      "metaTitle": "Privacy — Avelys",
+      "metaDescription": "Privacy policy of the Avelys website.",
+      "title": "Privacy policy",
+      "pending": "The privacy policy is being written.",
+      "contactPrompt": "A question about your personal data?",
+      "contactLink": "Contact us"
+    },
+    "cookies": {
+      "metaTitle": "Cookies — Avelys",
+      "metaDescription": "Cookie policy of the Avelys website.",
+      "title": "Cookies",
+      "pending": "The cookie policy is being written.",
+      "current": "This website currently sets no analytics or advertising cookie. No such cookie will be set without your consent."
+    },
+    "terms": {
+      "metaTitle": "Terms and conditions of sale — Avelys",
+      "metaDescription": "Terms and conditions of sale of Avelys.",
+      "title": "Terms and conditions of sale",
+      "pending": "The terms and conditions of sale are under legal review. They will be published on this page.",
+      "mediatorTitle": "Consumer mediator",
+      "mediatorPending": "To be confirmed (provisional — {decisions})"
+    }
   },
   "LocaleSwitcher": {
     "label": "Language",
