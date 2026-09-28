@@ -1,0 +1,21 @@
+{
+  "Metadata": {
+    "title": "Avelys — Premium private driver in Paris",
+    "description": "Premium private driver in Paris. Book ahead, with the price known before confirmation."
+  },
+  "Home": {
+    "title": "Avelys",
+    "tagline": "Premium private driver in Paris"
+  },
+  "LocaleSwitcher": {
+    "label": "Language",
+    "fr": "Français",
+    "en": "English"
+  },
+  "NotFound": {
+    "metaTitle": "Page not found — Avelys",
+    "title": "Page not found",
+    "description": "The page you requested does not exist or has moved.",
+    "home": "Back to the home page"
+  }
+}

@@ -4,7 +4,7 @@ Source : Master Spec §5, §17, §22.
 
 ## SEO
 
-- Pages FR et EN indexables séparément, `hreflang` réciproques + `x-default`.
+- Pages FR et EN indexables séparément, `hreflang` réciproques + `x-default` (en place depuis VTC-013 : `docs/architecture/i18n.md`).
 - `title`, `meta description`, `canonical`, OpenGraph par page et par langue (Metadata API Next.js).
 - `sitemap.xml` (FR + EN) et `robots.txt` générés.
 - Données structurées pertinentes (`LocalBusiness`/`TaxiService`, `FAQPage`, `BreadcrumbList`) — uniquement avec des informations réelles (pas de faux avis).
