@@ -51,7 +51,7 @@ Requête (JSON, schéma strict : toute clé inconnue, en particulier un montant,
 
 - Lieu : `placeId` **ou** `lat`/`lng`, toujours avec un `label` (affichage uniquement, ni tarifé ni journalisé).
 - `pickupLocalDateTime` : heure murale Europe/Paris, `YYYY-MM-DDTHH:mm`, sans décalage. Convertie en UTC via `@date-fns/tz` ; une heure inexistante (passage à l'heure d'été) ou ambiguë (passage à l'heure d'hiver) est refusée explicitement.
-- Délai minimal (BR-31) : `BOOKING_MIN_LEAD_TIME_MINUTES`, **provisoire**, 720 min (12 h) par défaut. Une prise en charge exactement à la limite est acceptée.
+- Délai minimal (BR-31) : `BOOKING_MIN_LEAD_TIME_MINUTES`, **provisoire**, 720 min (12 h) par défaut, entier strictement positif (0 est refusé par la validation de l'environnement). Une prise en charge exactement à la limite est acceptée.
 - Pas de maximum passagers/bagages tant que DEC-02 est ouvert.
 
 Réponse 200 (`cache-control: no-store`) :
@@ -91,9 +91,10 @@ Erreurs (aucun prix n'est produit) :
 | `ROUTE_UNAVAILABLE`           | 503  | Fournisseur de routing indisponible, quota, clé absente (BR-51)          |
 | `NO_ACTIVE_PRICING_RULE`      | 503  | Aucune `PricingRule` en vigueur                                          |
 | `PRICING_UNAVAILABLE`         | 503  | Règle stockée invalide ou montant hors plage                             |
+| `DATABASE_UNAVAILABLE`        | 503  | PostgreSQL injoignable (connexion refusée, délai, pool épuisé)           |
 | `INTERNAL_ERROR`              | 500  | Erreur inattendue (détail dans les logs uniquement)                      |
 
-Ordre des contrôles : entrée → heure locale → délai → règle active → appel de routing (facturé en dernier). Logs : code, raison technique, `snapshotId`, version de règle, total, distance — jamais d'adresse, de libellé, de coordonnée ni de `placeId` (BR-60).
+Ordre des contrôles : entrée → heure locale → délai → règle active → appel de routing (facturé en dernier). Logs : code, raison technique, `snapshotId`, version de règle, total, distance — jamais d'adresse, de libellé, de coordonnée ni de `placeId` (BR-60). Une erreur inattendue n'est journalisée que par son nom (`errorName`) et le `correlationId` : ni message ni stack, qui pourraient citer un lieu.
 
 ## Règles
 

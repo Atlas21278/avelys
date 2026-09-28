@@ -4,6 +4,7 @@ import { computeBaseFare } from "@/domain/pricing/base-fare";
 import { PROVISIONAL_RULE, route } from "@/domain/pricing/fixtures";
 import { parsePricingRule, PricingError, type RouteInput } from "@/domain/pricing/rule";
 import { parsePricingSnapshot } from "@/domain/pricing/snapshot";
+import { Prisma } from "@/generated/prisma/client";
 import { RoutingError, type RoutingProvider } from "@/integrations/maps/routing";
 import { PricingRuleStoreError } from "@/server/pricing/rules";
 
@@ -180,7 +181,7 @@ describe("computeQuote", () => {
       });
     });
 
-    it("refuses a quote just after the limit, without routing", async () => {
+    it("refuses a quote made 1 ms past the limit (pickup too soon), without calling routing", async () => {
       const { deps: d, computeRoute } = deps({ now: () => new Date(limit.getTime() + 1) });
       const error = await failure(computeQuote(REQUEST, d));
       expect(error.code).toBe("BOOKING_LEAD_TIME_TOO_SHORT");
@@ -251,6 +252,32 @@ describe("computeQuote", () => {
       const error = await failure(computeQuote(REQUEST, d));
       expect(error.code).toBe("PRICING_UNAVAILABLE");
       expect(error.reason).toBe("INVALID_PRICING_RULE");
+    });
+
+    it("refuses with a temporary DATABASE_UNAVAILABLE when PostgreSQL is unreachable", async () => {
+      const { deps: d, activePricingRule, computeRoute } = deps();
+      activePricingRule.mockRejectedValue(
+        new Prisma.PrismaClientKnownRequestError("query quoting test-place-origin", {
+          code: "P1001",
+          clientVersion: "test",
+        }),
+      );
+      const error = await failure(computeQuote(REQUEST, d));
+      expect(error.code).toBe("DATABASE_UNAVAILABLE");
+      expect(error.temporary).toBe(true);
+      expect(error.reason).toBe("P1001");
+      expect(error.message).not.toContain("test-place-origin");
+      expect(computeRoute).not.toHaveBeenCalled();
+    });
+
+    it("lets any other database error through as unexpected", async () => {
+      const { deps: d, activePricingRule } = deps();
+      const unexpected = new Prisma.PrismaClientKnownRequestError("unique", {
+        code: "P2002",
+        clientVersion: "test",
+      });
+      activePricingRule.mockRejectedValue(unexpected);
+      await expect(computeQuote(REQUEST, d)).rejects.toBe(unexpected);
     });
 
     it("refuses an amount beyond the safe integer range", async () => {

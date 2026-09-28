@@ -64,10 +64,12 @@ export async function POST(request: Request) {
       );
     } catch (error) {
       if (error instanceof QuoteError) {
-        // A missing or invalid rule is an operational fault; a provider outage is transient;
-        // the rest are ordinary refusals of the request.
+        // A missing or invalid rule, or an unreachable database, is an operational fault; a
+        // provider outage is transient; the rest are ordinary refusals of the request.
         const level =
-          error.code === "NO_ACTIVE_PRICING_RULE" || error.code === "PRICING_UNAVAILABLE"
+          error.code === "NO_ACTIVE_PRICING_RULE" ||
+          error.code === "PRICING_UNAVAILABLE" ||
+          error.code === "DATABASE_UNAVAILABLE"
             ? "error"
             : error.temporary
               ? "warn"
@@ -78,8 +80,12 @@ export async function POST(request: Request) {
         );
         return fail(error.code, error.temporary ? 503 : undefined);
       }
-      // Unexpected: details go to the logs only, never to the response.
-      logger().error({ err: error }, "quote failed");
+      // Unexpected: only the error name is logged. Its message or stack may quote the request
+      // (a place, a label: BR-60); the correlationId comes from the request context.
+      logger().error(
+        { errorName: error instanceof Error ? error.name : typeof error },
+        "quote failed",
+      );
       return fail("INTERNAL_ERROR");
     }
   });

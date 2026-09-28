@@ -16,6 +16,7 @@ import { RoutingError, type RoutingProvider, type Waypoint } from "@/integration
 import { PARIS_TIME_ZONE, parseLocalDateTime, resolveLocalDateTime } from "@/lib/dates";
 import type { ApiErrorCode } from "@/lib/errors";
 import type { Money } from "@/lib/money";
+import { databaseUnavailableReason } from "@/server/db-errors";
 import { PricingRuleStoreError } from "@/server/pricing/rules";
 
 /**
@@ -74,11 +75,12 @@ export type QuoteErrorCode = Extract<
   | "ROUTE_UNAVAILABLE"
   | "NO_ACTIVE_PRICING_RULE"
   | "PRICING_UNAVAILABLE"
+  | "DATABASE_UNAVAILABLE"
 >;
 
 /**
  * No price is produced when this is raised. `reason` is a short technical tag for logs;
- * `temporary` marks a provider-side failure (the same request may succeed later). Neither the
+ * `temporary` marks a provider-side or database failure (the same request may succeed later). Neither the
  * message nor the reason contains a place, a coordinate or a label.
  */
 export class QuoteError extends Error {
@@ -149,6 +151,13 @@ async function loadRule(deps: QuoteDeps, at: Date): Promise<PricingRuleConfig> {
     }
     if (error instanceof PricingError) {
       throw new QuoteError("PRICING_UNAVAILABLE", error.code, error.message, false, {
+        cause: error,
+      });
+    }
+    const databaseReason = databaseUnavailableReason(error);
+    if (databaseReason !== null) {
+      // The Prisma message may quote the query: only its code is kept (BR-60).
+      throw new QuoteError("DATABASE_UNAVAILABLE", databaseReason, "Database unavailable", true, {
         cause: error,
       });
     }
