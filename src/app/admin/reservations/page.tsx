@@ -3,8 +3,12 @@ import { headers } from "next/headers";
 import Link from "next/link";
 
 import { textLinkClasses } from "@/components/ui/text-link";
-import { formatParisDateTime } from "@/lib/dates";
-import { bookingListSearch, parseBookingListQuery } from "@/server/admin/booking-list-query";
+import { formatParisDate, formatParisDateTimeUnambiguous, parisDayStart } from "@/lib/dates";
+import {
+  bookingListSearch,
+  hasInvertedDateRange,
+  parseBookingListQuery,
+} from "@/server/admin/booking-list-query";
 import { type BookingListItem, listBackOfficeBookings } from "@/server/admin/bookings";
 import { requireBackOfficeUser } from "@/server/auth/back-office";
 
@@ -38,7 +42,18 @@ export default async function BookingsPage({ searchParams }: PageProps<"/admin/r
 
         <BookingFilters query={query} />
 
-        {result.items.length === 0 ? (
+        {hasInvertedDateRange(query) && query.from && query.to ? (
+          <p role="alert" className="text-ink">
+            La date de début ({formatCalendarDate(query.from)}) est postérieure à la date de fin (
+            {formatCalendarDate(query.to)}) : aucune réservation ne peut correspondre.{" "}
+            <Link
+              href={`/admin/reservations${bookingListSearch({ ...query, from: query.to, to: query.from, page: 1 })}`}
+              className={textLinkClasses}
+            >
+              Inverser les dates
+            </Link>
+          </p>
+        ) : result.items.length === 0 ? (
           <p className="py-10 text-graphite">
             {result.total === 0
               ? "Aucune réservation ne correspond à ces critères."
@@ -71,6 +86,11 @@ export default async function BookingsPage({ searchParams }: PageProps<"/admin/r
   );
 }
 
+/** `dim. 25 oct. 2026` for a Paris calendar day `YYYY-MM-DD`. */
+function formatCalendarDate(calendarDate: string): string {
+  return formatParisDate(parisDayStart(calendarDate));
+}
+
 function BookingGroup({ title, items }: { title: string; items: readonly BookingListItem[] }) {
   return (
     <section className="flex flex-col gap-1">
@@ -98,7 +118,7 @@ function BookingRow({ item }: { item: BookingListItem }) {
       </span>
       <span className="flex min-w-0 flex-col gap-0.5">
         <time dateTime={item.pickupAt.toISOString()} className="font-semibold">
-          {formatParisDateTime(item.pickupAt)}
+          {formatParisDateTimeUnambiguous(item.pickupAt)}
         </time>
         <span className="text-ink">
           {item.pickupLabel} <span aria-label="vers">→</span> {item.dropoffLabel}

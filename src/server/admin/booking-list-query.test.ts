@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   BOOKING_LIST_MAX_PAGE,
   bookingListSearch,
+  hasInvertedDateRange,
   parseBookingListQuery,
 } from "./booking-list-query";
 
@@ -68,5 +69,28 @@ describe("bookingListSearch", () => {
 
   it("omits defaults", () => {
     expect(bookingListSearch({ statuses: [], page: 1 })).toBe("");
+  });
+});
+
+describe("hasInvertedDateRange", () => {
+  it("flags a range that starts after it ends", () => {
+    expect(
+      hasInvertedDateRange({ statuses: [], page: 1, from: "2026-10-26", to: "2026-10-25" }),
+    ).toBe(true);
+    expect(
+      hasInvertedDateRange({ statuses: [], page: 1, from: "2027-01-01", to: "2026-12-31" }),
+    ).toBe(true);
+  });
+
+  it("accepts a single day, an ordered range and open-ended ranges", () => {
+    expect(
+      hasInvertedDateRange({ statuses: [], page: 1, from: "2026-10-25", to: "2026-10-25" }),
+    ).toBe(false);
+    expect(
+      hasInvertedDateRange({ statuses: [], page: 1, from: "2026-10-25", to: "2026-10-26" }),
+    ).toBe(false);
+    expect(hasInvertedDateRange({ statuses: [], page: 1, from: "2026-10-25" })).toBe(false);
+    expect(hasInvertedDateRange({ statuses: [], page: 1, to: "2026-10-25" })).toBe(false);
+    expect(hasInvertedDateRange({ statuses: [], page: 1 })).toBe(false);
   });
 });

@@ -158,7 +158,6 @@ const DETAIL_SELECT = {
   pickupLabel: true,
   dropoffLabel: true,
   pickupAt: true,
-  pickupTimeZone: true,
   passengerCount: true,
   luggageCount: true,
   quotedDistanceMeters: true,

@@ -76,3 +76,11 @@ export function bookingListSearch(query: BookingListQuery): string {
   const search = params.toString();
   return search ? `?${search}` : "";
 }
+
+/**
+ * Whether the date filter starts after it ends (`from` > `to`): no booking can match. The page
+ * says so instead of showing a silent empty list. `YYYY-MM-DD` strings compare chronologically.
+ */
+export function hasInvertedDateRange(query: BookingListQuery): boolean {
+  return query.from !== undefined && query.to !== undefined && query.from > query.to;
+}
