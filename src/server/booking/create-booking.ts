@@ -31,9 +31,11 @@ import type { PaymentMethodGuard } from "./payment-method-guard";
 const LabelSchema = z.string().trim().min(1).max(200);
 
 /**
- * A place of the booking form: coordinates (stored on the booking for dispatch) plus, when the
- * place came from Places autocomplete, its id. The route is computed from the place id when
- * present, from the coordinates otherwise — as for the quote the customer saw.
+ * A place of the booking form: coordinates plus, when the place came from Places autocomplete,
+ * its id. The route is computed from the place id when present, from the coordinates otherwise —
+ * as for the quote the customer saw. The submitted coordinates are a routing input only: the
+ * booking stores the end points of the priced route (VTC-035), so a request cannot be priced
+ * A→B and dispatched C→D.
  */
 export const BookingPlaceSchema = z.strictObject({
   label: LabelSchema,
@@ -241,12 +243,14 @@ async function persist(
         contactPhone: customer.phone ?? null,
         contactLocale: customer.locale,
         pickupLabel: request.origin.label,
-        pickupLat: request.origin.lat,
-        pickupLng: request.origin.lng,
+        // Priced coordinates, resolved by the routing provider (VTC-035): the browser's are
+        // never stored.
+        pickupLat: quote.pricedOrigin.lat,
+        pickupLng: quote.pricedOrigin.lng,
         pickupPlaceId: request.origin.placeId ?? null,
         dropoffLabel: request.destination.label,
-        dropoffLat: request.destination.lat,
-        dropoffLng: request.destination.lng,
+        dropoffLat: quote.pricedDestination.lat,
+        dropoffLng: quote.pricedDestination.lng,
         dropoffPlaceId: request.destination.placeId ?? null,
         pickupAt: new Date(snapshot.inputs.pickupAt),
         pickupLocalDateTime: localDateTimeColumn(snapshot.inputs.pickupLocalDateTime),

@@ -2,11 +2,13 @@ import "server-only";
 
 import { z } from "zod";
 
-import { RouteInputSchema, type RouteInput } from "@/domain/pricing/rule";
+import { RouteInputSchema } from "@/domain/pricing/rule";
 
 import {
+  LatLngSchema,
   RouteRequestSchema,
   RoutingError,
+  type ResolvedRoute,
   type RouteRequest,
   type RoutingLogger,
   type RoutingProvider,
@@ -22,8 +24,13 @@ import {
 
 export const GOOGLE_ROUTES_PROVIDER = "google-routes";
 export const GOOGLE_ROUTES_ENDPOINT = "https://routes.googleapis.com/directions/v2:computeRoutes";
-/** Distance and duration only: the minimal field mask keeps the request on the Essentials SKU. */
-export const GOOGLE_ROUTES_FIELD_MASK = "routes.distanceMeters,routes.duration";
+/**
+ * Distance, duration and the resolved start/end points of the single leg (VTC-035): the stored
+ * booking coordinates are the ones the route was priced for. No traffic, toll or polyline field,
+ * which would move the request to a more expensive SKU.
+ */
+export const GOOGLE_ROUTES_FIELD_MASK =
+  "routes.distanceMeters,routes.duration,routes.legs.startLocation,routes.legs.endLocation";
 
 /**
  * `TRAFFIC_UNAWARE` is the cheapest option (Essentials SKU); the traffic-aware ones are billed
@@ -66,6 +73,14 @@ export interface GoogleRoutesOptions {
   routingPreference?: RoutingPreference;
 }
 
+/** A `google.type.LatLng`; proto3 omits zero values, so an absent axis means 0. */
+const GoogleLocationSchema = z.object({
+  latLng: z.object({
+    latitude: z.number().optional(),
+    longitude: z.number().optional(),
+  }),
+});
+
 /** Only the fields requested by the field mask; extra fields are tolerated. */
 const ComputeRoutesResponseSchema = z.object({
   routes: z
@@ -74,21 +89,41 @@ const ComputeRoutesResponseSchema = z.object({
         // proto3 omits zero values: an absent distance means 0 metres.
         distanceMeters: z.int().nonnegative().optional(),
         duration: z.string().regex(/^\d+(\.\d{1,9})?s$/),
+        legs: z
+          .array(
+            z.object({
+              startLocation: GoogleLocationSchema.optional(),
+              endLocation: GoogleLocationSchema.optional(),
+            }),
+          )
+          .optional(),
       }),
     )
     .optional(),
 });
+
+type GoogleLocation = z.output<typeof GoogleLocationSchema>;
 
 const GoogleErrorBodySchema = z.object({
   error: z.object({ status: z.string().optional() }).optional(),
 });
 
 type AttemptResult =
-  { ok: true; route: RouteInput } | { ok: false; error: RoutingError; retryable: boolean };
+  { ok: true; route: ResolvedRoute } | { ok: false; error: RoutingError; retryable: boolean };
 
 /** Protobuf duration ("165s", "3.5s") to whole seconds. */
 export function parseDurationSeconds(duration: string): number {
   return Math.round(Number(duration.slice(0, -1)));
+}
+
+/** A provider location to bounds-checked WGS84 coordinates, or `null` when missing/invalid. */
+function toLatLng(location: GoogleLocation | undefined) {
+  if (!location) return null;
+  const parsed = LatLngSchema.safeParse({
+    lat: location.latLng.latitude ?? 0,
+    lng: location.latLng.longitude ?? 0,
+  });
+  return parsed.success ? parsed.data : null;
 }
 
 function toGoogleWaypoint(waypoint: Waypoint): Record<string, unknown> {
@@ -127,7 +162,7 @@ export class GoogleRoutesProvider implements RoutingProvider {
     this.routingPreference = options.routingPreference ?? GOOGLE_ROUTES_DEFAULTS.routingPreference;
   }
 
-  async computeRoute(request: RouteRequest): Promise<RouteInput> {
+  async computeRoute(request: RouteRequest): Promise<ResolvedRoute> {
     const parsed = RouteRequestSchema.safeParse(request);
     if (!parsed.success) {
       const issues = parsed.error.issues
@@ -299,6 +334,21 @@ export class GoogleRoutesProvider implements RoutingProvider {
         status,
       );
     }
-    return { ok: true, route: route.data };
+
+    // One origin, one destination, no intermediate: exactly one leg. Without its resolved end
+    // points the route cannot be stored as priced, so no price is produced (VTC-035).
+    const legs = first.legs ?? [];
+    const origin = legs.length === 1 ? toLatLng(legs[0]?.startLocation) : null;
+    const destination = legs.length === 1 ? toLatLng(legs[0]?.endLocation) : null;
+    if (!origin || !destination) {
+      return failure(
+        "ROUTING_PROVIDER_ERROR",
+        "invalid_response",
+        "Routing provider returned no resolved end points",
+        false,
+        status,
+      );
+    }
+    return { ok: true, route: { route: route.data, origin, destination } };
   }
 }

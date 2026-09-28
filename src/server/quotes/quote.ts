@@ -12,7 +12,13 @@ import {
   type PricingSnapshot,
   type PricingSnapshotInputs,
 } from "@/domain/pricing/snapshot";
-import { RoutingError, type RoutingProvider, type Waypoint } from "@/integrations/maps/routing";
+import {
+  RoutingError,
+  type LatLng,
+  type ResolvedRoute,
+  type RoutingProvider,
+  type Waypoint,
+} from "@/integrations/maps/routing";
 import { PARIS_TIME_ZONE, parseLocalDateTime, resolveLocalDateTime } from "@/lib/dates";
 import type { ApiErrorCode } from "@/lib/errors";
 import type { Money } from "@/lib/money";
@@ -108,6 +114,12 @@ export type Quote = Readonly<{
   pickupAt: Date;
   origin: QuotePlace;
   destination: QuotePlace;
+  /**
+   * Where the priced route actually starts and ends, as resolved by the routing provider
+   * (VTC-035). The only coordinates a booking may store: never the submitted ones.
+   */
+  pricedOrigin: LatLng;
+  pricedDestination: LatLng;
 }>;
 
 function toWaypoint(place: QuotePlace): Waypoint {
@@ -165,7 +177,11 @@ async function loadRule(deps: QuoteDeps, at: Date): Promise<PricingRuleConfig> {
   }
 }
 
-async function loadRoute(deps: QuoteDeps, origin: Waypoint, destination: Waypoint) {
+async function loadRoute(
+  deps: QuoteDeps,
+  origin: Waypoint,
+  destination: Waypoint,
+): Promise<ResolvedRoute> {
   try {
     return await deps.routing.computeRoute({ origin, destination });
   } catch (error) {
@@ -183,7 +199,7 @@ async function loadRoute(deps: QuoteDeps, origin: Waypoint, destination: Waypoin
   }
 }
 
-function priceOf(rule: PricingRuleConfig, route: Awaited<ReturnType<typeof loadRoute>>) {
+function priceOf(rule: PricingRuleConfig, route: ResolvedRoute["route"]) {
   try {
     return computeBaseFare(rule, route);
   } catch (error) {
@@ -227,8 +243,8 @@ export async function computeQuote(input: unknown, deps: QuoteDeps): Promise<Quo
   const rule = await loadRule(deps, now);
   const origin = toWaypoint(request.origin);
   const destination = toWaypoint(request.destination);
-  const route = await loadRoute(deps, origin, destination);
-  const fare = priceOf(rule, route);
+  const resolved = await loadRoute(deps, origin, destination);
+  const fare = priceOf(rule, resolved.route);
 
   const inputs: PricingSnapshotInputs = {
     origin,
@@ -259,5 +275,7 @@ export async function computeQuote(input: unknown, deps: QuoteDeps): Promise<Quo
     pickupAt,
     origin: request.origin,
     destination: request.destination,
+    pricedOrigin: { lat: resolved.origin.lat, lng: resolved.origin.lng },
+    pricedDestination: { lat: resolved.destination.lat, lng: resolved.destination.lng },
   });
 }

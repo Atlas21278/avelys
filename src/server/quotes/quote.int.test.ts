@@ -45,7 +45,11 @@ const REQUEST = {
 };
 
 function deps(): QuoteDeps {
-  const computeRoute = vi.fn<RoutingProvider["computeRoute"]>().mockResolvedValue(ROUTE);
+  const computeRoute = vi.fn<RoutingProvider["computeRoute"]>().mockResolvedValue({
+    route: ROUTE,
+    origin: { lat: 48.8442, lng: 2.3744 },
+    destination: { lat: 49.0096, lng: 2.548 },
+  });
   return {
     routing: { computeRoute },
     activePricingRule: getActivePricingRule,
