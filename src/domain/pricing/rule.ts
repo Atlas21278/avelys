@@ -72,7 +72,11 @@ export const RouteInputSchema = z.strictObject({
 export type RouteInput = z.output<typeof RouteInputSchema>;
 
 export type PricingErrorCode =
-  "ROUTE_UNAVAILABLE" | "INVALID_ROUTE" | "INVALID_PRICING_RULE" | "AMOUNT_OUT_OF_RANGE";
+  | "ROUTE_UNAVAILABLE"
+  | "INVALID_ROUTE"
+  | "INVALID_PRICING_RULE"
+  | "INVALID_PRICING_SNAPSHOT"
+  | "AMOUNT_OUT_OF_RANGE";
 
 /** No price is ever produced when this is raised (BR-51). Messages carry no personal data. */
 export class PricingError extends DomainError {

@@ -10,7 +10,12 @@ const valid = {
   BETTER_AUTH_SECRET: "unit-tests-only-placeholder-value-0000",
 };
 
-const defaults = { LOG_LEVEL: "info", TRUSTED_PROXIES: [], AUTH_SESSION_MAX_AGE_SECONDS: 604_800 };
+const defaults = {
+  LOG_LEVEL: "info",
+  TRUSTED_PROXIES: [],
+  AUTH_SESSION_MAX_AGE_SECONDS: 604_800,
+  BOOKING_MIN_LEAD_TIME_MINUTES: 720,
+};
 
 describe("parseServerEnv", () => {
   it("returns typed values for a valid environment, with defaults", () => {
@@ -34,6 +39,18 @@ describe("parseServerEnv", () => {
       expect(() => parseServerEnv({ ...valid, TRUSTED_PROXIES: value })).toThrowError(
         /TRUSTED_PROXIES/,
       );
+    }
+  });
+
+  it("reads the booking lead time as a non-negative integer number of minutes", () => {
+    const read = (value: string) =>
+      parseServerEnv({ ...valid, BOOKING_MIN_LEAD_TIME_MINUTES: value })
+        .BOOKING_MIN_LEAD_TIME_MINUTES;
+    expect(read("90")).toBe(90);
+    expect(read("0")).toBe(0);
+    expect(read("")).toBe(720);
+    for (const value of ["-1", "1.5", "twelve hours"]) {
+      expect(() => read(value)).toThrowError(/BOOKING_MIN_LEAD_TIME_MINUTES/);
     }
   });
 
