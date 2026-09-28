@@ -16,14 +16,14 @@ Scripts pnpm du projet (`install`, `lint`, `typecheck`, `test`, `build`, `format
 
 ## Refusé
 
-| Catégorie             | Règles                                                                                                                                                                                                          |
-| --------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Secrets               | lecture de `.env`, `.env.local`, `.env.*.local`, `.env.{development,test,staging,production}`, `**/*.pem`, `**/secrets/**` ; écriture de `.env`, `.env.local`, `.env.production`. `.env.example` reste lisible. |
-| Git                   | push forcé, push vers `main` (dont `HEAD:main`), `git reset --hard`, modification de `core.hooksPath`                                                                                                           |
-| Cluster / déploiement | `kubectl`, `helm install/upgrade/uninstall/rollback`, `argocd`                                                                                                                                                  |
-| Base                  | `prisma migrate reset`                                                                                                                                                                                          |
-| Fichiers              | `rm -rf`                                                                                                                                                                                                        |
-| GitHub                | `gh secret`, `gh pr merge --admin` (contournement du ruleset), modification des rulesets via `gh api`, `gh variable`, `gh repo delete`, changement de visibilité du repo, `gh api` en `DELETE`                  |
+| Catégorie             | Règles                                                                                                                                                                                                                       |
+| --------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Secrets               | lecture de `.env`, `.env.local`, `.env.*.local`, `.env.{development,test,staging,production}`, `**/*.pem`, `**/secrets/**` ; écriture de `.env`, `.env.local`, `.env.production`. `.env.example` reste lisible.              |
+| Git                   | push forcé, push vers `main` (dont `HEAD:main`), `git reset --hard`, modification de `core.hooksPath`                                                                                                                        |
+| Cluster / déploiement | `kubectl`, `helm install/upgrade/uninstall/rollback`, `argocd`                                                                                                                                                               |
+| Base                  | `prisma migrate reset`                                                                                                                                                                                                       |
+| Fichiers              | `rm -rf`                                                                                                                                                                                                                     |
+| GitHub                | `gh secret`, `gh pr merge --admin` (contournement du ruleset), modification des rulesets via `gh api` ou `scripts/apply-ruleset.sh`, `gh variable`, `gh repo delete`, changement de visibilité du repo, `gh api` en `DELETE` |
 
 Les règles git, cluster et GitHub sensibles existent aussi en `PowerShell(...)` : le poste de développement est sous Windows.
 
