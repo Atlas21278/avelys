@@ -68,6 +68,8 @@ describe("booking schema (integration)", () => {
   });
 
   afterAll(async () => {
+    // Leave no booking behind: stale rows would break later foreign key validations.
+    await db().booking.deleteMany();
     await db().$disconnect();
   });
 

@@ -54,6 +54,8 @@ describe("pricing rule store (integration)", () => {
   });
 
   afterAll(async () => {
+    // Leave no booking behind: stale rows would break later foreign key validations.
+    await db().booking.deleteMany();
     await db().$disconnect();
   });
 
@@ -139,22 +141,31 @@ describe("pricing rule store (integration)", () => {
       await expect(getActivePricingRule(T2)).resolves.toEqual(v2);
     });
 
-    it("picks the highest version among several already effective", async () => {
+    it("picks the latest effectiveFrom among the versions already in effect", async () => {
       await publish(T0);
-      await publish(T1);
-      const v3 = await publish(T1);
+      const v2 = await publish(T1);
 
+      await expect(getActivePricingRule(T2)).resolves.toEqual(v2);
+    });
+
+    it("breaks an effectiveFrom tie with the highest version (replacing a scheduled one)", async () => {
+      const v1 = await publish(T0);
+      await publish(T2);
+      const v3 = await publish(T2, { ...TARIFF, perKmCents: TARIFF.perKmCents + 1 });
+
+      await expect(getActivePricingRule(ms(T2, -1))).resolves.toEqual(v1);
       await expect(getActivePricingRule(T2)).resolves.toEqual(v3);
     });
 
-    it("lets a later version supersede an earlier one, even one scheduled after it", async () => {
+    it("keeps a scheduled version active at its date when a higher version starts earlier", async () => {
       const v1 = await publish(T0);
-      await publish(T2);
+      const v2 = await publish(T2);
       const v3 = await publish(T1);
 
       await expect(getActivePricingRule(ms(T1, -1))).resolves.toEqual(v1);
       await expect(getActivePricingRule(T1)).resolves.toEqual(v3);
-      await expect(getActivePricingRule(ms(T2, 1))).resolves.toEqual(v3);
+      await expect(getActivePricingRule(ms(T2, -1))).resolves.toEqual(v3);
+      await expect(getActivePricingRule(T2)).resolves.toEqual(v2);
     });
 
     it("rejects an invalid instant", async () => {
@@ -217,6 +228,37 @@ describe("pricing rule store (integration)", () => {
     expect(versions).toEqual(Array.from({ length: MAX_VERSION_ATTEMPTS }, (_, i) => i + 1));
     await expect(db().pricingRule.count()).resolves.toBe(MAX_VERSION_ATTEMPTS);
     await expect(db().auditLog.count()).resolves.toBe(MAX_VERSION_ATTEMPTS);
+  });
+
+  it("gives up with PRICING_RULE_VERSION_CONFLICT after MAX_VERSION_ATTEMPTS unique violations", async () => {
+    // Test-only trigger: every insert fails with unique_violation (SQLSTATE 23505, as a lost
+    // version race would). A sequence counts the attempts: nextval survives the rollbacks.
+    const client = db();
+    await client.$executeRawUnsafe(`CREATE SEQUENCE pricing_rule_attempts_test`);
+    await client.$executeRawUnsafe(`
+      CREATE FUNCTION pricing_rule_conflict_test() RETURNS trigger LANGUAGE plpgsql AS $$
+      BEGIN
+        PERFORM nextval('pricing_rule_attempts_test');
+        RAISE unique_violation USING MESSAGE = 'simulated version conflict';
+      END $$`);
+    await client.$executeRawUnsafe(`
+      CREATE TRIGGER pricing_rule_conflict_test BEFORE INSERT ON "PricingRule"
+      FOR EACH ROW EXECUTE FUNCTION pricing_rule_conflict_test()`);
+    try {
+      const error: unknown = await publish(T0).catch((caught: unknown) => caught);
+      expect(error).toBeInstanceOf(PricingRuleStoreError);
+      expect(error).toMatchObject({ code: "PRICING_RULE_VERSION_CONFLICT" });
+
+      const [counter] = await client.$queryRaw<Array<{ attempts: bigint }>>`
+        SELECT last_value AS attempts FROM pricing_rule_attempts_test`;
+      expect(Number(counter?.attempts)).toBe(MAX_VERSION_ATTEMPTS);
+      await expect(client.pricingRule.count()).resolves.toBe(0);
+      await expect(client.auditLog.count()).resolves.toBe(0);
+    } finally {
+      await client.$executeRawUnsafe(`DROP TRIGGER pricing_rule_conflict_test ON "PricingRule"`);
+      await client.$executeRawUnsafe(`DROP FUNCTION pricing_rule_conflict_test()`);
+      await client.$executeRawUnsafe(`DROP SEQUENCE pricing_rule_attempts_test`);
+    }
   });
 
   it("leaves a booking on its own rule version when a new version is published (BR-13)", async () => {
