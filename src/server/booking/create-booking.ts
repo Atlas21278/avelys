@@ -210,7 +210,8 @@ async function persist(
     await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`customer:${customer.email}`}, 0))::text AS locked`;
 
     // Matching rule: normalised email, guest profiles only (a profile linked to an account is
-    // never taken over by an anonymous request). An existing profile is reused as is: no merge.
+    // never taken over by an anonymous request). An existing profile is reused as is: no merge,
+    // never rewritten by a guest (DEC-25); the submitted contact is copied onto the booking.
     const existing = await tx.customer.findFirst({
       where: { email: customer.email, userId: null },
       orderBy: [{ createdAt: "asc" }, { id: "asc" }],
@@ -234,6 +235,11 @@ async function persist(
       data: {
         reference,
         customerId,
+        // Contact of this trip as submitted (VTC-037): the driver calls this number, even when
+        // the reused profile holds an older one. Never written to the audit trail (BR-60).
+        contactName: customer.name,
+        contactPhone: customer.phone ?? null,
+        contactLocale: customer.locale,
         pickupLabel: request.origin.label,
         pickupLat: request.origin.lat,
         pickupLng: request.origin.lng,
