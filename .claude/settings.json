@@ -82,10 +82,18 @@
       "PowerShell(gh secret *)",
       "PowerShell(gh repo delete *)",
       "PowerShell(gh repo edit * --visibility *)",
-      "Bash(gh pr merge * --admin*)",
-      "PowerShell(gh pr merge * --admin*)",
-      "Bash(gh api * rulesets*)",
-      "PowerShell(gh api * rulesets*)"
+      "Bash(gh pr merge *--admin*)",
+      "PowerShell(gh pr merge *--admin*)",
+      "Bash(gh api *rulesets*)",
+      "PowerShell(gh api *rulesets*)",
+      "Bash(sh *apply-ruleset.sh*)",
+      "Bash(bash *apply-ruleset.sh*)",
+      "Bash(./scripts/apply-ruleset.sh*)",
+      "Bash(scripts/apply-ruleset.sh*)",
+      "PowerShell(sh *apply-ruleset.sh*)",
+      "PowerShell(bash *apply-ruleset.sh*)",
+      "PowerShell(./scripts/apply-ruleset.sh*)",
+      "PowerShell(scripts/apply-ruleset.sh*)"
     ]
   }
 }

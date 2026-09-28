@@ -1,6 +1,6 @@
 #!/bin/sh
 # Applies .github/rulesets/main.json to the GitHub repository (repo admin only).
-# Requires GitHub Pro for a private repository owned by a personal account (DEC-23).
+# Free on this public repository (DEC-23). Denied to Claude in .claude/settings.json.
 set -eu
 repo=$(gh repo view --json nameWithOwner --jq .nameWithOwner)
 existing=$(gh api "repos/$repo/rulesets" --jq '.[] | select(.name == "main") | .id')
