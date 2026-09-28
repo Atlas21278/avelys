@@ -19,6 +19,9 @@ export const REDACTED_PATHS = [
   "*.phone",
   "*.cardNumber",
   "*.DATABASE_URL",
+  "*.BETTER_AUTH_SECRET",
+  "*.backupCodes",
+  "*.totpURI",
   "req.headers.authorization",
   "req.headers.cookie",
 ];

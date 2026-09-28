@@ -1,7 +1,7 @@
 import * as z from "zod";
 
 /**
- * Server-side environment. Stripe, Maps, Resend and database variables are added by their own tickets.
+ * Server-side environment. Stripe, Maps and Resend variables are added by their own tickets.
  * Public (NEXT_PUBLIC_*) variables will get a separate schema when the first one is needed:
  * Next.js only inlines them when referenced literally, so they cannot share this parser.
  */
@@ -10,6 +10,8 @@ export const serverEnvSchema = z.object({
   APP_ENV: z.enum(["local", "ci", "staging", "production"]),
   APP_URL: z.url({ protocol: /^https?$/ }),
   DATABASE_URL: z.url({ protocol: /^postgres(ql)?$/ }),
+  // Signs and encrypts Better Auth cookies, tokens and TOTP secrets (VTC-016). At least 32 characters.
+  BETTER_AUTH_SECRET: z.string().min(32),
   LOG_LEVEL: z.enum(["fatal", "error", "warn", "info", "debug", "trace", "silent"]).default("info"),
 });
 

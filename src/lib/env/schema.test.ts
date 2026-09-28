@@ -7,6 +7,7 @@ const valid = {
   APP_ENV: "local",
   APP_URL: "http://localhost:3000",
   DATABASE_URL: "postgresql://user:pass@127.0.0.1:5433/avelys",
+  BETTER_AUTH_SECRET: "unit-tests-only-placeholder-value-0000",
 };
 
 describe("parseServerEnv", () => {
@@ -34,6 +35,7 @@ describe("parseServerEnv", () => {
       expect(names).toContain("APP_ENV");
       expect(names).toContain("APP_URL");
       expect(names).toContain("DATABASE_URL");
+      expect(names).toContain("BETTER_AUTH_SECRET");
     }
   });
 
@@ -48,6 +50,12 @@ describe("parseServerEnv", () => {
     expect(message).toMatch(/APP_ENV/);
     expect(message).toMatch(/APP_URL/);
     expect(message).not.toContain(secretLooking);
+  });
+
+  it("rejects a Better Auth secret shorter than 32 characters", () => {
+    expect(() => parseServerEnv({ ...valid, BETTER_AUTH_SECRET: "too-short" })).toThrowError(
+      /BETTER_AUTH_SECRET/,
+    );
   });
 
   it("rejects a non-http URL", () => {

@@ -2,6 +2,9 @@ allowBuilds:
   # Official Prisma packages: download the schema engine used by the migration CLI.
   "@prisma/engines": true
   prisma: true
+  # tsx (local scripts): the platform binary comes from an optional dependency, the
+  # postinstall only re-checks it.
+  esbuild: false
   sharp: false
   unrs-resolver: false
 
