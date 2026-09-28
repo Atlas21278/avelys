@@ -38,6 +38,14 @@ Toute autre transition échoue avec une erreur typée (`INVALID_BOOKING_TRANSITI
 ## Implémentation attendue
 
 - Table de transitions unique dans `src/domain/booking/transitions.ts` (données + garde par rôle), fonction pure testée exhaustivement (toutes paires état×état).
+
+### Module de domaine (VTC-019)
+
+- États : `src/domain/booking/status.ts` (`BOOKING_STATUSES`, `FINAL_BOOKING_STATUSES`, `isBookingStatus`). Aucun statut de paiement ni `ON_TRIP` (calculé).
+- Table et gardes : `src/domain/booking/transitions.ts` — `BOOKING_TRANSITIONS` (gelée), `canTransition`, `assertTransition`, `allowedTransitions(from, actor)`, `isFinal`, et pour la création `canCreateBooking` / `assertCanCreateBooking`.
+- Acteurs techniques (`BookingActor`) : `CUSTOMER`, `ADMIN`, `DISPATCHER`, `DRIVER` (rôles RBAC, ADR-0005) et `SYSTEM` (webhook, tâche planifiée). Lecture littérale du tableau : « Client » = `CUSTOMER`, « Admin/Dispatcher » = `ADMIN` + `DISPATCHER`, « Admin » seul = `ADMIN`, « Chauffeur » = `DRIVER`, « Système » = `SYSTEM`. Un `DISPATCHER` ne peut donc ni annuler ni déclarer un `NO_SHOW` ; toute extension de droits passe d'abord par ce document.
+- Refus : `InvalidBookingTransitionError` (`code: "INVALID_BOOKING_TRANSITION"`, `from` — `null` pour une création —, `to`, `actor`), sans donnée personnelle. Le mapping HTTP relève de la couche serveur.
+- Hors module (préconditions du service appelant) : délais DEC-06 et DEC-13, vérification du Payment `PAID`, `AuditLog`, concurrence.
 - Le service applique transition + écritures associées + `AuditLog` (acteur, avant, après, horodatage) dans **une transaction**.
 - Concurrence : verrou optimiste (colonne `version`) ou `SELECT … FOR UPDATE` ; deux transitions concurrentes ne peuvent pas réussir toutes les deux.
 - Les effets externes (email, Stripe) sont déclenchés après commit et sont idempotents (BR-50).
@@ -49,6 +57,11 @@ Référence publique · `customerId` · pickup/dropoff (libellé + lat/lng) · d
 ## Référence publique
 
 Format `VTC-XXXXXXXX` : 8 caractères base32 Crockford (`0-9A-HJKMNP-TV-Z`, sans I/L/O/U), générés par `crypto.randomInt`/`randomBytes`, contrainte d'unicité en base, nouvel essai en cas de collision. Jamais séquentielle.
+
+- Préfixe **provisoire** (DEC-22 ouverte : `VTC-` ou `AVL-`) : défini une seule fois, `BOOKING_REFERENCE_PREFIX` dans `src/domain/booking/reference.ts`. À modifier là, avant la première réservation réelle, si DEC-22 en décide autrement.
+- Module : `src/domain/booking/reference.ts` (pur, source d'aléa injectée) — `createReference`, `formatReference`, `normalizeReference`, `isValidReference`, erreur `INVALID_BOOKING_REFERENCE`. Génération serveur : `generateReference()` de `src/server/booking/reference.ts`, branché sur `node:crypto`. `Math.random` est interdit dans `src/domain` et `src/server` (règle ESLint).
+- Saisie tolérante (`normalizeReference`) : casse ignorée ; espaces et tirets retirés ; `O` lu `0`, `I` et `L` lus `1` ; préfixe facultatif. Tout autre caractère (dont `U`, lettres accentuées, ponctuation) ou une longueur différente de 8 est rejeté. `isValidReference` ne vérifie que la forme canonique stockée.
+- Hors périmètre de ce module : colonne `reference` et contrainte d'unicité (modèle Booking), boucle de nouvel essai (service de création).
 
 ## Aéroports et gares
 

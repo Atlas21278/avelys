@@ -52,6 +52,20 @@ export default defineConfig([
     rules: { "no-restricted-imports": ["error", domainRestrictions] },
   },
   {
+    // Security-relevant randomness (booking references, ADR-0015) comes from node:crypto only.
+    files: ["src/domain/**/*.{ts,tsx}", "src/server/**/*.{ts,tsx}"],
+    rules: {
+      "no-restricted-properties": [
+        "error",
+        {
+          object: "Math",
+          property: "random",
+          message: "Not cryptographically secure: use randomInt/randomBytes from node:crypto.",
+        },
+      ],
+    },
+  },
+  {
     files: ["src/app/**/*.{ts,tsx}"],
     rules: { "no-restricted-imports": ["error", appRestrictions] },
   },
