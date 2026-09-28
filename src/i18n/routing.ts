@@ -24,6 +24,11 @@ export const routing = defineRouting({
     "/contact": "/contact",
     "/reservation": { fr: "/reservation", en: "/booking" },
     "/compte": { fr: "/compte", en: "/account" },
+    // Legal pages (VTC-018): provisional content until DEC-08, DEC-09, DEC-10 and DEC-11 close.
+    "/mentions-legales": { fr: "/mentions-legales", en: "/legal-notice" },
+    "/confidentialite": { fr: "/confidentialite", en: "/privacy" },
+    "/cookies": "/cookies",
+    "/cgv": { fr: "/cgv", en: "/terms" },
   },
 });
 

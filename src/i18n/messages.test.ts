@@ -82,3 +82,50 @@ describe("home page and site chrome messages", () => {
     },
   );
 });
+
+describe("public content page messages", () => {
+  const pages = Object.keys(fr.Pages);
+
+  it("cover the ten public pages of VTC-018", () => {
+    expect(pages.sort()).toEqual(
+      [
+        "about",
+        "booking",
+        "business",
+        "contact",
+        "cookies",
+        "fleet",
+        "legalNotice",
+        "privacy",
+        "services",
+        "terms",
+      ].sort(),
+    );
+  });
+
+  it.each(Object.entries(catalogues))(
+    "give every page a title, meta title and meta description in %s",
+    (_locale, messages) => {
+      for (const page of pages) {
+        for (const key of ["title", "metaTitle", "metaDescription"]) {
+          expect(messages.has(`Pages.${page}.${key}`), `Pages.${page}.${key}`).toBe(true);
+        }
+      }
+    },
+  );
+
+  it.each(Object.entries(catalogues))(
+    "name the open decisions in the provisional labels in %s",
+    (_locale, messages) => {
+      expect(messages.get("Provisional.labelWithDecisions")).toContain("{decisions}");
+      expect(messages.get("Pages.terms.mediatorPending")).toContain("{decisions}");
+    },
+  );
+
+  it.each(Object.entries(catalogues))("show no amount in %s", (_locale, messages) => {
+    for (const [key, value] of messages) {
+      if (!key.startsWith("Pages.")) continue;
+      expect(value as string, key).not.toMatch(/€|\bEUR\b|\d+[,.]\d{2}/);
+    }
+  });
+});

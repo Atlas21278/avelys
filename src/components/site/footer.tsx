@@ -4,15 +4,11 @@ import { Container } from "@/components/ui/container";
 import { Link } from "@/i18n/navigation";
 import { SITE_IDENTITY_DECISIONS, SITE_IDENTITY_FIELDS, siteIdentity } from "@/lib/site-identity";
 
-import { SITE_NAV } from "./nav";
+import { LEGAL_NAV, SITE_NAV } from "./nav";
 
 const footerLinkClasses =
   "text-paper underline decoration-on-ink-muted decoration-1 underline-offset-[5px] " +
   "transition-[text-decoration-color] duration-200 ease-settle hover:decoration-paper";
-
-// Legal pages get their routes and English slugs from VTC-018 (DEC-09, DEC-10); until then they
-// are listed without links rather than pointing to invented paths.
-const LEGAL_PAGES = ["legalNotice", "privacy", "cookies", "terms"] as const;
 
 /** Public site footer: the page's single ink band (DESIGN.md, Single Binding Rule). */
 export function SiteFooter() {
@@ -47,17 +43,20 @@ export function SiteFooter() {
           </ul>
         </nav>
 
-        <section aria-labelledby="footer-legal-title" className="flex flex-col gap-4">
+        <nav aria-labelledby="footer-legal-title" className="flex flex-col gap-4">
           <h2 id="footer-legal-title" className="small-caps-label text-on-ink-muted">
             {t("footer.legalTitle")}
           </h2>
           <ul className="flex flex-col gap-2">
-            {LEGAL_PAGES.map((page) => (
-              <li key={page}>{t(`footer.legal.${page}`)}</li>
+            {LEGAL_NAV.map((item) => (
+              <li key={item.key}>
+                <Link href={item.href} className={footerLinkClasses}>
+                  {t(`footer.legal.${item.key}`)}
+                </Link>
+              </li>
             ))}
           </ul>
-          <p className="text-sm text-on-ink-muted">{t("footer.legalPending")}</p>
-        </section>
+        </nav>
 
         <section aria-labelledby="footer-identity-title" className="flex flex-col gap-4">
           <h2 id="footer-identity-title" className="small-caps-label text-on-ink-muted">

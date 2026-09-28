@@ -102,6 +102,27 @@ export function parseBookingSearch(input: Record<string, unknown>) {
   return { ...result, data };
 }
 
+/** Raw URL parameters, as given by a page's `searchParams` or a `URLSearchParams`. */
+export type RawSearchParams = URLSearchParams | Record<string, string | string[] | undefined>;
+
+/**
+ * Tolerant reading of the search carried in a URL (booking page): each field is validated on
+ * its own, an invalid or repeated-but-invalid field is simply left out, and nothing throws.
+ * A repeated parameter keeps its first value. Unknown parameters (an amount, for instance)
+ * are ignored.
+ */
+export function readBookingSearch(params: RawSearchParams): BookingSearch {
+  const search: Record<string, string | number> = {};
+  for (const field of BOOKING_SEARCH_FIELDS) {
+    const raw = params instanceof URLSearchParams ? params.get(field) : params[field];
+    const value = Array.isArray(raw) ? raw[0] : raw;
+    if (value === undefined || value === null) continue;
+    const result = bookingSearchSchema.shape[field].safeParse(value);
+    if (result.success && result.data !== undefined) search[field] = result.data;
+  }
+  return search as BookingSearch;
+}
+
 /** URL query string (without `?`) with the filled fields, in a stable order. */
 export function bookingSearchQuery(search: BookingSearch): string {
   const params = new URLSearchParams();
