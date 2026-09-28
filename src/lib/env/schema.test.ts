@@ -52,6 +52,20 @@ describe("parseServerEnv", () => {
     }
   });
 
+  it("treats the Google Maps server key as optional, empty meaning not configured", () => {
+    expect(parseServerEnv(valid).GOOGLE_MAPS_SERVER_API_KEY).toBeUndefined();
+    expect(
+      parseServerEnv({ ...valid, GOOGLE_MAPS_SERVER_API_KEY: "" }).GOOGLE_MAPS_SERVER_API_KEY,
+    ).toBeUndefined();
+    expect(
+      parseServerEnv({ ...valid, GOOGLE_MAPS_SERVER_API_KEY: "unit-test-placeholder" })
+        .GOOGLE_MAPS_SERVER_API_KEY,
+    ).toBe("unit-test-placeholder");
+    expect(() => parseServerEnv({ ...valid, GOOGLE_MAPS_SERVER_API_KEY: "   " })).toThrowError(
+      /GOOGLE_MAPS_SERVER_API_KEY/,
+    );
+  });
+
   it("rejects a non-PostgreSQL database URL", () => {
     expect(() => parseServerEnv({ ...valid, DATABASE_URL: "mysql://x@y/z" })).toThrowError(
       /DATABASE_URL/,

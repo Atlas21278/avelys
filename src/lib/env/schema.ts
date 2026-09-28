@@ -32,6 +32,14 @@ export const serverEnvSchema = z.object({
     (value) => (value === "" ? undefined : value),
     z.coerce.number().int().positive().default(604_800),
   ),
+  // Google Maps Platform server key (VTC-024, ADR-0010): Routes API only, restricted by API and
+  // IP. Optional at startup so that `next build` and pages without routing work without it;
+  // the routing adapter fails with a typed error on first use when it is missing.
+  // An empty value (as copied from .env.example) means "not configured".
+  GOOGLE_MAPS_SERVER_API_KEY: z.preprocess(
+    (value) => (value === "" ? undefined : value),
+    z.string().trim().min(1).optional(),
+  ),
   LOG_LEVEL: z.enum(["fatal", "error", "warn", "info", "debug", "trace", "silent"]).default("info"),
 });
 

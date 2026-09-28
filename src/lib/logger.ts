@@ -20,6 +20,8 @@ export const REDACTED_PATHS = [
   "*.cardNumber",
   "*.DATABASE_URL",
   "*.BETTER_AUTH_SECRET",
+  "*.GOOGLE_MAPS_SERVER_API_KEY",
+  "*.apiKey",
   "*.backupCodes",
   "*.totpURI",
   "req.headers.authorization",
