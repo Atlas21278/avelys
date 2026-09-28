@@ -19,6 +19,10 @@ PostgreSQL 17 (managé en production, DEC-12), Prisma ORM 7.
 
 Contrôle de dérive en CI : `prisma migrate diff --from-config-datasource --to-schema prisma/schema.prisma --exit-code` échoue (code 2) si le schéma contient un changement sans migration. L'extension `btree_gist`, créée en SQL manuel, ne provoque pas de faux positif (vérifié).
 
+### Authentification (VTC-016)
+
+Migration `20260928065414_auth_better_auth`, **additive** (un enum, six tables, aucune modification de l'existant) : `User` (avec `role` `UserRole` et `twoFactorEnabled`), `Session`, `Account` (hash du mot de passe, fournisseur `credential`), `Verification` (défis 2FA en cours), `TwoFactor` (secret TOTP et codes de secours chiffrés par `BETTER_AUTH_SECRET`), `RateLimit`. Noms de champs imposés par Better Auth. Rollback : revert de la PR ; suppression manuelle des tables en dev uniquement (aucune donnée métier ne dépend encore de `User`).
+
 ## Entités minimales
 
 | Entité                                      | Responsabilité                     | Notes                                                                         |

@@ -7,15 +7,49 @@ const valid = {
   APP_ENV: "local",
   APP_URL: "http://localhost:3000",
   DATABASE_URL: "postgresql://user:pass@127.0.0.1:5433/avelys",
+  BETTER_AUTH_SECRET: "unit-tests-only-placeholder-value-0000",
 };
+
+const defaults = { LOG_LEVEL: "info", TRUSTED_PROXIES: [], AUTH_SESSION_MAX_AGE_SECONDS: 604_800 };
 
 describe("parseServerEnv", () => {
   it("returns typed values for a valid environment, with defaults", () => {
-    expect(parseServerEnv(valid)).toEqual({ ...valid, LOG_LEVEL: "info" });
+    expect(parseServerEnv(valid)).toEqual({ ...valid, ...defaults });
   });
 
   it("ignores unrelated variables", () => {
-    expect(parseServerEnv({ ...valid, PATH: "/usr/bin" })).toEqual({ ...valid, LOG_LEVEL: "info" });
+    expect(parseServerEnv({ ...valid, PATH: "/usr/bin" })).toEqual({ ...valid, ...defaults });
+  });
+
+  it("parses trusted proxies as a list of IPs and CIDR ranges", () => {
+    expect(
+      parseServerEnv({ ...valid, TRUSTED_PROXIES: " 10.0.0.0/8, 192.0.2.10 ,fd00::/8," })
+        .TRUSTED_PROXIES,
+    ).toEqual(["10.0.0.0/8", "192.0.2.10", "fd00::/8"]);
+    expect(parseServerEnv({ ...valid, TRUSTED_PROXIES: "" }).TRUSTED_PROXIES).toEqual([]);
+  });
+
+  it("rejects a trusted proxy that is not an IP or a CIDR range", () => {
+    for (const value of ["ingress.local", "10.0.0.0/33", "10.0.0.0/8, *"]) {
+      expect(() => parseServerEnv({ ...valid, TRUSTED_PROXIES: value })).toThrowError(
+        /TRUSTED_PROXIES/,
+      );
+    }
+  });
+
+  it("reads the session lifetime as a positive integer number of seconds", () => {
+    expect(
+      parseServerEnv({ ...valid, AUTH_SESSION_MAX_AGE_SECONDS: "3600" })
+        .AUTH_SESSION_MAX_AGE_SECONDS,
+    ).toBe(3600);
+    expect(
+      parseServerEnv({ ...valid, AUTH_SESSION_MAX_AGE_SECONDS: "" }).AUTH_SESSION_MAX_AGE_SECONDS,
+    ).toBe(604_800);
+    for (const value of ["0", "-1", "1.5", "one hour"]) {
+      expect(() => parseServerEnv({ ...valid, AUTH_SESSION_MAX_AGE_SECONDS: value })).toThrowError(
+        /AUTH_SESSION_MAX_AGE_SECONDS/,
+      );
+    }
   });
 
   it("rejects a non-PostgreSQL database URL", () => {
@@ -34,6 +68,7 @@ describe("parseServerEnv", () => {
       expect(names).toContain("APP_ENV");
       expect(names).toContain("APP_URL");
       expect(names).toContain("DATABASE_URL");
+      expect(names).toContain("BETTER_AUTH_SECRET");
     }
   });
 
@@ -48,6 +83,12 @@ describe("parseServerEnv", () => {
     expect(message).toMatch(/APP_ENV/);
     expect(message).toMatch(/APP_URL/);
     expect(message).not.toContain(secretLooking);
+  });
+
+  it("rejects a Better Auth secret shorter than 32 characters", () => {
+    expect(() => parseServerEnv({ ...valid, BETTER_AUTH_SECRET: "too-short" })).toThrowError(
+      /BETTER_AUTH_SECRET/,
+    );
   });
 
   it("rejects a non-http URL", () => {

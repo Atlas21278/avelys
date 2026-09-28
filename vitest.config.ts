@@ -42,6 +42,10 @@ export default defineConfig({
             APP_ENV: "ci",
             APP_URL: "http://localhost:3000",
             DATABASE_URL: TEST_DATABASE_URL,
+            // Fixed, test-only value (not a secret): signs cookies of the test database only.
+            BETTER_AUTH_SECRET: "integration-tests-only-placeholder-not-a-secret",
+            // Documentation range standing in for the ingress hops (RFC 5737 TEST-NET-2).
+            TRUSTED_PROXIES: "198.51.100.0/24",
             LOG_LEVEL: "silent",
           },
           fileParallelism: false,

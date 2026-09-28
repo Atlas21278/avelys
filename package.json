@@ -19,11 +19,13 @@
     "db:up": "docker compose up -d db",
     "db:migrate": "prisma migrate dev",
     "db:deploy": "prisma migrate deploy",
-    "db:status": "prisma migrate status"
+    "db:status": "prisma migrate status",
+    "auth:create-staff": "tsx --conditions=react-server scripts/create-staff-user.ts"
   },
   "dependencies": {
     "@prisma/adapter-pg": "7.10.0",
     "@prisma/client": "7.10.0",
+    "better-auth": "1.7.6",
     "next": "16.3.6",
     "next-intl": "^4.14.7",
     "pg": "^8.23.0",
@@ -48,6 +50,7 @@
     "prettier-plugin-tailwindcss": "^0.8.1",
     "prisma": "7.10.0",
     "tailwindcss": "^4",
+    "tsx": "^4.23.15",
     "typescript": "^6",
     "typescript-eslint": "^8.70.1",
     "vitest": "^5.0.2"
