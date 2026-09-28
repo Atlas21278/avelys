@@ -1,0 +1,9 @@
+# Sensitive paths need the owner's review (Master Spec §29).
+# When the second associate has a GitHub account, add them here and require CODEOWNERS review.
+/prisma/migrations/        @Atlas21278
+/.github/                  @Atlas21278
+/charts/                   @Atlas21278
+/src/integrations/stripe/  @Atlas21278
+/src/domain/pricing/       @Atlas21278
+/.claude/                  @Atlas21278
+/CLAUDE.md                 @Atlas21278

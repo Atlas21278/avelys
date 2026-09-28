@@ -1,0 +1,78 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  ci:
+    name: ci
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      APP_ENV: ci
+      APP_URL: http://localhost:3000
+      NEXT_TELEMETRY_DISABLED: "1"
+      # Throwaway credential of the job-scoped service container below; not a secret.
+      TEST_DATABASE_URL: postgresql://avelys:avelys_ci@localhost:5432/avelys_test
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: avelys
+          POSTGRES_PASSWORD: avelys_ci
+          POSTGRES_DB: avelys_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U avelys -d avelys_test"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm lint
+      - run: pnpm format:check
+      - run: pnpm typecheck
+      - name: Unit tests
+        run: pnpm exec vitest run --project unit --reporter=default --reporter=junit --outputFile.junit=reports/unit.xml
+      - name: Apply migrations to the test database
+        run: pnpm db:deploy
+        env:
+          DATABASE_URL: ${{ env.TEST_DATABASE_URL }}
+      - name: Migrations are complete (no pending change in the schema)
+        run: pnpm exec prisma migrate diff --from-config-datasource --to-schema prisma/schema.prisma --exit-code
+        env:
+          DATABASE_URL: ${{ env.TEST_DATABASE_URL }}
+      - name: Integration tests
+        run: pnpm exec vitest run --project integration --reporter=default --reporter=junit --outputFile.junit=reports/integration.xml
+      # Built without database variables, like the Docker image: env is validated at runtime.
+      - run: pnpm build
+
+      - name: Upload test report
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: test-report
+          path: reports/
+          retention-days: 14
+          if-no-files-found: ignore

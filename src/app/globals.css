@@ -1,0 +1,134 @@
+@import "tailwindcss";
+
+/*
+ * Avelys design tokens — "Le Guide de voyage" (see DESIGN.md).
+ * Anthracite binding, ivory pages, graphite annotations, one champagne ribbon.
+ * Champagne is never text on ivory (2.35:1): use --color-champagne-deep for accented text.
+ */
+@theme {
+  --color-*: initial;
+  --color-ink: #1f2124;
+  --color-ink-raised: #34373c;
+  --color-paper: #f4efe6;
+  --color-paper-deep: #eae3d6;
+  --color-graphite: #5b5852;
+  --color-rule: #8c877e;
+  --color-hairline: #d6cec0;
+  --color-champagne: #b8996a;
+  --color-champagne-deep: #7a5f32;
+  --color-rubric: #9c2b20;
+  --color-on-ink-muted: #a8a298;
+  --color-transparent: transparent;
+  --color-current: currentColor;
+
+  --radius-*: initial;
+  --radius-print: 2px;
+  --radius-full: 9999px;
+
+  --shadow-*: initial;
+  --shadow-page: 0 1px 1px rgb(31 33 36 / 0.06), 0 12px 32px -12px rgb(31 33 36 / 0.22);
+
+  --ease-settle: cubic-bezier(0.16, 1, 0.3, 1);
+
+  --text-caption: 0.8125rem;
+  --text-caption--line-height: 1.35;
+  --text-caption--letter-spacing: 0.08em;
+  --text-display-sm: clamp(2rem, 6vw, 2.75rem);
+  --text-display-sm--line-height: 1.05;
+  --text-display: clamp(2.5rem, 7vw, 4.75rem);
+  --text-display--line-height: 1;
+  --text-display--letter-spacing: -0.02em;
+}
+
+@theme inline {
+  --font-display: var(--font-bodoni), "Bodoni 72", "Didot", serif;
+  --font-sans: var(--font-schibsted), ui-sans-serif, system-ui, sans-serif;
+}
+
+@layer base {
+  html {
+    background-color: var(--color-paper);
+    color: var(--color-ink);
+    font-family: var(--font-sans);
+    -webkit-text-size-adjust: 100%;
+    text-rendering: optimizeLegibility;
+    scrollbar-color: var(--color-rule) var(--color-paper-deep);
+    accent-color: var(--color-ink);
+    caret-color: var(--color-ink);
+  }
+
+  body {
+    min-height: 100dvh;
+    font-size: 1rem;
+    line-height: 1.55;
+  }
+
+  ::selection {
+    background-color: var(--color-champagne);
+    color: var(--color-ink);
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--color-ink);
+    outline-offset: 3px;
+  }
+
+  h1,
+  h2,
+  h3 {
+    text-wrap: balance;
+  }
+
+  p {
+    text-wrap: pretty;
+  }
+
+  /* Lining, not tabular: Schibsted Grotesk's tabular comma takes a full figure width ("32 , 4"). */
+  table,
+  time,
+  data {
+    font-variant-numeric: lining-nums;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
+  }
+}
+
+/*
+ * Bodoni is always set at its text optical size (opsz 11): the display cuts' hairlines
+ * disappear on ivory (owner feedback 2026-09-28). Weight 500 keeps titles readable at a glance.
+ */
+@utility font-display-optical {
+  font-family: var(--font-display);
+  font-variation-settings: "opsz" 11;
+  font-weight: 500;
+  font-variant-numeric: lining-nums;
+}
+
+/*
+ * Bodoni at text sizes: optical size pinned low and weight 500 so hairlines (€ crossbars, hyphens) survive
+ * on figures and place names. Automatic optical sizing thins them out above ~32px.
+ */
+@utility font-display-figure {
+  font-family: var(--font-display);
+  font-variation-settings: "opsz" 11;
+  font-weight: 600;
+  font-variant-numeric: lining-nums;
+}
+
+/* Labels controls and data. Never placed above a heading as an eyebrow. */
+@utility small-caps-label {
+  font-size: var(--text-caption);
+  line-height: var(--text-caption--line-height);
+  letter-spacing: var(--text-caption--letter-spacing);
+  text-transform: uppercase;
+  font-weight: 600;
+}

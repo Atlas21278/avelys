@@ -1,0 +1,133 @@
+{
+  "title": "Avelys — choisir l'univers visuel",
+  "question": "Le tirage a attribué « Le Guide de voyage ». Garde-le, prends une alternative, ou relance le tirage.",
+  "options": [
+    {
+      "id": "assigned",
+      "label": "Le Guide de voyage",
+      "kicker": "LE TIRAGE",
+      "lineage": "Guides Bleus et guides verts, cartes routières et carnets d'itinéraires",
+      "thesis": "Chaque trajet présenté comme un itinéraire de guide : distance, durée et prix fixe lus d'un coup d'œil.",
+      "palette": ["#1F2124", "#F4EFE6", "#6E6B64", "#B8996A"],
+      "materials": ["reliure toilée anthracite", "papier ivoire mat", "signet champagne"],
+      "viewport": "À gauche la promesse en capitales de guide ; à droite, la fiche itinéraire CDG → Paris avec son tracé numéroté et un emplacement de prix réservé.",
+      "risk": "Peut sembler documentaire si la typographie de titre manque d'ampleur.",
+      "raised": [
+        {
+          "from": "challenger-segments",
+          "raise": "Le prix a une place fixe dès le premier écran, vide et dessinée tant que le devis n'est pas calculé : la place ne bouge jamais, seul le chiffre apparaît."
+        },
+        {
+          "from": "challenger-patron",
+          "raise": "Le choix engagé se trace en trait plein, les alternatives restent en pointillé (service choisi, trajet retenu)."
+        },
+        {
+          "from": "challenger-scher",
+          "raise": "Un seul mot dominant par section sert de porte d'entrée, lisible de loin."
+        }
+      ]
+    },
+    {
+      "id": "model-pick",
+      "label": "La Pancarte d'arrivée",
+      "kicker": "LE CHOIX D'IMPECCABLE",
+      "lineage": "La pancarte nominative tenue par un chauffeur dans le hall des arrivées",
+      "thesis": "Quelqu'un vous attend, par votre nom : le site parle comme la pancarte que tient Avelys à CDG.",
+      "palette": ["#141414", "#FAF8F3", "#8A8780", "#C2A878"],
+      "materials": ["carton blanc", "encre noire épaisse", "hall d'aéroport"],
+      "viewport": "Une grande pancarte blanche au nom du visiteur, tenue au premier plan, avec le module de recherche dessous.",
+      "risk": "Direction proche de ce que font beaucoup de chauffeurs privés ; image forte mais attendue."
+    },
+    {
+      "id": "challenger-nuit",
+      "label": "Nuit de pluie sur la ville",
+      "verdict": "declined",
+      "lineage": "Ville à l'heure bleue puis sous la pluie nocturne",
+      "thesis": "Paris de nuit, reflets sur la chaussée mouillée, lumières des transports.",
+      "palette": ["#1B2A5A", "#0E0E10", "#E3A33A", "#C9CDD4"],
+      "materials": ["asphalte mouillé", "néon", "reflets"],
+      "viewport": "Une ligne d'horizon nocturne avec le trajet tracé en ambre.",
+      "case": "Proche de l'image de voiture la nuit que montre toute la catégorie, et ses bleus et ambres contredisent la palette imposée.",
+      "kept": "Le reflet comme preuve de calme : une seule ligne de lumière en mouvement, jamais plusieurs.",
+      "risk": "Cliché du chauffeur de luxe nocturne.",
+      "hero": "https://impeccable.style/worlds/cards/light-shadow-caustics-rain-night-cityscape-hero.webp"
+    },
+    {
+      "id": "challenger-segments",
+      "label": "Afficheur sept segments",
+      "verdict": "declined",
+      "lineage": "Réveils, totems de prix de station-service, tableaux de score",
+      "thesis": "Le prix affiché comme un chiffre lumineux dans des cases fixes.",
+      "palette": ["#101010", "#E0402A", "#3A3A3A"],
+      "materials": ["segments LED", "cases fantômes"],
+      "viewport": "Le prix du trajet en grands segments.",
+      "case": "Évoque la station-service plus que l'hôtel de luxe.",
+      "kept": "Une place fixe réservée au prix, dessinée même vide.",
+      "risk": "Registre bon marché."
+    },
+    {
+      "id": "challenger-patron",
+      "label": "Pochette de patron de couture",
+      "verdict": "declined",
+      "lineage": "Patrons avec vues A/B/C et lignes de coupe",
+      "thesis": "Les services comme des vues A, B, C ; la taille choisie en trait plein.",
+      "palette": ["#E9DDC3", "#1A1A1A", "#B3322B"],
+      "materials": ["papier de soie", "tracés en pointillé"],
+      "viewport": "Les trois services en vues lettrées.",
+      "case": "Le touriste ne s'y reconnaît pas.",
+      "kept": "Le choix engagé en trait plein, les autres en pointillé.",
+      "risk": "Hors sujet."
+    },
+    {
+      "id": "challenger-scher",
+      "label": "Affiche de théâtre de rue",
+      "verdict": "declined",
+      "lineage": "Capitales en bois, diagonales, mots coupés au bord",
+      "thesis": "Des mots immenses qui crient depuis le mur.",
+      "palette": ["#F4C600", "#FFFFFF", "#111111", "#E4572E"],
+      "materials": ["caractères bois", "papier affiche"],
+      "viewport": "Le mot AVELYS coupé par le bord, en diagonale.",
+      "case": "Trop bruyant pour un service qui promet le calme.",
+      "kept": "Un mot dominant par section comme porte d'entrée.",
+      "risk": "Agressif."
+    },
+    {
+      "id": "challenger-vhs",
+      "label": "Mur de vidéoclub",
+      "verdict": "declined",
+      "lineage": "Boîtiers alignés par genre, étiquettes « loué »",
+      "thesis": "Les services comme des boîtiers sur une étagère.",
+      "palette": ["#0B0B0B", "#C8102E", "#2E5BFF", "#F2C200"],
+      "materials": ["boîtiers plastique", "néon"],
+      "viewport": "Une étagère de services.",
+      "case": "Sans rapport avec le luxe ni le voyage.",
+      "kept": "L'absence dite honnêtement : un créneau indisponible porte une étiquette claire (contact direct sous 12 h).",
+      "risk": "Hors sujet."
+    },
+    {
+      "id": "challenger-encre",
+      "label": "Bassin d'encre marbrée",
+      "verdict": "declined",
+      "lineage": "Suminagashi, encre sur l'eau",
+      "thesis": "La page comme une surface liquide.",
+      "palette": ["#1F2A44", "#F7F5F0", "#8A8F99"],
+      "materials": ["encre", "eau"],
+      "viewport": "Un bassin d'encre animé.",
+      "case": "Beau mais n'explique ni le prix ni le service.",
+      "kept": "Des actions nommées par ce qu'elles font réellement (« Voir le prix », pas « Découvrir »).",
+      "risk": "Lourd à charger sur mobile."
+    }
+  ],
+  "reroll": { "registers": ["safer", "bolder"] },
+  "buildPath": { "value": "code", "toggle": false },
+  "canon": true,
+  "canonCard": {
+    "label": "Le standard du secteur",
+    "thesis": "Ce que font les chauffeurs privés haut de gamme, exécuté avec soin.",
+    "palette": ["#0A0A0A", "#FFFFFF", "#C5A572"],
+    "materials": ["photo de berline noire", "serif doré"],
+    "viewport": "Grande photo de voiture noire, titre serif doré, formulaire de réservation par-dessus.",
+    "risk": "Indiscernable de la concurrence."
+  },
+  "steer": true
+}

@@ -1,0 +1,51 @@
+name: Bug
+description: BUG-xxx — anomalie constatée
+title: "BUG-xxx — "
+labels: ["type:bug", "status:backlog"]
+body:
+  - type: markdown
+    attributes:
+      value: >
+        **Aucune donnée personnelle ni secret** : pas de nom, email, téléphone, adresse ou carte.
+        Utiliser la référence de réservation (VTC-XXXXXXXX) et le correlationId.
+  - type: dropdown
+    id: env
+    attributes:
+      label: Environnement
+      options: [local, staging, production]
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Version (SHA ou digest d'image)
+  - type: input
+    id: refs
+    attributes:
+      label: Références
+      placeholder: correlationId, bookingRef, lien Sentry
+  - type: textarea
+    id: steps
+    attributes:
+      label: Étapes pour reproduire
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Attendu
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Constaté
+    validations:
+      required: true
+  - type: dropdown
+    id: risk
+    attributes:
+      label: Risque
+      options: [LOW, MEDIUM, HIGH, CRITICAL]
+    validations:
+      required: true

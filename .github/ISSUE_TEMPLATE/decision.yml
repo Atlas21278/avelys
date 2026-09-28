@@ -1,0 +1,52 @@
+name: Décision
+description: DECISION-xxx — une décision humaine bloque un ticket (private/docs/decisions/register.md)
+title: "DECISION-xxx — "
+labels: ["type:decision", "status:needs-decision"]
+body:
+  - type: markdown
+    attributes:
+      value: >
+        Claude documente les options et recommande, mais ne tranche jamais une règle métier,
+        tarifaire, fiscale ou juridique.
+  - type: input
+    id: register
+    attributes:
+      label: Entrée du registre
+      placeholder: DEC-05
+    validations:
+      required: true
+  - type: input
+    id: blocks
+    attributes:
+      label: Tickets bloqués
+    validations:
+      required: true
+  - type: input
+    id: owner
+    attributes:
+      label: Propriétaire de la décision
+      placeholder: Associés, comptable, juriste…
+    validations:
+      required: true
+  - type: textarea
+    id: context
+    attributes:
+      label: Contexte
+    validations:
+      required: true
+  - type: textarea
+    id: options
+    attributes:
+      label: Options
+      description: Chaque option avec ses impacts (produit, coût, technique, légal)
+    validations:
+      required: true
+  - type: textarea
+    id: recommendation
+    attributes:
+      label: Recommandation technique
+  - type: textarea
+    id: decision
+    attributes:
+      label: Décision prise
+      description: À remplir par le propriétaire ; reporter ensuite dans le registre ou un ADR

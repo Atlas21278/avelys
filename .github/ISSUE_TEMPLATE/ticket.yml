@@ -1,0 +1,90 @@
+name: Ticket
+description: Unité de travail VTC-xxx ou INFRA-xxx (format docs/process/tickets.md)
+title: "VTC-xxx — "
+labels: ["status:backlog"]
+body:
+  - type: input
+    id: epic
+    attributes:
+      label: Epic
+      placeholder: EPIC-01
+    validations:
+      required: true
+  - type: dropdown
+    id: risk
+    attributes:
+      label: Risque
+      options: [LOW, MEDIUM, HIGH, CRITICAL]
+    validations:
+      required: true
+  - type: dropdown
+    id: human
+    attributes:
+      label: Validation humaine
+      options: ["non", "oui"]
+    validations:
+      required: true
+  - type: input
+    id: deps
+    attributes:
+      label: Dépendances
+      placeholder: "VTC-002, INFRA-001 ou —"
+  - type: input
+    id: sources
+    attributes:
+      label: Sources
+      description: Sections de la Master Spec, docs, ADR
+    validations:
+      required: true
+  - type: textarea
+    id: context
+    attributes:
+      label: Contexte
+    validations:
+      required: true
+  - type: textarea
+    id: goal
+    attributes:
+      label: Objectif
+    validations:
+      required: true
+  - type: textarea
+    id: outcome
+    attributes:
+      label: Résultat attendu / user story
+  - type: textarea
+    id: functional
+    attributes:
+      label: Spécification fonctionnelle
+  - type: textarea
+    id: technical
+    attributes:
+      label: Spécification technique (si nécessaire)
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Critères d'acceptation
+      description: Testables, un par ligne
+      value: "- [ ] "
+    validations:
+      required: true
+  - type: textarea
+    id: tests
+    attributes:
+      label: Tests attendus
+    validations:
+      required: true
+  - type: textarea
+    id: files
+    attributes:
+      label: Fichiers / modules probables
+  - type: textarea
+    id: forbidden
+    attributes:
+      label: Interdits / hors périmètre
+    validations:
+      required: true
+  - type: textarea
+    id: rollback
+    attributes:
+      label: Rollback / impact DB

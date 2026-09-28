@@ -1,0 +1,11 @@
+// Avelys data model. Conventions and the SQL that Prisma cannot express
+// (btree_gist, exclusion constraints) are documented in docs/architecture/database.md.
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
