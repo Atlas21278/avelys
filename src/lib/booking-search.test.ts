@@ -5,6 +5,7 @@ import {
   bookingSearchHref,
   bookingSearchQuery,
   parseBookingSearch,
+  readBookingSearch,
 } from "./booking-search";
 
 describe("parseBookingSearch", () => {
@@ -155,5 +156,65 @@ describe("bookingSearchHref", () => {
   it("has no query string for an empty search", () => {
     expect(bookingSearchHref({}, "fr")).toBe("/reservation");
     expect(bookingSearchHref({}, "en")).toBe("/en/booking");
+  });
+});
+
+describe("readBookingSearch", () => {
+  it("returns an empty search when no parameter is given", () => {
+    expect(readBookingSearch({})).toEqual({});
+    expect(readBookingSearch(new URLSearchParams())).toEqual({});
+  });
+
+  it("keeps the valid fields and ignores the invalid ones", () => {
+    expect(
+      readBookingSearch({
+        pickup: "Orly",
+        dropoff: "x".repeat(201),
+        date: "2026-02-30",
+        time: "07:45",
+        passengers: "zero",
+        luggage: "2",
+      }),
+    ).toEqual({ pickup: "Orly", time: "07:45", luggage: 2 });
+  });
+
+  it("ignores every field when all of them are invalid, without throwing", () => {
+    expect(
+      readBookingSearch({ date: "tomorrow", time: "25:00", passengers: "-1", luggage: "1.5" }),
+    ).toEqual({});
+  });
+
+  it("takes the first value of a repeated parameter", () => {
+    expect(
+      readBookingSearch({ pickup: ["Gare du Nord", "Orly"], passengers: ["2", "3"], luggage: [] }),
+    ).toEqual({ pickup: "Gare du Nord", passengers: 2 });
+  });
+
+  it("reads a URL query string, decoding encoded characters", () => {
+    const query = "pickup=Gare+de+Lyon+%26+Hall+1&dropoff=Caf%C3%A9+%233&time=18%3A05&luggage=0";
+    expect(readBookingSearch(new URLSearchParams(query))).toEqual({
+      pickup: "Gare de Lyon & Hall 1",
+      dropoff: "Café #3",
+      time: "18:05",
+      luggage: 0,
+    });
+  });
+
+  it("round-trips what bookingSearchQuery writes", () => {
+    const search = {
+      pickup: "Aéroport Charles-de-Gaulle",
+      dropoff: "Hôtel, Paris 8e",
+      date: "2026-10-12",
+      time: "07:45",
+      passengers: 3,
+      luggage: 0,
+    };
+    expect(readBookingSearch(new URLSearchParams(bookingSearchQuery(search)))).toEqual(search);
+  });
+
+  it("drops unknown parameters such as an amount", () => {
+    expect(
+      readBookingSearch({ pickup: "Orly", price: "10", amountCents: "1000", total: undefined }),
+    ).toEqual({ pickup: "Orly" });
   });
 });

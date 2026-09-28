@@ -15,18 +15,7 @@ import { Link } from "@/i18n/navigation";
 import { bookingSearchHref } from "@/lib/booking-search";
 
 import { SearchForm } from "./_components/search-form";
-
-// V1 services (docs/product/vision.md, "Prestations V1"). No price, duration or capacity is shown.
-const SERVICES = [
-  "airports",
-  "door",
-  "stations",
-  "excursions",
-  "hourly",
-  "longDistance",
-  "business",
-  "events",
-] as const;
+import { SERVICES } from "./_components/services";
 
 // Confirmed differentiators (PRODUCT.md, Positioning) and decided booking facts.
 const ADVANTAGES = ["founders", "fixedPrice", "electric", "simple"] as const;

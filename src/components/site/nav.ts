@@ -8,3 +8,11 @@ export const SITE_NAV = [
   { href: "/a-propos", key: "about" },
   { href: "/contact", key: "contact" },
 ] as const satisfies readonly { href: AppPathname; key: string }[];
+
+/** Legal pages listed in the footer (Master Spec §5); their content is provisional (VTC-018). */
+export const LEGAL_NAV = [
+  { href: "/mentions-legales", key: "legalNotice" },
+  { href: "/confidentialite", key: "privacy" },
+  { href: "/cookies", key: "cookies" },
+  { href: "/cgv", key: "terms" },
+] as const satisfies readonly { href: AppPathname; key: string }[];
