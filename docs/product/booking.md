@@ -38,6 +38,14 @@ Toute autre transition échoue avec une erreur typée (`INVALID_BOOKING_TRANSITI
 ## Implémentation attendue
 
 - Table de transitions unique dans `src/domain/booking/transitions.ts` (données + garde par rôle), fonction pure testée exhaustivement (toutes paires état×état).
+
+### Module de domaine (VTC-019)
+
+- États : `src/domain/booking/status.ts` (`BOOKING_STATUSES`, `FINAL_BOOKING_STATUSES`, `isBookingStatus`). Aucun statut de paiement ni `ON_TRIP` (calculé).
+- Table et gardes : `src/domain/booking/transitions.ts` — `BOOKING_TRANSITIONS` (gelée), `canTransition`, `assertTransition`, `allowedTransitions(from, actor)`, `isFinal`, et pour la création `canCreateBooking` / `assertCanCreateBooking`.
+- Acteurs techniques (`BookingActor`) : `CUSTOMER`, `ADMIN`, `DISPATCHER`, `DRIVER` (rôles RBAC, ADR-0005) et `SYSTEM` (webhook, tâche planifiée). Lecture littérale du tableau : « Client » = `CUSTOMER`, « Admin/Dispatcher » = `ADMIN` + `DISPATCHER`, « Admin » seul = `ADMIN`, « Chauffeur » = `DRIVER`, « Système » = `SYSTEM`. Un `DISPATCHER` ne peut donc ni annuler ni déclarer un `NO_SHOW` ; toute extension de droits passe d'abord par ce document.
+- Refus : `InvalidBookingTransitionError` (`code: "INVALID_BOOKING_TRANSITION"`, `from` — `null` pour une création —, `to`, `actor`), sans donnée personnelle. Le mapping HTTP relève de la couche serveur.
+- Hors module (préconditions du service appelant) : délais DEC-06 et DEC-13, vérification du Payment `PAID`, `AuditLog`, concurrence.
 - Le service applique transition + écritures associées + `AuditLog` (acteur, avant, après, horodatage) dans **une transaction**.
 - Concurrence : verrou optimiste (colonne `version`) ou `SELECT … FOR UPDATE` ; deux transitions concurrentes ne peuvent pas réussir toutes les deux.
 - Les effets externes (email, Stripe) sont déclenchés après commit et sont idempotents (BR-50).
