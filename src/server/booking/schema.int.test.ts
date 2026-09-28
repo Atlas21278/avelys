@@ -12,6 +12,20 @@ import { generateReference } from "./reference";
 const PICKUP_AT = new Date("2026-10-25T01:30:00.000Z");
 const PICKUP_LOCAL = new Date(Date.UTC(2026, 9, 25, 2, 30));
 
+// Referenced by Booking (composite foreign key, VTC-025). Test row only: its config is not a tariff.
+const TEST_RULE = { id: "test-rule", version: 1 } as const;
+
+async function testPricingRule() {
+  return db().pricingRule.create({
+    data: {
+      ...TEST_RULE,
+      effectiveFrom: new Date("2026-01-01T00:00:00.000Z"),
+      config: { note: "test rule, not a tariff" },
+      schemaVersion: 1,
+    },
+  });
+}
+
 async function guestCustomer() {
   return db().customer.create({
     data: { name: "Guest Test", email: "guest@avelys.test", phone: "+33100000000" },
@@ -38,8 +52,8 @@ function minimalBooking(customerId: string, reference = generateReference()) {
     totalTtcCents: 12_345,
     currency: "EUR",
     pricingSnapshot: { schemaVersion: 1, note: "test snapshot" },
-    pricingRuleId: "test-rule",
-    pricingRuleVersion: 1,
+    pricingRuleId: TEST_RULE.id,
+    pricingRuleVersion: TEST_RULE.version,
   } satisfies Prisma.BookingUncheckedCreateInput;
 }
 
@@ -49,9 +63,13 @@ describe("booking schema (integration)", () => {
     await client.auditLog.deleteMany();
     await client.booking.deleteMany();
     await client.customer.deleteMany();
+    await client.pricingRule.deleteMany();
+    await testPricingRule();
   });
 
   afterAll(async () => {
+    // Leave no booking behind: stale rows would break later foreign key validations.
+    await db().booking.deleteMany();
     await db().$disconnect();
   });
 
@@ -135,6 +153,26 @@ describe("booking schema (integration)", () => {
     await db().booking.create({ data: minimalBooking(customer.id) });
 
     await expect(db().customer.delete({ where: { id: customer.id } })).rejects.toBeInstanceOf(
+      Prisma.PrismaClientKnownRequestError,
+    );
+  });
+
+  it("rejects a booking whose pricing rule version does not exist (P2003)", async () => {
+    const customer = await guestCustomer();
+    const error: unknown = await db()
+      .booking.create({
+        data: { ...minimalBooking(customer.id), pricingRuleVersion: TEST_RULE.version + 1 },
+      })
+      .catch((caught: unknown) => caught);
+    expect(error).toBeInstanceOf(Prisma.PrismaClientKnownRequestError);
+    expect(error).toMatchObject({ code: "P2003" });
+  });
+
+  it("refuses to delete a pricing rule referenced by a booking", async () => {
+    const customer = await guestCustomer();
+    await db().booking.create({ data: minimalBooking(customer.id) });
+
+    await expect(db().pricingRule.delete({ where: { id: TEST_RULE.id } })).rejects.toBeInstanceOf(
       Prisma.PrismaClientKnownRequestError,
     );
   });

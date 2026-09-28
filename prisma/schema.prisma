@@ -205,8 +205,10 @@ model Booking {
   currency           String @db.Char(3)
   /// Immutable pricing snapshot validated by a versioned Zod schema (BR-13, ADR-0009).
   pricingSnapshot    Json
+  /// Rule version the quote was priced with (VTC-025). Composite key: the pair must exist as is.
   pricingRuleId      String
   pricingRuleVersion Int
+  pricingRule        PricingRule @relation(fields: [pricingRuleId, pricingRuleVersion], references: [id, version], onDelete: Restrict, onUpdate: Restrict)
 
   status BookingStatus @default(REQUESTED)
 
@@ -249,4 +251,33 @@ model AuditLog {
   createdAt     DateTime  @default(now()) @db.Timestamptz(3)
 
   @@index([entityType, entityId, createdAt])
+}
+
+// ---------------------------------------------------------------------------
+// Pricing (VTC-025, Master Spec §8, ADR-0009). No tariff value lives in the code (BR-02):
+// the only provisional values are in the dev seed (prisma/seed.ts, DEC-03).
+// ---------------------------------------------------------------------------
+
+/// Immutable pricing rule version (BR-13): the application only inserts rows, never updates or
+/// deletes them. A new tariff is a new version; bookings keep their own snapshot.
+model PricingRule {
+  id            String    @id @default(cuid(2))
+  /// Monotonic across all rules, allocated as max + 1 by the service (unique constraint + retry).
+  version       Int       @unique
+  /// The rule applies from this instant (UTC) until a version with a later effectiveFrom (or the
+  /// same one and a higher version) takes over.
+  effectiveFrom DateTime  @db.Timestamptz(3)
+  /// Tariff fields of PricingRuleConfig without id/version/schemaVersion (taken from the
+  /// columns), validated by parsePricingRule on write and on read.
+  config        Json
+  /// PRICING_RULE_SCHEMA_VERSION of `config` (src/domain/pricing/rule.ts).
+  schemaVersion Int
+  /// Staff User id of the author; null for the dev seed. No foreign key, like AuditLog.actorId.
+  createdBy     String?
+  createdAt     DateTime  @default(now()) @db.Timestamptz(3)
+  bookings      Booking[]
+
+  /// Target of the composite foreign key from Booking (id + version must match).
+  @@unique([id, version])
+  @@index([effectiveFrom])
 }
