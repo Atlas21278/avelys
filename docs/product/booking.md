@@ -52,6 +52,8 @@ Toute autre transition échoue avec une erreur typée (`INVALID_BOOKING_TRANSITI
 
 ## Champs Booking indispensables
 
+Modèle Prisma et champs reportés : `docs/architecture/database.md` (section VTC-026).
+
 Référence publique · `customerId` · pickup/dropoff (libellé + lat/lng) · date/heure locale + instant UTC · passagers/bagages · distance/durée du devis · montants HT/TVA/TTC (centimes) + devise · pricing snapshot · `status` · référence au `Payment` courant (statut non dupliqué) · `driverId`/`vehicleId` optionnels · champs vol/train · notes client / notes internes séparées · `createdAt`/`updatedAt`/`cancelledAt`/`completedAt`.
 
 ## Référence publique
