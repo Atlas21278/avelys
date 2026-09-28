@@ -4,7 +4,14 @@
  * created before the copy existed carry no contact columns and fall back to their customer.
  */
 
-export type ContactLocale = "fr" | "en";
+import type { Locale } from "@/i18n/routing";
+
+/**
+ * Language of a contact: the app's routed locales, a single source (VTC-038). The Prisma `Locale`
+ * enum is kept equal to them by the schema parity test (`src/server/booking/schema.test.ts`).
+ * Type-only import: nothing from the i18n module runs in the domain.
+ */
+export type ContactLocale = Locale;
 
 /** Contact columns of a booking; all null on bookings created before VTC-037. */
 export interface BookingContactColumns {

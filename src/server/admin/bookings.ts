@@ -55,7 +55,11 @@ const LIST_SELECT = {
   luggageCount: true,
   totalTtcCents: true,
   currency: true,
-  customer: { select: { name: true } },
+  // Read only to resolve the displayed name like the detail does (VTC-038); not returned.
+  contactName: true,
+  contactPhone: true,
+  contactLocale: true,
+  customer: { select: { name: true, phone: true, preferredLocale: true } },
 } as const satisfies Prisma.BookingSelect;
 
 export interface BookingListItem {
@@ -68,7 +72,8 @@ export interface BookingListItem {
   readonly luggageCount: number;
   readonly totalTtcCents: number;
   readonly currency: string;
-  readonly customerName: string;
+  /** Name from the booking's own contact copy, or its customer for older rows (VTC-038). */
+  readonly contactName: string;
 }
 
 export interface BookingListPage {
@@ -81,8 +86,15 @@ export interface BookingListPage {
 
 type ListRow = Prisma.BookingGetPayload<{ select: typeof LIST_SELECT }>;
 
-function toListItem({ customer, ...row }: ListRow): BookingListItem {
-  return { ...row, customerName: customer.name };
+function toListItem({
+  customer,
+  contactName,
+  contactPhone,
+  contactLocale,
+  ...row
+}: ListRow): BookingListItem {
+  const contact = resolveBookingContact({ contactName, contactPhone, contactLocale }, customer);
+  return { ...row, contactName: contact.name };
 }
 
 function pickupRange(query: BookingListQuery): Prisma.DateTimeFilter | undefined {

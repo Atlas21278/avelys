@@ -1,6 +1,9 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, expectTypeOf, it } from "vitest";
 
-import { resolveBookingContact } from "./contact";
+import type { Locale as PrismaLocale } from "@/generated/prisma/browser";
+import type { Locale } from "@/i18n/routing";
+
+import { type ContactLocale, resolveBookingContact } from "./contact";
 
 const CUSTOMER = { name: "Profile Name", phone: "+33100000000", preferredLocale: "fr" } as const;
 
@@ -45,5 +48,12 @@ describe("resolveBookingContact", () => {
         { ...CUSTOMER, phone: null },
       ),
     ).toEqual({ name: "Profile Name", phone: null, locale: "fr", source: "customer" });
+  });
+});
+
+describe("ContactLocale", () => {
+  it("is the routed locale type, equal to the Prisma Locale enum (single source, VTC-038)", () => {
+    expectTypeOf<ContactLocale>().toEqualTypeOf<Locale>();
+    expectTypeOf<ContactLocale>().toEqualTypeOf<PrismaLocale>();
   });
 });
