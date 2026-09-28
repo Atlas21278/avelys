@@ -36,9 +36,9 @@ export const TimeFloorSchema = z.strictObject({ perHourCents: positiveCents });
  * Structural guarantees only; the amounts themselves are provisional business values (DEC-03)
  * that live in a versioned `PricingRule`, never in code (BR-02).
  *
- * `minimumCents` and `perKmCents` are strictly positive (Master Spec §8: the fare is pickup plus
- * a per-km price on the road distance, with a minimum always applied), so no valid rule can
- * produce a 0 EUR fare. `pickupCents` may be zero.
+ * Only `minimumCents` is strictly positive: the base fare is at least the minimum, so no valid
+ * rule can produce a 0 EUR fare. `pickupCents` and `perKmCents` may be zero (e.g. a flat fare
+ * carried by the minimum); whether such rules are used is a business choice (DEC-03).
  */
 export const PricingRuleConfigSchema = z.strictObject({
   schemaVersion: z.literal(PRICING_RULE_SCHEMA_VERSION),
@@ -50,7 +50,7 @@ export const PricingRuleConfigSchema = z.strictObject({
   /** DECISION-003 (A1): applied once, to the total only. Defaults to `halfUp`. */
   rounding: z.enum(ROUNDING_MODES).default(DEFAULT_PRICING_ROUNDING),
   pickupCents: cents,
-  perKmCents: positiveCents,
+  perKmCents: cents,
   minimumCents: positiveCents,
   timeFloor: TimeFloorSchema.nullable().default(null),
 });

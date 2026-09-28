@@ -251,7 +251,6 @@ describe("computeBaseFare — invalid rule", () => {
     ["fractional per-km price", { perKmCents: 1.5 }],
     ["negative minimum", { minimumCents: -100 }],
     ["zero minimum", { minimumCents: 0 }],
-    ["zero per-km price", { perKmCents: 0 }],
     ["negative time floor", { timeFloor: { perHourCents: -1 } }],
     ["null rounding", { rounding: null }],
     ["unsupported currency", { currency: "USD" }],
@@ -277,13 +276,26 @@ describe("computeBaseFare — invalid rule", () => {
     expectPricingError(() => parsePricingRule(allZero), "INVALID_PRICING_RULE");
   });
 
-  it("accepts a zero pickup: only the minimum and the per-km price must be positive", () => {
+  it("accepts a zero pickup: only the minimum must be positive", () => {
     const fare = computeBaseFare(withRule({ pickupCents: 0 }), route({ distanceMeters: 30_000 }));
     expect(fare.total.amountCents).toBe(4_500);
   });
 
+  it("accepts a zero per-km price: the minimum still sets a positive fare", () => {
+    const fare = computeBaseFare(withRule({ perKmCents: 0 }), route({ distanceMeters: 30_000 }));
+    expect(fare.components.distanceExact).toBe(0);
+    expect(fare.binding).toBe("MINIMUM");
+    expect(fare.total.amountCents).toBe(3_500);
+  });
+
+  it("accepts zero pickup and per-km price together, priced at the minimum", () => {
+    const flat = withRule({ pickupCents: 0, perKmCents: 0 });
+    const fare = computeBaseFare(flat, route({ distanceMeters: 800_000 }));
+    expect(fare.total.amountCents).toBe(3_500);
+  });
+
   it("never prices a trip at 0 EUR, even at 1 m with the smallest valid rule", () => {
-    const smallest = withRule({ pickupCents: 0, perKmCents: 1, minimumCents: 1 });
+    const smallest = withRule({ pickupCents: 0, perKmCents: 0, minimumCents: 1 });
     const fare = computeBaseFare(smallest, route({ distanceMeters: 1 }));
     expect(fare.total.amountCents).toBe(1);
   });
