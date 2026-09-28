@@ -1,0 +1,3 @@
+# Extends the default gitleaks rules. Every allowlist entry must say why it is safe.
+[extend]
+useDefault = true

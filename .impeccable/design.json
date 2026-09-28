@@ -1,0 +1,433 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-09-28T05:08:24.939Z",
+  "title": "Design System: Avelys",
+  "extensions": {
+    "colorMeta": {
+      "ink": {
+        "role": "primary",
+        "displayName": "Anthracite Binding",
+        "canonical": "#1f2124",
+        "oklch": "oklch(24.7% 0.006 258.4)",
+        "tonalRamp": [
+          "#090b0e",
+          "#222427",
+          "#3e4043",
+          "#5b5e61",
+          "#7e8084",
+          "#a2a5a9",
+          "#c8cbcf",
+          "#eceff3"
+        ],
+        "contrast": "14.09:1 on paper"
+      },
+      "ink-raised": {
+        "role": "primary",
+        "displayName": "Raised Binding",
+        "canonical": "#34373c",
+        "oklch": "oklch(33.6% 0.010 260.7)",
+        "tonalRamp": [
+          "#090b0f",
+          "#212429",
+          "#3d4045",
+          "#5a5e63",
+          "#7d8086",
+          "#a1a5ab",
+          "#c7cbd1",
+          "#ebeff5"
+        ]
+      },
+      "paper": {
+        "role": "neutral",
+        "displayName": "Ivory Page",
+        "canonical": "#f4efe6",
+        "oklch": "oklch(95.4% 0.013 82.4)",
+        "tonalRamp": [
+          "#0e0b06",
+          "#27241d",
+          "#433f38",
+          "#615d55",
+          "#848078",
+          "#a9a49c",
+          "#cfcac1",
+          "#f3eee5"
+        ]
+      },
+      "paper-deep": {
+        "role": "neutral",
+        "displayName": "Deep Ivory",
+        "canonical": "#eae3d6",
+        "oklch": "oklch(91.8% 0.019 83.1)",
+        "tonalRamp": [
+          "#0f0a03",
+          "#28231a",
+          "#453f34",
+          "#635d52",
+          "#867f74",
+          "#aaa498",
+          "#d1cabd",
+          "#f5eee1"
+        ]
+      },
+      "graphite": {
+        "role": "neutral",
+        "displayName": "Graphite Annotation",
+        "canonical": "#5b5852",
+        "oklch": "oklch(46.1% 0.010 84.6)",
+        "tonalRamp": [
+          "#0d0b07",
+          "#26241e",
+          "#423f3a",
+          "#605d57",
+          "#838079",
+          "#a7a49d",
+          "#cecac3",
+          "#f2eee7"
+        ],
+        "contrast": "6.19:1 on paper"
+      },
+      "rule": {
+        "role": "neutral",
+        "displayName": "Ruled Line",
+        "canonical": "#8c877e",
+        "oklch": "oklch(62.5% 0.015 82.4)",
+        "tonalRamp": [
+          "#0e0b05",
+          "#28231c",
+          "#443f37",
+          "#625d55",
+          "#848077",
+          "#a9a49b",
+          "#cfcac0",
+          "#f3eee4"
+        ],
+        "contrast": "3.12:1 on paper (control edge)"
+      },
+      "hairline": {
+        "role": "neutral",
+        "displayName": "Hairline",
+        "canonical": "#d6cec0",
+        "oklch": "oklch(85.4% 0.021 81.8)",
+        "tonalRamp": [
+          "#100a03",
+          "#292318",
+          "#453f33",
+          "#645d50",
+          "#877f72",
+          "#aba496",
+          "#d1c9bc",
+          "#f6eddf"
+        ]
+      },
+      "champagne": {
+        "role": "secondary",
+        "displayName": "Champagne Ribbon",
+        "canonical": "#b8996a",
+        "oklch": "oklch(70.0% 0.073 77.5)",
+        "tonalRamp": [
+          "#120900",
+          "#322001",
+          "#553a06",
+          "#75582a",
+          "#997b4d",
+          "#be9f70",
+          "#e5c595",
+          "#feecd0"
+        ],
+        "contrast": "2.35:1 on paper (never text on paper); 6.00:1 on ink"
+      },
+      "champagne-deep": {
+        "role": "secondary",
+        "displayName": "Deep Champagne",
+        "canonical": "#7a5f32",
+        "oklch": "oklch(50.3% 0.071 78.8)",
+        "tonalRamp": [
+          "#120900",
+          "#322001",
+          "#543a09",
+          "#73592c",
+          "#977b4e",
+          "#bda071",
+          "#e4c696",
+          "#ffeccf"
+        ],
+        "contrast": "5.22:1 on paper"
+      },
+      "rubric": {
+        "role": "tertiary",
+        "displayName": "Rubric Red",
+        "canonical": "#9c2b20",
+        "oklch": "oklch(46.4% 0.151 29.5)",
+        "tonalRamp": [
+          "#1f0000",
+          "#4b0100",
+          "#7d0100",
+          "#a13025",
+          "#ca5648",
+          "#f47c6b",
+          "#feb6aa",
+          "#ffe9e5"
+        ],
+        "contrast": "6.60:1 on paper"
+      },
+      "on-ink-muted": {
+        "role": "neutral",
+        "displayName": "Muted Ink Annotation",
+        "canonical": "#a8a298",
+        "oklch": "oklch(71.4% 0.016 80.7)",
+        "tonalRamp": [
+          "#0f0a05",
+          "#28231b",
+          "#443f36",
+          "#625d54",
+          "#857f76",
+          "#aaa49a",
+          "#d0cabf",
+          "#f4eee3"
+        ],
+        "contrast": "6.37:1 on ink"
+      }
+    },
+    "typographyMeta": {
+      "display": {
+        "displayName": "Display",
+        "purpose": "Page promise and page titles; Bodoni pinned at opsz 11, weight 500 (font-display-optical)."
+      },
+      "headline": {
+        "displayName": "Headline",
+        "purpose": "Section titles; Bodoni pinned at opsz 11, weight 500; with the figure cut (weight 600), route headlines."
+      },
+      "figure": {
+        "displayName": "Figure",
+        "purpose": "The price in the price slot; Bodoni pinned at opsz 11, weight 600 (font-display-figure) so hyphens and € crossbars survive."
+      },
+      "title": {
+        "displayName": "Title",
+        "purpose": "Place names on a route line; Bodoni pinned at opsz 11, weight 600."
+      },
+      "body": {
+        "displayName": "Body",
+        "purpose": "Reference text, 65ch measure; lead paragraphs step to 1.125rem. Lining numerals, never tabular."
+      },
+      "body-sm": {
+        "displayName": "Small",
+        "purpose": "Hints, stop details, leg distance and duration, error messages."
+      },
+      "label": {
+        "displayName": "Label",
+        "purpose": "Uppercase small-caps-label for controls and data only; never an eyebrow above a heading."
+      },
+      "button": {
+        "displayName": "Button",
+        "purpose": "Button labels; 1rem with 0.01em tracking at the large size."
+      }
+    },
+    "shadows": [
+      {
+        "name": "page",
+        "value": "0 1px 1px rgb(31 33 36 / 0.06), 0 12px 32px -12px rgb(31 33 36 / 0.22)",
+        "purpose": "The paper-deep itinerary card (guide page) only."
+      },
+      {
+        "name": "field-focus-line",
+        "value": "0 2px 0 0 var(--color-ink)",
+        "purpose": "Added to the 1px ink border to make the 3px focus underline on fields."
+      },
+      {
+        "name": "field-error-line",
+        "value": "0 1px 0 0 var(--color-rubric)",
+        "purpose": "Added to the 1px rubric border to make the 2px error underline when not focused."
+      }
+    ],
+    "motion": [
+      {
+        "name": "ease-settle",
+        "value": "cubic-bezier(0.16, 1, 0.3, 1)",
+        "purpose": "All state transitions and the route draw."
+      },
+      {
+        "name": "duration-state",
+        "value": "200ms",
+        "purpose": "Colour, border and underline transitions on buttons, links and fields."
+      },
+      {
+        "name": "duration-route-draw",
+        "value": "700ms",
+        "purpose": "A committed route line draws solid once from the top, 120ms stagger per leg; skipped under reduced motion."
+      }
+    ],
+    "focus": {
+      "value": "outline: 2px solid var(--color-ink); outline-offset: 3px",
+      "purpose": "Global focus-visible ring; fields replace it with a 3px ink underline."
+    },
+    "breakpoints": [
+      {
+        "name": "sm",
+        "value": "640px"
+      },
+      {
+        "name": "md",
+        "value": "768px"
+      },
+      {
+        "name": "lg",
+        "value": "1024px"
+      }
+    ]
+  },
+  "components": [
+    {
+      "name": "Primary Button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "The main action: ink fill, paper text, print corner.",
+      "html": "<button class=\"ds-btn-primary\">Voir le prix</button>",
+      "css": ".ds-btn-primary { display: inline-flex; align-items: center; justify-content: center; gap: 10px; min-height: 48px; padding: 0 20px; border-radius: 2px; font-family: var(--font-sans, \"Schibsted Grotesk\", system-ui, sans-serif); font-weight: 600; font-size: 0.9375rem; cursor: pointer; border: 0; background: var(--color-ink, #1f2124); color: var(--color-paper, #f4efe6); transition: background-color 200ms cubic-bezier(0.16, 1, 0.3, 1); } .ds-btn-primary:hover { background: var(--color-ink-raised, #34373c); } .ds-btn-primary:focus-visible { outline: 2px solid var(--color-ink, #1f2124); outline-offset: 3px; } .ds-btn-primary:disabled { background: var(--color-hairline, #d6cec0); color: var(--color-graphite, #5b5852); cursor: not-allowed; }"
+    },
+    {
+      "name": "Loading Button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "In progress keeps the variant colours and the label, with a spinning progress mark.",
+      "html": "<button class=\"ds-btn-loading\" aria-busy=\"true\" disabled><svg class=\"ds-spin\" aria-hidden=\"true\" viewBox=\"0 0 16 16\" width=\"16\" height=\"16\" fill=\"none\"><circle cx=\"8\" cy=\"8\" r=\"6.5\" stroke=\"currentColor\" stroke-opacity=\"0.3\"/><path d=\"M8 1.5A6.5 6.5 0 0 1 14.5 8\" stroke=\"currentColor\" stroke-linecap=\"round\"/></svg>Calcul du prix</button>",
+      "css": ".ds-btn-loading { display: inline-flex; align-items: center; justify-content: center; gap: 10px; min-height: 48px; padding: 0 20px; border-radius: 2px; font-family: var(--font-sans, \"Schibsted Grotesk\", system-ui, sans-serif); font-weight: 600; font-size: 0.9375rem; cursor: pointer; border: 0; background: var(--color-ink, #1f2124); color: var(--color-paper, #f4efe6); cursor: progress; } .ds-spin { animation: ds-spin 1s linear infinite; } @keyframes ds-spin { to { transform: rotate(360deg); } } @media (prefers-reduced-motion: reduce) { .ds-spin { animation: none; } }"
+    },
+    {
+      "name": "Secondary Button",
+      "kind": "button",
+      "refersTo": "button-secondary",
+      "description": "1px ink outline; deep ivory on hover.",
+      "html": "<button class=\"ds-btn-secondary\">Nous appeler</button>",
+      "css": ".ds-btn-secondary { display: inline-flex; align-items: center; justify-content: center; gap: 10px; min-height: 48px; padding: 0 20px; border-radius: 2px; font-family: var(--font-sans, \"Schibsted Grotesk\", system-ui, sans-serif); font-weight: 600; font-size: 0.9375rem; cursor: pointer; border: 1px solid var(--color-ink, #1f2124); background: transparent; color: var(--color-ink, #1f2124); transition: background-color 200ms cubic-bezier(0.16, 1, 0.3, 1); } .ds-btn-secondary:hover { background: var(--color-paper-deep, #eae3d6); } .ds-btn-secondary:focus-visible { outline: 2px solid var(--color-ink, #1f2124); outline-offset: 3px; }"
+    },
+    {
+      "name": "Quiet Button",
+      "kind": "button",
+      "refersTo": "button-quiet",
+      "description": "An underlined ink word for minor actions.",
+      "html": "<button class=\"ds-btn-quiet\">Modifier l’itinéraire</button>",
+      "css": ".ds-btn-quiet { min-height: 48px; padding: 0 4px; border: 0; background: transparent; color: var(--color-ink, #1f2124); font-family: var(--font-sans, \"Schibsted Grotesk\", system-ui, sans-serif); font-weight: 600; font-size: 0.9375rem; text-decoration: underline; text-decoration-color: var(--color-rule, #8c877e); text-decoration-thickness: 1px; text-underline-offset: 6px; cursor: pointer; transition: text-decoration-color 200ms cubic-bezier(0.16, 1, 0.3, 1); } .ds-btn-quiet:hover { text-decoration-color: var(--color-ink, #1f2124); } .ds-btn-quiet:focus-visible { outline: 2px solid var(--color-ink, #1f2124); outline-offset: 3px; }"
+    },
+    {
+      "name": "Ledger Field",
+      "kind": "input",
+      "refersTo": "field-input",
+      "description": "Small-caps label, a 1px rule underline, 1px ink on hover, 3px ink underline on focus.",
+      "html": "<div class=\"ds-field\"><label class=\"ds-field-label\" for=\"ds-pickup\">Départ</label><input id=\"ds-pickup\" class=\"ds-field-input\" placeholder=\"Aéroport Charles-de-Gaulle\"><p class=\"ds-field-hint\">Adresse, gare, aéroport ou hôtel</p></div>",
+      "css": ".ds-field { display: flex; flex-direction: column; gap: 6px; font-family: var(--font-sans, \"Schibsted Grotesk\", system-ui, sans-serif); } .ds-field-label { font-size: 0.8125rem; line-height: 1.35; letter-spacing: 0.08em; text-transform: uppercase; font-weight: 600; color: var(--color-graphite, #5b5852); } .ds-field-input { min-height: 48px; padding: 8px 0; border: 0; border-bottom: 1px solid var(--color-rule, #8c877e); border-radius: 0; background: transparent; color: var(--color-ink, #1f2124); font: inherit; font-size: 1rem; transition: border-color 200ms cubic-bezier(0.16, 1, 0.3, 1), box-shadow 200ms cubic-bezier(0.16, 1, 0.3, 1); } .ds-field-input::placeholder { color: var(--color-graphite, #5b5852); } .ds-field-input:hover { border-bottom-color: var(--color-ink, #1f2124); } .ds-field-input:focus-visible { outline: none; border-bottom-color: var(--color-ink, #1f2124); box-shadow: 0 2px 0 0 var(--color-ink, #1f2124); } .ds-field-hint { margin: 0; font-size: 0.875rem; color: var(--color-graphite, #5b5852); }"
+    },
+    {
+      "name": "Ledger Field, error",
+      "kind": "input",
+      "refersTo": "field-input",
+      "description": "A 2px rubric underline and message; focus still wins with the 3px ink underline.",
+      "html": "<div class=\"ds-field-e\"><label class=\"ds-field-e-label\" for=\"ds-dropoff\">Destination</label><input id=\"ds-dropoff\" class=\"ds-field-e-input\" aria-invalid=\"true\"><p class=\"ds-field-e-msg\"><svg aria-hidden=\"true\" viewBox=\"0 0 16 16\" width=\"16\" height=\"16\" fill=\"none\"><circle cx=\"8\" cy=\"8\" r=\"7\" stroke=\"currentColor\" stroke-width=\"1.25\"/><path d=\"M8 4.5v4.25\" stroke=\"currentColor\" stroke-width=\"1.5\" stroke-linecap=\"round\"/><circle cx=\"8\" cy=\"11.25\" r=\"0.9\" fill=\"currentColor\"/></svg>Indiquez une destination pour calculer le prix.</p></div>",
+      "css": ".ds-field-e { display: flex; flex-direction: column; gap: 6px; font-family: var(--font-sans, \"Schibsted Grotesk\", system-ui, sans-serif); } .ds-field-e-label { font-size: 0.8125rem; line-height: 1.35; letter-spacing: 0.08em; text-transform: uppercase; font-weight: 600; color: var(--color-graphite, #5b5852); } .ds-field-e-input { min-height: 48px; padding: 8px 0; border: 0; border-bottom: 1px solid var(--color-rubric, #9c2b20); box-shadow: 0 1px 0 0 var(--color-rubric, #9c2b20); border-radius: 0; background: transparent; color: var(--color-ink, #1f2124); font: inherit; } .ds-field-e-input:focus-visible { outline: none; border-bottom-color: var(--color-ink, #1f2124); box-shadow: 0 2px 0 0 var(--color-ink, #1f2124); } .ds-field-e-msg { display: flex; gap: 6px; align-items: flex-start; margin: 0; font-size: 0.875rem; color: var(--color-rubric, #9c2b20); } .ds-field-e-msg svg { margin-top: 2px; flex-shrink: 0; }"
+    },
+    {
+      "name": "Price Slot",
+      "kind": "custom",
+      "refersTo": "price-slot",
+      "description": "Empty: dashed rule border and a drawn 1px rule where the figure will sit. Priced: solid ink border and a Bodoni figure. The slot never moves or resizes.",
+      "html": "<div class=\"ds-price ds-price-empty\"><span class=\"ds-price-label\">Prix fixe, TTC</span><output class=\"ds-price-row\"><span class=\"ds-price-rule\"></span><span class=\"ds-price-note\">Calculé dès que l’itinéraire est complet</span></output></div><div class=\"ds-price\"><span class=\"ds-price-label\">Prix fixe, TTC (exemple fictif)</span><output class=\"ds-price-row\"><span class=\"ds-price-figure\">84,50 €</span></output></div>",
+      "css": ".ds-price { display: flex; flex-direction: column; justify-content: space-between; gap: 8px; min-height: 6.5rem; margin-bottom: 16px; padding: 12px 16px; border: 1px solid var(--color-ink, #1f2124); font-family: var(--font-sans, \"Schibsted Grotesk\", system-ui, sans-serif); } .ds-price-empty { border-style: dashed; border-color: var(--color-rule, #8c877e); } .ds-price-label { font-size: 0.8125rem; line-height: 1.35; letter-spacing: 0.08em; text-transform: uppercase; font-weight: 600; color: var(--color-graphite, #5b5852); } .ds-price-row { display: flex; min-height: 40px; align-items: flex-end; justify-content: space-between; gap: 12px; } .ds-price-rule { display: block; width: 64px; height: 1px; margin-bottom: 8px; flex-shrink: 0; background: var(--color-graphite, #5b5852); } .ds-price-note { font-size: 0.875rem; text-align: right; color: var(--color-graphite, #5b5852); } .ds-price-figure { font-family: var(--font-display, \"Bodoni Moda\", \"Bodoni 72\", Didot, serif); font-variation-settings: \"opsz\" 14; font-weight: 500; font-variant-numeric: lining-nums; font-size: 2.25rem; line-height: 1; color: var(--color-ink, #1f2124); }"
+    },
+    {
+      "name": "Route Line",
+      "kind": "custom",
+      "refersTo": "route-stop-marker",
+      "description": "Numbered stops, Bodoni place names, a dot leader for distance and duration; the connector is dotted while possible and draws solid ink when committed (hover previews it here).",
+      "html": "<ol class=\"ds-route\"><li class=\"ds-stop\"><span class=\"ds-rail\"><span class=\"ds-num\">1</span><span class=\"ds-leg\"></span></span><span class=\"ds-body\"><span class=\"ds-place\">Aéroport Charles-de-Gaulle</span><span class=\"ds-detail\">Terminal 2E, porte 8</span><span class=\"ds-leader\"><span>32,4 km</span><span class=\"ds-dots\"></span><span>45 min</span></span></span></li><li class=\"ds-stop\"><span class=\"ds-rail\"><span class=\"ds-num ds-num-last\">2</span></span><span class=\"ds-body\"><span class=\"ds-place\">Hôtel, Paris 8ᵉ</span><span class=\"ds-detail\">Arrivée estimée après le trajet routier</span></span></li></ol>",
+      "css": ".ds-route { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; font-family: var(--font-sans, \"Schibsted Grotesk\", system-ui, sans-serif); color: var(--color-ink, #1f2124); } .ds-stop { position: relative; display: flex; gap: 16px; padding-bottom: 24px; } .ds-stop:last-child { padding-bottom: 0; } .ds-rail { position: relative; display: flex; justify-content: center; width: 28px; flex-shrink: 0; } .ds-num { position: relative; z-index: 1; display: flex; align-items: center; justify-content: center; width: 28px; height: 28px; border: 1px solid var(--color-ink, #1f2124); border-radius: 9999px; background: var(--color-paper, #f4efe6); font-size: 0.8125rem; font-weight: 600; } .ds-num-last { background: var(--color-ink, #1f2124); color: var(--color-paper, #f4efe6); } .ds-leg { position: absolute; top: 28px; bottom: -4px; left: 13px; width: 0; border-left: 1px dotted var(--color-rule, #8c877e); } .ds-route:hover .ds-leg { border-left: 1px solid var(--color-ink, #1f2124); } .ds-body { display: flex; flex-direction: column; gap: 2px; padding-top: 2px; flex: 1; min-width: 0; } .ds-place { font-family: var(--font-display, \"Bodoni Moda\", \"Bodoni 72\", Didot, serif); font-variation-settings: \"opsz\" 14; font-weight: 500; font-variant-numeric: lining-nums; font-size: 1.25rem; line-height: 1.25; } .ds-detail { font-size: 0.875rem; color: var(--color-graphite, #5b5852); } .ds-leader { display: flex; align-items: baseline; gap: 8px; margin-top: 8px; font-size: 0.875rem; } .ds-dots { flex: 1; transform: translateY(-0.2em); border-bottom: 1px dotted var(--color-rule, #8c877e); }"
+    },
+    {
+      "name": "Guide Page with Signet",
+      "kind": "card",
+      "refersTo": "guide-page",
+      "description": "The one lifted surface: deep ivory, square corners, the page shadow, the champagne ribbon hanging from its top edge.",
+      "html": "<article class=\"ds-guide\"><svg class=\"ds-signet\" aria-hidden=\"true\" viewBox=\"0 0 14 32\" width=\"14\" height=\"32\" fill=\"currentColor\"><path d=\"M0 0h14v32l-7-6.5L0 32z\"/></svg><h3 class=\"ds-guide-label\">Itinéraire retenu</h3><p class=\"ds-guide-text\">Charles-de-Gaulle → Paris 8ᵉ</p></article>",
+      "css": ".ds-guide { position: relative; display: flex; flex-direction: column; gap: 16px; padding: 24px; background: var(--color-paper-deep, #eae3d6); box-shadow: 0 1px 1px rgb(31 33 36 / 0.06), 0 12px 32px -12px rgb(31 33 36 / 0.22); font-family: var(--font-sans, \"Schibsted Grotesk\", system-ui, sans-serif); } .ds-signet { position: absolute; top: -8px; right: 24px; color: var(--color-champagne, #b8996a); } .ds-guide-label { margin: 0; font-size: 0.8125rem; line-height: 1.35; letter-spacing: 0.08em; text-transform: uppercase; font-weight: 600; color: var(--color-graphite, #5b5852); } .ds-guide-text { margin: 0; font-family: var(--font-display, \"Bodoni Moda\", \"Bodoni 72\", Didot, serif); font-variation-settings: \"opsz\" 14; font-weight: 500; font-variant-numeric: lining-nums; font-size: 1.25rem; color: var(--color-ink, #1f2124); }"
+    },
+    {
+      "name": "Text Link",
+      "kind": "custom",
+      "refersTo": "body",
+      "description": "Ink text with a 1px rule underline offset 5px; the underline turns ink on hover.",
+      "html": "<p class=\"ds-link-p\">Consultez les <a class=\"ds-link\" href=\"#\">conditions de réservation</a>.</p>",
+      "css": ".ds-link-p { font-family: var(--font-sans, \"Schibsted Grotesk\", system-ui, sans-serif); color: var(--color-ink, #1f2124); } .ds-link { color: var(--color-ink, #1f2124); text-decoration: underline; text-decoration-color: var(--color-rule, #8c877e); text-decoration-thickness: 1px; text-underline-offset: 5px; transition: text-decoration-color 200ms cubic-bezier(0.16, 1, 0.3, 1); } .ds-link:hover { text-decoration-color: var(--color-ink, #1f2124); } .ds-link:focus-visible { outline: 2px solid var(--color-ink, #1f2124); outline-offset: 3px; }"
+    }
+  ],
+  "narrative": {
+    "northStar": "Le Guide de voyage",
+    "overview": "Avelys is set like a travel guide from the era of the Guides Bleus: an anthracite cloth binding, matte ivory pages, graphite annotations in the margin, and a single champagne ribbon bookmark marking where the reader is. Every trip is read as a guide itinerary: numbered stops, the distance and duration between them on a dot leader, and a fixed price that owns a drawn place on the page before it exists. The system is quiet and exact rather than glamorous; luxury comes from print discipline, not from gold on black.\n\nDensity is that of a reference page: generous margins, 1px rules instead of boxes, one high-contrast serif (Bodoni Moda) for titles, place names and figures, and one plain grotesque (Schibsted Grotesk) for everything the reader must act on. Depth is almost entirely flat; the one lifted object is the itinerary card, a guide page lying on the page. Motion is rare and functional: state transitions settle in 200ms, and a chosen route draws itself solid once.\n\nThe world refuses the category default of a black sedan at night under a gold serif. Imagery is real photography only; until real photographs exist, image slots stay visibly labelled as provisional.",
+    "keyCharacteristics": [
+      "Ink binding, ivory pages, graphite annotations, one champagne ribbon per view.",
+      "Solid means chosen, dotted means possible.",
+      "The price owns a fixed, drawn slot that never moves or resizes.",
+      "Fields are ledger lines, not boxes; corners are square printed corners.",
+      "Bodoni for place names and figures, Schibsted Grotesk for reference text and controls."
+    ],
+    "rules": [
+      {
+        "name": "The One Ribbon Rule",
+        "body": "One champagne ribbon per view, and it marks the current place. Champagne is never text on paper; accented text on paper uses champagne-deep. The state the ribbon marks is also carried by text or ARIA.",
+        "section": "colors"
+      },
+      {
+        "name": "The Single Binding Rule",
+        "body": "Ink is the only dark field. No second dark surface, no dark cards on the page.",
+        "section": "colors"
+      },
+      {
+        "name": "The Rubric Rule",
+        "body": "Rubric red means an error and nothing else.",
+        "section": "colors"
+      },
+      {
+        "name": "The Pinned Hairline Rule",
+        "body": "Bodoni is always set at its text optical size, opsz 11: titles at weight 500, figures and place names at weight 600. The display optical sizes thin the hairlines until they vanish on ivory (owner feedback, 2026-09-28), and hyphens and the € crossbars must survive. Never use automatic optical sizing or weight 400.",
+        "section": "typography"
+      },
+      {
+        "name": "The Lining Figures Rule",
+        "body": "Figures are lining, not tabular: Schibsted Grotesk's tabular comma takes a full figure width and breaks French decimals (\"32 , 4\"). Tables, times and data set lining numerals.",
+        "section": "typography"
+      },
+      {
+        "name": "The Label, Not Kicker Rule",
+        "body": "Small caps label controls and data. They never sit above a heading as an eyebrow.",
+        "section": "typography"
+      },
+      {
+        "name": "The One Page Lift Rule",
+        "body": "Only the guide-page card is lifted. Buttons, fields, the price slot and everything else stay flat and are drawn with 1px lines.",
+        "section": "elevation"
+      },
+      {
+        "name": "The Solid Means Chosen Rule",
+        "body": "Committed routes and priced slots draw solid in ink; possible routes stay dotted and an empty price slot stays dashed.",
+        "section": "shapes"
+      }
+    ],
+    "dos": [
+      "Do keep one champagne ribbon per view, marking the current place, and also convey that state in text or ARIA.",
+      "Do use champagne-deep for accented text on paper; champagne on paper stays under 3:1 (2.35:1).",
+      "Do set every Bodoni use at opsz 11: titles at weight 500, figures and place names at weight 600.",
+      "Do set figures as lining numerals.",
+      "Do draw committed routes and known prices solid in ink, possible routes dotted, and the empty price slot dashed.",
+      "Do make focus the strongest line on a field: a 3px ink underline that wins over the error colour.",
+      "Do keep a loading button in its variant's colours with its label visible.",
+      "Do keep primary targets at 48px minimum (56px for the main call to action)."
+    ],
+    "donts": [
+      "Don't set champagne as text on paper, or add a second ribbon, or use champagne as a general accent.",
+      "Don't place small-caps labels above a heading as an eyebrow; they label controls and data only.",
+      "Don't use tabular figures where a decimal comma appears.",
+      "Don't box fields or round them; the field is a 1px ledger line.",
+      "Don't round corners beyond the 2px print corner; only route stop markers are circular.",
+      "Don't introduce a second dark surface or a second shadow; ink is the only dark field and the guide page is the only lifted object.",
+      "Don't use rubric red for anything other than errors.",
+      "Don't fall back to the black-sedan-at-night, gold-serif-on-black look."
+    ]
+  }
+}

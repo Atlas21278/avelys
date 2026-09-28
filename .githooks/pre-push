@@ -1,0 +1,10 @@
+#!/bin/sh
+# Refuses direct pushes to main (Master Spec §26). Stopgap until the GitHub ruleset is active.
+# Enable once per clone: git config core.hooksPath .githooks
+while read -r local_ref local_sha remote_ref remote_sha; do
+  if [ "$remote_ref" = "refs/heads/main" ]; then
+    echo "pre-push: direct push to main is forbidden, open a pull request instead." >&2
+    exit 1
+  fi
+done
+exit 0

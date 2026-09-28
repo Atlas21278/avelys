@@ -1,0 +1,14 @@
+allowBuilds:
+  # Official Prisma packages: download the schema engine used by the migration CLI.
+  "@prisma/engines": true
+  prisma: true
+  sharp: false
+  unrs-resolver: false
+
+# Security overrides for transitive dependencies of the Prisma 7.10 CLI, which pins
+# vulnerable exact versions. Remove each one when Prisma ships the patched version.
+overrides:
+  # GHSA-ggr8-5vv4-36mx (high): via @prisma/config
+  deepmerge-ts: ^8.0.2
+  # GHSA-3f6p-5ww8-9rcr (high): via prisma; MySQL is not used by Avelys
+  mysql2: ^3.24.4

@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <!-- Provisional monogram until a real logo exists: ivory A on anthracite, champagne ribbon. -->
+  <rect width="64" height="64" rx="3" fill="#1F2124"/>
+  <path d="M32 12 17 52h6.2l3.4-9.6h10.8l3.4 9.6H47L32 12Zm0 11.4 3.7 13.4h-7.4L32 23.4Z" fill="#F4EFE6"/>
+  <path d="M46 0h8v18l-4-3.6L46 18z" fill="#B8996A"/>
+</svg>

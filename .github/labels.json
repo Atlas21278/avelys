@@ -1,0 +1,182 @@
+[
+  {
+    "name": "status:backlog",
+    "color": "c5def5",
+    "description": "Pas encore prêt"
+  },
+  {
+    "name": "status:needs-decision",
+    "color": "c5def5",
+    "description": "Bloqué par une décision humaine"
+  },
+  {
+    "name": "status:ready",
+    "color": "c5def5",
+    "description": "Definition of Ready remplie"
+  },
+  {
+    "name": "status:in-progress",
+    "color": "c5def5",
+    "description": "En cours"
+  },
+  {
+    "name": "status:pr-open",
+    "color": "c5def5",
+    "description": "PR ouverte"
+  },
+  {
+    "name": "status:review",
+    "color": "c5def5",
+    "description": "En review"
+  },
+  {
+    "name": "status:blocked",
+    "color": "c5def5",
+    "description": "Bloqué"
+  },
+  {
+    "name": "status:ready-to-merge",
+    "color": "c5def5",
+    "description": "Prêt à merger"
+  },
+  {
+    "name": "status:done",
+    "color": "c5def5",
+    "description": "Terminé"
+  },
+  {
+    "name": "risk:low",
+    "color": "0e8a16",
+    "description": "Risque LOW (docs/process/tickets.md)"
+  },
+  {
+    "name": "risk:medium",
+    "color": "fbca04",
+    "description": "Risque MEDIUM (docs/process/tickets.md)"
+  },
+  {
+    "name": "risk:high",
+    "color": "d93f0b",
+    "description": "Risque HIGH (docs/process/tickets.md)"
+  },
+  {
+    "name": "risk:critical",
+    "color": "b60205",
+    "description": "Risque CRITICAL (docs/process/tickets.md)"
+  },
+  {
+    "name": "human-approval",
+    "color": "b60205",
+    "description": "Approbation humaine explicite requise"
+  },
+  {
+    "name": "type:feature",
+    "color": "5319e7",
+    "description": "Produit / applicatif"
+  },
+  {
+    "name": "type:infra",
+    "color": "5319e7",
+    "description": "CI, Docker, Kubernetes, GitOps"
+  },
+  {
+    "name": "type:bug",
+    "color": "5319e7",
+    "description": "Anomalie"
+  },
+  {
+    "name": "type:decision",
+    "color": "5319e7",
+    "description": "Décision humaine (DECISION-*)"
+  },
+  {
+    "name": "type:epic",
+    "color": "5319e7",
+    "description": "Epic"
+  },
+  {
+    "name": "epic:01",
+    "color": "ededed",
+    "description": "EPIC-01"
+  },
+  {
+    "name": "epic:02",
+    "color": "ededed",
+    "description": "EPIC-02"
+  },
+  {
+    "name": "epic:03",
+    "color": "ededed",
+    "description": "EPIC-03"
+  },
+  {
+    "name": "epic:04",
+    "color": "ededed",
+    "description": "EPIC-04"
+  },
+  {
+    "name": "epic:05",
+    "color": "ededed",
+    "description": "EPIC-05"
+  },
+  {
+    "name": "epic:06",
+    "color": "ededed",
+    "description": "EPIC-06"
+  },
+  {
+    "name": "epic:07",
+    "color": "ededed",
+    "description": "EPIC-07"
+  },
+  {
+    "name": "epic:08",
+    "color": "ededed",
+    "description": "EPIC-08"
+  },
+  {
+    "name": "epic:09",
+    "color": "ededed",
+    "description": "EPIC-09"
+  },
+  {
+    "name": "epic:10",
+    "color": "ededed",
+    "description": "EPIC-10"
+  },
+  {
+    "name": "epic:11",
+    "color": "ededed",
+    "description": "EPIC-11"
+  },
+  {
+    "name": "epic:12",
+    "color": "ededed",
+    "description": "EPIC-12"
+  },
+  {
+    "name": "epic:13",
+    "color": "ededed",
+    "description": "EPIC-13"
+  },
+  {
+    "name": "epic:14",
+    "color": "ededed",
+    "description": "EPIC-14"
+  },
+  {
+    "name": "epic:15",
+    "color": "ededed",
+    "description": "EPIC-15"
+  },
+  {
+    "name": "epic:16",
+    "color": "ededed",
+    "description": "EPIC-16"
+  },
+  {
+    "name": "dependencies",
+    "color": "0366d6",
+    "description": "Mise à jour de dépendances (Dependabot)"
+  }
+]
