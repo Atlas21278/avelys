@@ -72,6 +72,19 @@ Base de test locale existante : les anciens tests laissaient des bookings `prici
 
 Rollback : revert de la PR ; la table reste inutilisée. En dev local uniquement : `ALTER TABLE "Booking" DROP CONSTRAINT "Booking_pricingRuleId_pricingRuleVersion_fkey"` puis suppression de la table.
 
+### Contact par réservation (VTC-037)
+
+Migration `20260928224334_booking_contact`, **additive** (expand) : trois colonnes **nullables** sur `Booking`, sans valeur par défaut, sans backfill ni modification de l'existant. Décision : DEC-25 (option 1). Tests : `src/server/booking/create-booking.int.test.ts`, `src/server/admin/bookings.int.test.ts`, `src/domain/booking/contact.test.ts`.
+
+| Élément       | Choix                                                                                                                                                                                                         |
+| ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Colonnes      | `contactName TEXT`, `contactPhone TEXT`, `contactLocale "Locale"` (enum existant). Écrites par `createBooking` à chaque réservation, depuis le contact soumis ; le `Customer` réutilisé n'est jamais modifié. |
+| Lignes nulles | Réservations créées avant VTC-037 : les trois colonnes restent nulles et la lecture se replie sur le `Customer` (`resolveBookingContact`). Pas de backfill : le contact d'origine de ces courses est inconnu. |
+| PII           | Données personnelles : jamais journalisées ni copiées dans `AuditLog` (BR-60). Relèvent de l'anonymisation RGPD au même titre que `Customer` (DEC-11).                                                        |
+| Contract      | Aucun pour l'instant. Rendre les colonnes obligatoires supposerait un backfill des lignes anciennes : ticket et décision dédiés.                                                                              |
+
+Rollback : revert du code ; les colonnes restent en place, ignorées par l'ancienne version (compatible avec un rolling deployment). Pas de `DROP COLUMN` hors dev local.
+
 ## Entités minimales
 
 | Entité                                      | Responsabilité                     | Notes                                                                         |

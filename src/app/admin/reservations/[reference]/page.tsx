@@ -123,11 +123,11 @@ export default async function BookingDetailPage({
 
         <Section title="Client">
           <Facts>
-            <Fact label="Nom">{booking.customer.name}</Fact>
+            <Fact label="Nom">{booking.contact.name}</Fact>
             <Fact label="Téléphone">
-              {booking.customer.phone ? (
-                <a href={`tel:${booking.customer.phone}`} className={textLinkClasses}>
-                  {booking.customer.phone}
+              {booking.contact.phone ? (
+                <a href={`tel:${booking.contact.phone}`} className={textLinkClasses}>
+                  {booking.contact.phone}
                 </a>
               ) : (
                 MISSING
@@ -135,14 +135,19 @@ export default async function BookingDetailPage({
             </Fact>
             <Fact label="Email">
               <a
-                href={`mailto:${booking.customer.email}`}
+                href={`mailto:${booking.customerEmail}`}
                 className={`${textLinkClasses} break-all`}
               >
-                {booking.customer.email}
+                {booking.customerEmail}
               </a>
             </Fact>
-            <Fact label="Langue">{LOCALE_LABELS[booking.customer.preferredLocale]}</Fact>
+            <Fact label="Langue">{LOCALE_LABELS[booking.contact.locale]}</Fact>
           </Facts>
+          <p className="text-sm text-graphite">
+            {booking.contact.source === "booking"
+              ? "Coordonnées saisies avec cette réservation."
+              : "Coordonnées du profil client (réservation antérieure à la copie par réservation)."}
+          </p>
         </Section>
 
         <Section title="Notes">

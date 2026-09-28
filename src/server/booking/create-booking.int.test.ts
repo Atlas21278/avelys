@@ -133,6 +133,9 @@ describe("booking creation service (integration)", () => {
     expect(booking).toMatchObject({
       reference: created.reference,
       customerId: created.customerId,
+      contactName: "Guest Test",
+      contactPhone: "+33100000000",
+      contactLocale: "fr",
       status: "REQUESTED",
       version: 1,
       pickupLabel: "Test origin",
@@ -200,9 +203,17 @@ describe("booking creation service (integration)", () => {
 
   it("reuses an existing guest customer matched by normalised email, without merging", async () => {
     const first = await createBooking(request(), deps());
+    const profileBefore = await db().customer.findUniqueOrThrow({
+      where: { id: first.customerId },
+    });
     const second = await createBooking(
       request({
-        customer: { name: "Other Name", email: " GUEST@avelys.TEST", phone: "+33199999999" },
+        customer: {
+          name: "Other Name",
+          email: " GUEST@avelys.TEST",
+          phone: "+33199999999",
+          locale: "en",
+        },
       }),
       deps(),
     );
@@ -210,9 +221,48 @@ describe("booking creation service (integration)", () => {
     expect(second.customerId).toBe(first.customerId);
     expect(second.reference).not.toBe(first.reference);
     await expect(db().customer.count()).resolves.toBe(1);
-    // The existing profile is kept as is (no profile merge).
+    // The existing profile is kept as is: no merge, never rewritten by a guest (DEC-25).
     const customer = await db().customer.findUniqueOrThrow({ where: { id: first.customerId } });
-    expect(customer.name).toBe("Guest Test");
+    expect(customer).toEqual(profileBefore);
+
+    // Each booking carries the contact submitted with it (VTC-037).
+    const contact = { contactName: true, contactPhone: true, contactLocale: true } as const;
+    await expect(
+      db().booking.findUniqueOrThrow({ where: { id: first.bookingId }, select: contact }),
+    ).resolves.toEqual({
+      contactName: "Guest Test",
+      contactPhone: "+33100000000",
+      contactLocale: "fr",
+    });
+    await expect(
+      db().booking.findUniqueOrThrow({ where: { id: second.bookingId }, select: contact }),
+    ).resolves.toEqual({
+      contactName: "Other Name",
+      contactPhone: "+33199999999",
+      contactLocale: "en",
+    });
+
+    // The contact copy never reaches the audit trail (BR-60).
+    const trail = await db().auditLog.findFirstOrThrow({
+      where: { entityType: "Booking", entityId: second.bookingId },
+    });
+    const serialised = JSON.stringify(trail);
+    for (const personal of ["Other Name", "+33199999999", "guest@"]) {
+      expect(serialised).not.toContain(personal);
+    }
+  });
+
+  it("stores no phone on the booking when none is submitted, whatever the profile holds", async () => {
+    const first = await createBooking(request(), deps());
+    const second = await createBooking(
+      request({ customer: { name: "Guest Test", email: "guest@avelys.test" } }),
+      deps(),
+    );
+
+    expect(second.customerId).toBe(first.customerId);
+    const booking = await db().booking.findUniqueOrThrow({ where: { id: second.bookingId } });
+    expect(booking).toMatchObject({ contactPhone: null, contactLocale: "fr" });
+    const customer = await db().customer.findUniqueOrThrow({ where: { id: first.customerId } });
     expect(customer.phone).toBe("+33100000000");
   });
 
