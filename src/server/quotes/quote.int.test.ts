@@ -5,7 +5,7 @@ import { PROVISIONAL_RULE, route } from "@/domain/pricing/fixtures";
 import { parsePricingSnapshot } from "@/domain/pricing/snapshot";
 import type { RoutingProvider } from "@/integrations/maps/routing";
 import { generateReference } from "@/server/booking/reference";
-import { db } from "@/server/db";
+import { createPrismaClient, db } from "@/server/db";
 import {
   createPricingRuleVersion,
   getActivePricingRule,
@@ -74,6 +74,25 @@ describe("quote service (integration)", () => {
     const error: unknown = await computeQuote(REQUEST, deps()).catch((caught: unknown) => caught);
     expect(error).toBeInstanceOf(QuoteError);
     expect((error as QuoteError).code).toBe("NO_ACTIVE_PRICING_RULE");
+  });
+
+  it("refuses with DATABASE_UNAVAILABLE when PostgreSQL cannot be reached", async () => {
+    // A real client on a closed local port: the genuine Prisma connection error, not a mock.
+    const unreachable = createPrismaClient("postgresql://avelys:unused@127.0.0.1:1/avelys_test");
+    try {
+      const error: unknown = await computeQuote(REQUEST, {
+        ...deps(),
+        activePricingRule: async () => {
+          await unreachable.pricingRule.findFirst();
+          throw new Error("an unreachable database answered");
+        },
+      }).catch((caught: unknown) => caught);
+      expect(error).toBeInstanceOf(QuoteError);
+      expect((error as QuoteError).code).toBe("DATABASE_UNAVAILABLE");
+      expect((error as QuoteError).temporary).toBe(true);
+    } finally {
+      await unreachable.$disconnect();
+    }
   });
 
   it("prices with the seeded rule and persists a snapshot that survives a new rule version", async () => {

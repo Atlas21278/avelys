@@ -42,10 +42,11 @@ export const serverEnvSchema = z.object({
   ),
   // Minimum booking lead time in minutes (BR-31). PROVISIONAL: 12 h (720) by default, pending
   // the owners' confirmation; below it the quote is refused (BOOKING_LEAD_TIME_TOO_SHORT).
+  // Must be > 0: zero would disable the lead time check (BR-31).
   // An empty value (as copied from .env.example) means "use the default".
   BOOKING_MIN_LEAD_TIME_MINUTES: z.preprocess(
     (value) => (value === "" ? undefined : value),
-    z.coerce.number().int().nonnegative().default(720),
+    z.coerce.number().int().positive().default(720),
   ),
   LOG_LEVEL: z.enum(["fatal", "error", "warn", "info", "debug", "trace", "silent"]).default("info"),
 });

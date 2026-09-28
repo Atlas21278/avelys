@@ -42,14 +42,14 @@ describe("parseServerEnv", () => {
     }
   });
 
-  it("reads the booking lead time as a non-negative integer number of minutes", () => {
+  it("reads the booking lead time as a positive integer number of minutes", () => {
     const read = (value: string) =>
       parseServerEnv({ ...valid, BOOKING_MIN_LEAD_TIME_MINUTES: value })
         .BOOKING_MIN_LEAD_TIME_MINUTES;
     expect(read("90")).toBe(90);
-    expect(read("0")).toBe(0);
+    expect(read("1")).toBe(1);
     expect(read("")).toBe(720);
-    for (const value of ["-1", "1.5", "twelve hours"]) {
+    for (const value of ["0", "-1", "1.5", "twelve hours"]) {
       expect(() => read(value)).toThrowError(/BOOKING_MIN_LEAD_TIME_MINUTES/);
     }
   });

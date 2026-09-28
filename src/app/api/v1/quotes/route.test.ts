@@ -129,6 +129,7 @@ describe("POST /api/v1/quotes", () => {
     ["ROUTE_UNAVAILABLE", true, 503],
     ["NO_ACTIVE_PRICING_RULE", false, 503],
     ["PRICING_UNAVAILABLE", false, 503],
+    ["DATABASE_UNAVAILABLE", true, 503],
   ] as const)("maps %s (temporary: %s) to HTTP %i", async (code, temporary, status) => {
     quote.mockRejectedValue(new QuoteError(code, "test_reason", "internal detail", temporary));
     const response = await post(BODY, { "x-request-id": "quote-test-0002" });
@@ -163,5 +164,18 @@ describe("POST /api/v1/quotes", () => {
     expect(text).not.toContain("ECONNREFUSED");
     expect(text).not.toContain("at ");
     expect(log.error).toHaveBeenCalled();
+  });
+
+  it("logs only the name of an unexpected error, never its message or stack", async () => {
+    const error = new TypeError("Cannot read label of Test origin label (test-place-origin)");
+    quote.mockRejectedValue(error);
+    await post(BODY);
+
+    expect(log.error).toHaveBeenCalledWith({ errorName: "TypeError" }, "quote failed");
+    const logs = allLogs();
+    for (const value of ["Test origin label", "test-place-origin", "Cannot read"]) {
+      expect(logs).not.toContain(value);
+    }
+    expect(logs).not.toContain("route.test.ts"); // no stack frame
   });
 });
