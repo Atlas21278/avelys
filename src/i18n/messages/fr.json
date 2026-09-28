@@ -1,0 +1,21 @@
+{
+  "Metadata": {
+    "title": "Avelys — Chauffeur privé premium à Paris",
+    "description": "Chauffeur privé premium à Paris. Réservation anticipée, prix connu avant confirmation."
+  },
+  "Home": {
+    "title": "Avelys",
+    "tagline": "Chauffeur privé premium à Paris"
+  },
+  "LocaleSwitcher": {
+    "label": "Langue",
+    "fr": "Français",
+    "en": "English"
+  },
+  "NotFound": {
+    "metaTitle": "Page introuvable — Avelys",
+    "title": "Page introuvable",
+    "description": "La page demandée n’existe pas ou a été déplacée.",
+    "home": "Retour à l’accueil"
+  }
+}

@@ -58,7 +58,7 @@ Accueil : header (Services, Entreprises, Flotte, À propos, Contact, FR/EN, Rés
 | Landing pages  | équivalents EN | CDG, Orly, Disneyland, Versailles, chauffeur privé Paris, business |
 | Légal          | équivalents EN | Mentions légales, confidentialité, cookies, CGV (DEC-09, DEC-10)   |
 
-> Les slugs EN traduits sont une proposition à confirmer dans le ticket i18n/routing (EPIC-07) ; la spec impose seulement le préfixe `/en`.
+> Slugs EN traduits : décidé (DEC-21, 2026-09-28). Routage, langue par défaut et hreflang : `docs/architecture/i18n.md`.
 
 ## Compte client et B2B
 
