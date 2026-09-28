@@ -1,6 +1,6 @@
 /**
  * Routing port (ADR-0010): the quote service asks for a road route without knowing the provider.
- * A route is either a valid road `RouteInput` or a typed `RoutingError`; there is never a
+ * A route is either a valid road `ResolvedRoute` or a typed `RoutingError`; there is never a
  * straight-line fallback (CLAUDE.md rule 4, BR-51).
  */
 
@@ -27,12 +27,25 @@ export const RouteRequestSchema = z.strictObject({
   destination: WaypointSchema,
 });
 
+export type LatLng = z.output<typeof LatLngSchema>;
 export type Waypoint = z.output<typeof WaypointSchema>;
 export type RouteRequest = z.input<typeof RouteRequestSchema>;
 
+/**
+ * A priced road route and the points it actually starts and ends at, as resolved by the
+ * provider (VTC-035). A `placeId` is resolved to its location, coordinates are snapped to the
+ * road network: these are the coordinates the price was computed for, and the ones stored on a
+ * booking — never the coordinates submitted by the browser.
+ */
+export type ResolvedRoute = Readonly<{
+  route: RouteInput;
+  origin: LatLng;
+  destination: LatLng;
+}>;
+
 export interface RoutingProvider {
-  /** Road distance and duration between two points, or a `RoutingError`. */
-  computeRoute(request: RouteRequest): Promise<RouteInput>;
+  /** Road distance, duration and resolved end points between two waypoints, or a `RoutingError`. */
+  computeRoute(request: RouteRequest): Promise<ResolvedRoute>;
 }
 
 export type RoutingErrorCode =
