@@ -100,6 +100,13 @@ async function main() {
 }
 
 main().catch((error: unknown) => {
-  console.error(error instanceof Error ? error.message : "Échec de la création du compte.");
+  // Unexpected failure (database, network): no raw message, which could carry connection or
+  // query details; the error name and code are enough to diagnose.
+  const name = error instanceof Error ? error.name : "UnknownError";
+  const code =
+    typeof error === "object" && error !== null && "code" in error
+      ? ` (${String(error.code)})`
+      : "";
+  console.error(`Échec de la création du compte : ${name}${code}.`);
   process.exit(1);
 });

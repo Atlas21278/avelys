@@ -3,6 +3,7 @@ import "server-only";
 import * as z from "zod";
 
 import { STAFF_ROLES } from "@/domain/auth/access";
+import { Prisma } from "@/generated/prisma/client";
 import { logger } from "@/lib/logger";
 import { db } from "@/server/db";
 
@@ -46,26 +47,34 @@ export async function createStaffUser(input: CreateStaffUserInput): Promise<{ us
   const accountId = ctx.generateId({ model: "account" });
   if (!userId || !accountId) throw new Error("Better Auth did not generate an id.");
 
-  await db().$transaction([
-    db().user.create({
-      data: {
-        id: userId,
-        email: data.email,
-        name: data.name,
-        role: data.role,
-        emailVerified: false,
-      },
-    }),
-    db().account.create({
-      data: {
-        id: accountId,
-        userId,
-        accountId: userId,
-        providerId: "credential",
-        password: passwordHash,
-      },
-    }),
-  ]);
+  try {
+    await db().$transaction([
+      db().user.create({
+        data: {
+          id: userId,
+          email: data.email,
+          name: data.name,
+          role: data.role,
+          emailVerified: false,
+        },
+      }),
+      db().account.create({
+        data: {
+          id: accountId,
+          userId,
+          accountId: userId,
+          providerId: "credential",
+          password: passwordHash,
+        },
+      }),
+    ]);
+  } catch (error) {
+    // A concurrent creation passed the check above: the unique index on email decides.
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
+      throw new StaffUserExistsError();
+    }
+    throw error;
+  }
 
   // No email in logs (PII minimisation): the id and the role are enough to trace it.
   logger().info({ userId, role: data.role }, "staff user created");

@@ -25,10 +25,12 @@ export const MIN_PASSWORD_LENGTH = 12;
  *   local script (`pnpm auth:create-staff`).
  * - TOTP two-factor. Whether it is mandatory is a role rule enforced by the server guard
  *   (src/server/auth/access.ts); disabling it and "trusted devices" are refused here.
- * - Rate limiting on every auth endpoint, stored in the database so it holds across replicas.
+ * - Rate limiting on every auth endpoint, stored in the database so it holds across replicas,
+ *   keyed by the client IP resolved through TRUSTED_PROXIES (see warnIfNoTrustedProxies).
  */
 function createAuth() {
   const env = serverEnv();
+  warnIfNoTrustedProxies(env.APP_ENV, env.TRUSTED_PROXIES);
 
   return betterAuth({
     appName: "Avelys",
@@ -40,6 +42,10 @@ function createAuth() {
       enabled: true,
       disableSignUp: true,
       minPasswordLength: MIN_PASSWORD_LENGTH,
+    },
+    session: {
+      // PROVISIONAL lifetime (AUTH_SESSION_MAX_AGE_SECONDS, default 7 days), pending a decision.
+      expiresIn: env.AUTH_SESSION_MAX_AGE_SECONDS,
     },
     user: {
       additionalFields: {
@@ -58,6 +64,12 @@ function createAuth() {
     },
     advanced: {
       cookiePrefix: "avelys",
+      ipAddress: {
+        ipAddressHeaders: ["x-forwarded-for"],
+        // X-Forwarded-For is read from the right, skipping these hops: the first untrusted
+        // address is the client. Without them only a single-value header is believed.
+        trustedProxies: env.TRUSTED_PROXIES,
+      },
     },
     logger: {
       // Structured logs through pino; the message only, extra arguments may carry user data.
@@ -92,6 +104,20 @@ function createAuth() {
       }),
     },
   });
+}
+
+/**
+ * Without trusted proxies, a multi-value or missing X-Forwarded-For resolves to no client IP
+ * and every such request shares one rate-limit bucket per path (a sign-in lockout for all).
+ * Deployed environments must set TRUSTED_PROXIES to the ingress hops (INFRA-005).
+ */
+export function warnIfNoTrustedProxies(appEnv: string, trustedProxies: readonly string[]): boolean {
+  if (appEnv !== "production" || trustedProxies.length > 0) return false;
+  logger().warn(
+    { check: "auth-rate-limit", variable: "TRUSTED_PROXIES" },
+    "TRUSTED_PROXIES is empty: auth rate limiting cannot identify clients behind a proxy",
+  );
+  return true;
 }
 
 export type Auth = ReturnType<typeof createAuth>;

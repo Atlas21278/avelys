@@ -5,13 +5,15 @@ import { db } from "@/server/db";
 import { totpFromUri } from "@/test/totp";
 
 import { checkAccess } from "./access";
-import { AUTH_BASE_PATH, auth } from "./auth";
+import { AUTH_BASE_PATH, auth, warnIfNoTrustedProxies } from "./auth";
 import { createStaffUser, StaffUserExistsError } from "./staff-users";
 
 // Runs against the real test database (vitest "integration" project), migrations applied.
 
 const PASSWORD = "correct horse battery staple";
 const ORIGIN = "http://localhost:3000";
+// Stands in for the ingress: listed in TRUSTED_PROXIES by vitest.config.ts (198.51.100.0/24).
+const INGRESS = "198.51.100.10";
 
 /** Minimal browser-like cookie jar fed by Set-Cookie headers. */
 class CookieJar {
@@ -173,8 +175,9 @@ describe("back-office authentication (integration)", () => {
   });
 
   it("refuses to disable 2FA and to trust a device", async () => {
-    const { jar } = await signIn(await staff("ADMIN"));
-    await enrolTotp(jar);
+    const email = await staff("ADMIN");
+    const { jar } = await signIn(email);
+    const totpURI = await enrolTotp(jar);
 
     await expect(
       auth().api.disableTwoFactor({ body: { password: PASSWORD }, headers: jar.headers() }),
@@ -189,6 +192,58 @@ describe("back-office authentication (integration)", () => {
         headers: jar.headers(),
       }),
     ).rejects.toMatchObject({ body: { code: "TRUST_DEVICE_NOT_ALLOWED" } });
+
+    // Refused even with a valid code during a sign-in challenge: no session is opened.
+    await auth().api.signOut({ headers: jar.headers() });
+    const challenge = await signIn(email);
+    await expect(
+      auth().api.verifyTOTP({
+        body: { code: totpFromUri(totpURI), trustDevice: true },
+        headers: challenge.jar.headers(),
+      }),
+    ).rejects.toMatchObject({ body: { code: "TRUST_DEVICE_NOT_ALLOWED" } });
+    await expect(checkAccess(challenge.jar.headers(), BACK_OFFICE_ROLES)).resolves.toEqual({
+      ok: false,
+      reason: "UNAUTHENTICATED",
+    });
+  });
+
+  it("locks TOTP verification after 10 consecutive wrong codes, even with a valid code", async () => {
+    const email = await staff("ADMIN");
+    const first = await signIn(email);
+    const totpURI = await enrolTotp(first.jar);
+    await auth().api.signOut({ headers: first.jar.headers() });
+
+    // Each sign-in challenge allows 5 attempts; the account budget (10) spans challenges.
+    for (let challenge = 0; challenge < 2; challenge += 1) {
+      const { jar } = await signIn(email);
+      for (let attempt = 0; attempt < 5; attempt += 1) {
+        await expect(
+          auth().api.verifyTOTP({ body: { code: "000000" }, headers: jar.headers() }),
+        ).rejects.toMatchObject({ body: { code: "INVALID_CODE" } });
+      }
+    }
+
+    const locked = await db().twoFactor.findFirstOrThrow({ where: { user: { email } } });
+    expect(locked.lockedUntil?.getTime()).toBeGreaterThan(Date.now());
+
+    const { jar } = await signIn(email);
+    await expect(
+      auth().api.verifyTOTP({ body: { code: totpFromUri(totpURI) }, headers: jar.headers() }),
+    ).rejects.toMatchObject({ body: { code: "ACCOUNT_TEMPORARILY_LOCKED" } });
+    await expect(checkAccess(jar.headers(), BACK_OFFICE_ROLES)).resolves.toEqual({
+      ok: false,
+      reason: "UNAUTHENTICATED",
+    });
+  });
+
+  it("gives sessions the configured lifetime (AUTH_SESSION_MAX_AGE_SECONDS, default 7 days)", async () => {
+    const before = Date.now();
+    await signIn(await staff("DRIVER"));
+    const session = await db().session.findFirstOrThrow();
+    const lifetime = session.expiresAt.getTime() - before;
+    expect(lifetime).toBeGreaterThan(604_800_000 - 60_000);
+    expect(lifetime).toBeLessThanOrEqual(604_800_000 + 60_000);
   });
 
   it("never lets a user change their own role", async () => {
@@ -207,7 +262,7 @@ describe("back-office authentication (integration)", () => {
     const response = await post(
       "/sign-up/email",
       { email: "intruder@avelys.test", password: PASSWORD, name: "Intruder" },
-      "198.51.100.1",
+      "192.0.2.1",
     );
     expect(response.ok).toBe(false);
     await expect(db().user.count({ where: { email: "intruder@avelys.test" } })).resolves.toBe(0);
@@ -227,6 +282,39 @@ describe("back-office authentication (integration)", () => {
     expect((await attempt("203.0.113.8")).status).not.toBe(429);
   });
 
+  it("keys the rate limit on the real client IP, not on a spoofed X-Forwarded-For entry", async () => {
+    await staff("ADMIN");
+    // The client forges the leftmost entries; the ingress appends the address it saw.
+    const attempt = (spoofed: string, client: string) =>
+      post(
+        "/sign-in/email",
+        { email: "admin@avelys.test", password: "wrong password!" },
+        `${spoofed}, ${client}, ${INGRESS}`,
+      );
+
+    const statuses: number[] = [];
+    for (let i = 0; i < 4; i += 1) {
+      statuses.push((await attempt(`192.0.2.${100 + i}`, "203.0.113.20")).status);
+    }
+    expect(statuses.slice(0, 3)).not.toContain(429);
+    // A new spoofed address on each request does not reset the real client's budget.
+    expect(statuses[3]).toBe(429);
+
+    const keys = (await db().rateLimit.findMany({ select: { key: true } })).map((row) => row.key);
+    expect(keys.some((key) => key.startsWith("203.0.113.20|"))).toBe(true);
+    expect(keys.some((key) => key.startsWith("192.0.2."))).toBe(false);
+    expect(keys.some((key) => key.startsWith("no-trusted-ip"))).toBe(false);
+
+    // Another real client behind the same ingress keeps its own budget.
+    expect((await attempt("192.0.2.200", "203.0.113.21")).status).not.toBe(429);
+  });
+
+  it("warns when TRUSTED_PROXIES is empty in production only", () => {
+    expect(warnIfNoTrustedProxies("production", [])).toBe(true);
+    expect(warnIfNoTrustedProxies("production", ["10.0.0.0/8"])).toBe(false);
+    expect(warnIfNoTrustedProxies("staging", [])).toBe(false);
+  });
+
   it("creates staff accounts only with a valid role, a long password and a unique email", async () => {
     await staff("ADMIN");
     await expect(staff("ADMIN")).rejects.toBeInstanceOf(StaffUserExistsError);
@@ -241,6 +329,12 @@ describe("back-office authentication (integration)", () => {
         password: PASSWORD,
       }),
     ).rejects.toThrow();
+
+    // Concurrent creations: the unique index decides, reported as the same domain error.
+    const results = await Promise.allSettled([staff("DISPATCHER"), staff("DISPATCHER")]);
+    const rejected = results.filter((result) => result.status === "rejected");
+    expect(rejected).toHaveLength(1);
+    expect(rejected[0]?.reason).toBeInstanceOf(StaffUserExistsError);
 
     // The password is stored hashed, never in clear.
     const account = await db().account.findFirstOrThrow({ where: { providerId: "credential" } });

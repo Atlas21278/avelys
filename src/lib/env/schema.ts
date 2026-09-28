@@ -12,6 +12,26 @@ export const serverEnvSchema = z.object({
   DATABASE_URL: z.url({ protocol: /^postgres(ql)?$/ }),
   // Signs and encrypts Better Auth cookies, tokens and TOTP secrets (VTC-016). At least 32 characters.
   BETTER_AUTH_SECRET: z.string().min(32),
+  // Reverse proxies (IPs or CIDR ranges, comma-separated) whose X-Forwarded-For entries are
+  // trusted when resolving the client IP for auth rate limiting. Empty by default; the ingress
+  // topology is fixed by INFRA-005 (docs/architecture/security.md).
+  TRUSTED_PROXIES: z
+    .string()
+    .default("")
+    .transform((value) =>
+      value
+        .split(",")
+        .map((entry) => entry.trim())
+        .filter(Boolean),
+    )
+    .pipe(z.array(z.union([z.ipv4(), z.ipv6(), z.cidrv4(), z.cidrv6()]))),
+  // Back-office session lifetime in seconds. PROVISIONAL: defaults to Better Auth's 7 days,
+  // pending a decision (docs/architecture/security.md).
+  // An empty value (as copied from .env.example) means "use the default".
+  AUTH_SESSION_MAX_AGE_SECONDS: z.preprocess(
+    (value) => (value === "" ? undefined : value),
+    z.coerce.number().int().positive().default(604_800),
+  ),
   LOG_LEVEL: z.enum(["fatal", "error", "warn", "info", "debug", "trace", "silent"]).default("info"),
 });
 
