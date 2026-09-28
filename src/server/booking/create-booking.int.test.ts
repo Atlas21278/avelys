@@ -44,6 +44,11 @@ const ROUTE = route({
   computedAt: NOW.toISOString(),
 });
 
+// Where the (mocked) provider resolved the waypoints to: the priced coordinates (VTC-035).
+const PRICED_ORIGIN = { lat: 48.8442, lng: 2.3744 };
+const PRICED_DESTINATION = { lat: 49.0094, lng: 2.5483 };
+const RESOLVED = { route: ROUTE, origin: PRICED_ORIGIN, destination: PRICED_DESTINATION };
+
 let rule: PricingRuleConfig;
 let computeRoute: ReturnType<typeof vi.fn<RoutingProvider["computeRoute"]>>;
 let hasConfirmedPaymentMethod: ReturnType<typeof vi.fn<() => Promise<boolean>>>;
@@ -110,7 +115,7 @@ describe("booking creation service (integration)", () => {
       { effectiveFrom: new Date("2026-01-01T00:00:00.000Z"), tariff: TARIFF },
       { type: "SYSTEM" },
     );
-    computeRoute = vi.fn<RoutingProvider["computeRoute"]>().mockResolvedValue(ROUTE);
+    computeRoute = vi.fn<RoutingProvider["computeRoute"]>().mockResolvedValue(RESOLVED);
     hasConfirmedPaymentMethod = vi.fn<() => Promise<boolean>>().mockResolvedValue(true);
   });
 
@@ -139,7 +144,11 @@ describe("booking creation service (integration)", () => {
       status: "REQUESTED",
       version: 1,
       pickupLabel: "Test origin",
+      pickupLat: PRICED_ORIGIN.lat,
+      pickupLng: PRICED_ORIGIN.lng,
       pickupPlaceId: null,
+      dropoffLat: PRICED_DESTINATION.lat,
+      dropoffLng: PRICED_DESTINATION.lng,
       dropoffPlaceId: "test-place",
       pickupTimeZone: "Europe/Paris",
       passengerCount: 2,
@@ -199,6 +208,46 @@ describe("booking creation service (integration)", () => {
     for (const personal of ["Guest", "guest@", "+331", "Test origin", "Test destination"]) {
       expect(serialised).not.toContain(personal);
     }
+  });
+
+  it("stores the priced coordinates of a forged request, never the submitted ones (VTC-035)", async () => {
+    // Priced from place ids A→B while claiming coordinates C→D (far away, e.g. Lyon/Marseille).
+    const created = await createBooking(
+      request({
+        origin: { label: "Test origin", lat: 45.764, lng: 4.8357, placeId: "test-place-a" },
+        destination: {
+          label: "Test destination",
+          lat: 43.2965,
+          lng: 5.3698,
+          placeId: "test-place-b",
+        },
+      }),
+      deps(),
+    );
+
+    expect(computeRoute).toHaveBeenCalledExactlyOnceWith({
+      origin: { placeId: "test-place-a" },
+      destination: { placeId: "test-place-b" },
+    });
+    const stored = await db().booking.findUniqueOrThrow({
+      where: { id: created.bookingId },
+      select: { pickupLat: true, pickupLng: true, dropoffLat: true, dropoffLng: true },
+    });
+    expect(stored).toEqual({
+      pickupLat: PRICED_ORIGIN.lat,
+      pickupLng: PRICED_ORIGIN.lng,
+      dropoffLat: PRICED_DESTINATION.lat,
+      dropoffLng: PRICED_DESTINATION.lng,
+    });
+  });
+
+  it("writes nothing when the provider cannot resolve the priced end points", async () => {
+    computeRoute.mockRejectedValue(
+      new RoutingError("ROUTING_PROVIDER_ERROR", "invalid_response", "No resolved end points"),
+    );
+    const error = await refusal(createBooking(request(), deps()));
+    expect(error.code).toBe("ROUTE_UNAVAILABLE");
+    await expectNothingWritten();
   });
 
   it("reuses an existing guest customer matched by normalised email, without merging", async () => {
