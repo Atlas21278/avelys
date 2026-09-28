@@ -301,6 +301,83 @@ describe("booking creation service (integration)", () => {
     }
   });
 
+  it("serialises two concurrent requests for one email onto one guest customer (VTC-036)", async () => {
+    // Deterministic overlap, no sleep: a third transaction holds the per-email advisory lock
+    // (same key as `persist`), both requests are started and the test waits until PostgreSQL
+    // reports both of them blocked on that lock; only then is the lock released. Without the
+    // lock (or with a different key) they never wait and the test fails instead of passing.
+    const email = "guest@avelys.test";
+    let releaseHolder!: () => void;
+    const holderReleased = new Promise<void>((resolve) => (releaseHolder = resolve));
+    let holderLocked!: () => void;
+    const holderHasLock = new Promise<void>((resolve) => (holderLocked = resolve));
+
+    const holder = db().$transaction(
+      async (tx) => {
+        await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`customer:${email}`}, 0))::text AS locked`;
+        holderLocked();
+        await holderReleased;
+      },
+      { timeout: 14_000 },
+    );
+    await holderHasLock;
+
+    let settled = false;
+    const both = Promise.allSettled([
+      createBooking(request(), deps()),
+      createBooking(
+        request({ customer: { name: "Second Guest", email: " GUEST@Avelys.TEST", locale: "en" } }),
+        deps(),
+      ),
+    ]).finally(() => (settled = true));
+
+    try {
+      // Bounded poll (the interval is a polling pace, not a timing assumption).
+      const deadline = Date.now() + 10_000;
+      for (;;) {
+        if (settled) throw new Error("the requests completed without waiting for the email lock");
+        const [row] = await db().$queryRaw<{ waiting: number }[]>`
+          SELECT count(*)::int AS waiting FROM pg_locks
+          WHERE locktype = 'advisory' AND NOT granted
+            AND database = (SELECT oid FROM pg_database WHERE datname = current_database())`;
+        if (row?.waiting === 2) break;
+        if (Date.now() > deadline) {
+          throw new Error(
+            `both requests were not blocked on the email lock within 10 s (waiting: ${row?.waiting ?? 0})`,
+          );
+        }
+        await new Promise((resolve) => setTimeout(resolve, 25));
+      }
+    } finally {
+      releaseHolder();
+      // An expired holder must not mask the original error.
+      await holder.catch(() => undefined);
+      // Let both requests finish, so none writes rows during the next test's beforeEach.
+      await both;
+    }
+
+    const results = await both;
+    const created = results.map((result) => {
+      if (result.status === "rejected") throw result.reason;
+      return result.value;
+    });
+    const [first, second] = created;
+
+    expect(first?.customerId).toBeDefined();
+    expect(second?.customerId).toBe(first?.customerId);
+    expect(second?.reference).not.toBe(first?.reference);
+    await expect(db().customer.count()).resolves.toBe(1);
+    await expect(db().customer.count({ where: { email, userId: null } })).resolves.toBe(1);
+    await expect(db().booking.count()).resolves.toBe(2);
+    const trail = await db().auditLog.findMany({
+      where: { entityType: "Booking", action: "booking.create" },
+    });
+    expect(trail).toHaveLength(2);
+    expect(new Set(trail.map((row) => row.entityId))).toEqual(
+      new Set(created.map((booking) => booking.bookingId)),
+    );
+  });
+
   it("stores no phone on the booking when none is submitted, whatever the profile holds", async () => {
     const first = await createBooking(request(), deps());
     const second = await createBooking(
