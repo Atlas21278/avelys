@@ -332,6 +332,8 @@ describe("booking creation service (integration)", () => {
     ]).finally(() => (settled = true));
 
     try {
+      // Bounded poll (the interval is a polling pace, not a timing assumption).
+      const deadline = Date.now() + 10_000;
       for (;;) {
         if (settled) throw new Error("the requests completed without waiting for the email lock");
         const [row] = await db().$queryRaw<{ waiting: number }[]>`
@@ -339,10 +341,19 @@ describe("booking creation service (integration)", () => {
           WHERE locktype = 'advisory' AND NOT granted
             AND database = (SELECT oid FROM pg_database WHERE datname = current_database())`;
         if (row?.waiting === 2) break;
+        if (Date.now() > deadline) {
+          throw new Error(
+            `both requests were not blocked on the email lock within 10 s (waiting: ${row?.waiting ?? 0})`,
+          );
+        }
+        await new Promise((resolve) => setTimeout(resolve, 25));
       }
     } finally {
       releaseHolder();
-      await holder;
+      // An expired holder must not mask the original error.
+      await holder.catch(() => undefined);
+      // Let both requests finish, so none writes rows during the next test's beforeEach.
+      await both;
     }
 
     const results = await both;
