@@ -36,7 +36,7 @@ promotion ─► PR GitOps prod (même digest) ─► approbation ─► Argo CD
 ## Stratégie Git
 
 - `main` toujours déployable, protégée : checks requis, pas de force push, approbation selon risque.
-- **État au 2026-09-28** : ruleset prêt (`.github/rulesets/main.json`, appliqué par `scripts/apply-ruleset.sh`) mais **non actif** — un repo privé sur un compte GitHub gratuit n’a pas accès aux rulesets (DEC-23). En attendant : squash merge seul et suppression des branches mergées activés, hook local `.githooks/pre-push` refusant tout push sur `main` (`git config core.hooksPath .githooks` une fois par clone), et vérification manuelle que `ci`, `secrets` et `deps` sont verts avant tout merge.
+- **État** : ruleset `main` **actif** depuis le 2026-09-28 sur le dépôt public `Atlas21278/avelys` (option gratuite, DEC-23 ; spec, tarifs, registre et backlog restent dans le dépôt privé `avelys-private`). Réappliquer après modification : `sh scripts/apply-ruleset.sh`. Le hook local `.githooks/pre-push` reste en place (`git config core.hooksPath .githooks` une fois par clone).
 - Ruleset : PR obligatoire, checks `ci`/`secrets`/`deps` à jour, historique linéaire, pas de force push ni de suppression, fils de discussion résolus, squash uniquement. **0 approbation requise** : un seul compte GitHub existe et l’auteur d’une PR ne peut pas l’approuver ; passer à 1 approbation + revue CODEOWNERS quand le second associé aura un compte.
 - Branches courtes `feature/VTC-*`, `fix/BUG-*`, `infra/INFRA-*` ; squash merge.
 - CODEOWNERS sur `prisma/migrations/`, `.github/workflows/`, `charts/`, `src/integrations/stripe/`, `src/domain/pricing/`.

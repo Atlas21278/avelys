@@ -1,7 +1,7 @@
 # VTC-006 — Branch protection et CODEOWNERS
 
 - **Epic** : EPIC-03
-- **Statut** : NEEDS_DECISION (DEC-23) — CODEOWNERS, réglages de merge, ruleset JSON, script et hook local livrés ; reste à activer le ruleset
+- **Statut** : DONE (2026-09-28) — ruleset actif sur le dépôt public `Atlas21278/avelys` (DEC-23 tranchée : option gratuite)
 - **Risque** : HIGH (gouvernance du repo)
 - **Validation humaine** : **oui** — réglages appliqués par le propriétaire (droits admin repo)
 - **Dépendances** : INFRA-001 (et INFRA-002 pour les checks requis)

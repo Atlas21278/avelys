@@ -23,13 +23,13 @@ Scripts pnpm du projet (`install`, `lint`, `typecheck`, `test`, `build`, `format
 | Cluster / déploiement | `kubectl`, `helm install/upgrade/uninstall/rollback`, `argocd`                                                                                                                                                  |
 | Base                  | `prisma migrate reset`                                                                                                                                                                                          |
 | Fichiers              | `rm -rf`                                                                                                                                                                                                        |
-| GitHub                | `gh secret`, `gh variable`, `gh repo delete`, changement de visibilité du repo, `gh api` en `DELETE`                                                                                                            |
+| GitHub                | `gh secret`, `gh pr merge --admin` (contournement du ruleset), modification des rulesets via `gh api`, `gh variable`, `gh repo delete`, changement de visibilité du repo, `gh api` en `DELETE`                  |
 
 Les règles git, cluster et GitHub sensibles existent aussi en `PowerShell(...)` : le poste de développement est sous Windows.
 
 ## Écarts assumés par rapport au ticket
 
-- **`gh pr merge` n'est pas refusé.** Le propriétaire a donné l'autonomie à Claude le 2026-09-28 (« ne me demande pas de permission »). Règle de conduite : merge en squash **uniquement** quand `ci`, `secrets` et `deps` sont verts. À revoir avec DEC-23 ou quand le second associé aura un compte GitHub (approbation requise).
+- **`gh pr merge` n'est pas refusé.** Le propriétaire a donné l'autonomie à Claude le 2026-09-28 (« ne me demande pas de permission »). Règle de conduite : merge en squash **uniquement** quand `ci`, `secrets` et `deps` sont verts. Le ruleset de `main` (actif) l’impose côté GitHub. Passer à 1 approbation + revue CODEOWNERS quand le second associé aura un compte GitHub.
 - **Pas de règles `ask`** (`git push`, `pnpm add`, `prisma migrate dev`) : elles déclencheraient des demandes, ce que le propriétaire a refusé. Le push vers une branche de travail reste possible ; vers `main`, il est refusé.
 - Pas de `.mcp.json` projet : aucun serveur MCP n'est nécessaire à ce stade (§27.2).
 
