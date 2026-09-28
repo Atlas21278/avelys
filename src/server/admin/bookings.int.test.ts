@@ -326,7 +326,9 @@ describe("back-office bookings (integration)", () => {
         totalHtCents: null,
         vatCents: null,
         pricingRuleVersion: TEST_RULE.version,
-        customer: { name: "Client Test", phone: "+33100000000" },
+        // No contact copy on this row (created as before VTC-037): the customer profile is used.
+        contact: { name: "Client Test", phone: "+33100000000", locale: "fr", source: "customer" },
+        customerEmail: "client@avelys.test",
       });
       expect(detail).not.toHaveProperty("pricingSnapshot");
       expect(detail).not.toHaveProperty("id");
@@ -346,6 +348,25 @@ describe("back-office bookings (integration)", () => {
           toStatus: "ACCEPTED",
         }),
       ]);
+    });
+
+    it("shows the booking's own contact copy rather than the customer profile (VTC-037)", async () => {
+      const { reference } = await booking("REQUESTED", "2026-11-02T09:00:00Z", {
+        contactName: "Autre Nom",
+        contactPhone: "+33199999999",
+        contactLocale: "en",
+      });
+
+      const detail = await getBackOfficeBooking(sessions.admin, reference);
+      expect(detail?.contact).toEqual({
+        name: "Autre Nom",
+        phone: "+33199999999",
+        locale: "en",
+        source: "booking",
+      });
+      expect(detail?.customerEmail).toBe("client@avelys.test");
+      expect(detail).not.toHaveProperty("customer");
+      expect(detail).not.toHaveProperty("contactPhone");
     });
 
     it("returns null for an unknown or invalid reference", async () => {

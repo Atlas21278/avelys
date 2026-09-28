@@ -173,6 +173,12 @@ model Booking {
   customerId String
   customer   Customer @relation(fields: [customerId], references: [id], onDelete: Restrict)
 
+  /// Contact submitted with this booking (VTC-037, DEC-25): a guest booking never rewrites the
+  /// Customer. Null on bookings created before the copy existed (the Customer is used instead).
+  contactName   String?
+  contactPhone  String?
+  contactLocale Locale?
+
   pickupLabel    String
   pickupLat      Float
   pickupLng      Float

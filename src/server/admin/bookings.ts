@@ -2,6 +2,7 @@ import "server-only";
 
 import { type AccessDenialReason, BACK_OFFICE_ROLES } from "@/domain/auth/access";
 import { splitPriorityPage } from "@/domain/booking/back-office-order";
+import { type BookingContact, resolveBookingContact } from "@/domain/booking/contact";
 import { InvalidBookingReferenceError, normalizeReference } from "@/domain/booking/reference";
 import { BOOKING_STATUSES, type BookingStatus } from "@/domain/booking/status";
 import type { BookingActor } from "@/domain/booking/transitions";
@@ -155,6 +156,9 @@ const DETAIL_SELECT = {
   id: true,
   reference: true,
   status: true,
+  contactName: true,
+  contactPhone: true,
+  contactLocale: true,
   pickupLabel: true,
   dropoffLabel: true,
   pickupAt: true,
@@ -195,7 +199,14 @@ export interface BookingAuditEntry {
   readonly toStatus: BookingStatus | null;
 }
 
-export type BookingDetail = Omit<DetailRow, "id"> & {
+export type BookingDetail = Omit<
+  DetailRow,
+  "id" | "customer" | "contactName" | "contactPhone" | "contactLocale"
+> & {
+  /** Contact of this booking (VTC-037), from its own copy or, for older rows, its customer. */
+  readonly contact: BookingContact;
+  /** Email of the customer profile: the guest matching key, not copied per booking (DEC-25). */
+  readonly customerEmail: string;
   readonly audit: readonly BookingAuditEntry[];
 };
 
@@ -274,6 +285,11 @@ export async function getBackOfficeBooking(
   const row = await db().booking.findUnique({ where: { reference }, select: DETAIL_SELECT });
   if (!row) return null;
 
-  const { id, ...booking } = row;
-  return { ...booking, audit: await auditTrail(id) };
+  const { id, customer, contactName, contactPhone, contactLocale, ...booking } = row;
+  return {
+    ...booking,
+    contact: resolveBookingContact({ contactName, contactPhone, contactLocale }, customer),
+    customerEmail: customer.email,
+    audit: await auditTrail(id),
+  };
 }

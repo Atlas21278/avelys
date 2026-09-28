@@ -49,6 +49,8 @@ function sampleQuote(): Quote {
     pickupAt: new Date("2026-07-02T12:30:00.000Z"),
     origin: BODY.origin,
     destination: BODY.destination,
+    pricedOrigin: { lat: 48.8584, lng: 2.2945 },
+    pricedDestination: { lat: 49.0096, lng: 2.548 },
   };
 }
 

@@ -31,8 +31,20 @@ function json(status: number, body: unknown): Response {
   });
 }
 
+// Where the provider resolved the waypoints to: deliberately different from the request.
+const RESOLVED_START = { lat: 48.8584, lng: 2.2945 };
+const RESOLVED_END = { lat: 49.0079, lng: 2.5508 };
+
+const googleLocation = ({ lat, lng }: { lat: number; lng: number }) => ({
+  latLng: { latitude: lat, longitude: lng },
+});
+const leg = (start = RESOLVED_START, end = RESOLVED_END) => ({
+  startLocation: googleLocation(start),
+  endLocation: googleLocation(end),
+});
+
 const ok = (distanceMeters = 31_250, duration = "2280s") =>
-  json(200, { routes: [{ distanceMeters, duration }] });
+  json(200, { routes: [{ distanceMeters, duration, legs: [leg()] }] });
 
 function setup(responses: Array<Response | Error>, overrides: Partial<GoogleRoutesOptions> = {}) {
   const fetchMock = vi.fn<typeof fetch>();
@@ -75,10 +87,14 @@ describe("GoogleRoutesProvider — success", () => {
     const { provider, fetchMock } = setup([ok()]);
 
     await expect(provider.computeRoute(byPlace)).resolves.toEqual({
-      distanceMeters: 31_250,
-      durationSeconds: 2280,
-      provider: "google-routes",
-      computedAt: "2026-09-28T10:00:00.000Z",
+      route: {
+        distanceMeters: 31_250,
+        durationSeconds: 2280,
+        provider: "google-routes",
+        computedAt: "2026-09-28T10:00:00.000Z",
+      },
+      origin: RESOLVED_START,
+      destination: RESOLVED_END,
     });
 
     expect(fetchMock).toHaveBeenCalledOnce();
@@ -90,7 +106,9 @@ describe("GoogleRoutesProvider — success", () => {
       "X-Goog-Api-Key": API_KEY,
       "X-Goog-FieldMask": GOOGLE_ROUTES_FIELD_MASK,
     });
-    expect(GOOGLE_ROUTES_FIELD_MASK).toBe("routes.distanceMeters,routes.duration");
+    expect(GOOGLE_ROUTES_FIELD_MASK).toBe(
+      "routes.distanceMeters,routes.duration,routes.legs.startLocation,routes.legs.endLocation",
+    );
     expect(sentBody(fetchMock)).toEqual({
       origin: { placeId: PLACE_ORIGIN },
       destination: { placeId: PLACE_DESTINATION },
@@ -103,9 +121,12 @@ describe("GoogleRoutesProvider — success", () => {
   it("computes a road route from WGS84 coordinates", async () => {
     const { provider, fetchMock } = setup([ok(26_900, "1900s")]);
 
-    const route = await provider.computeRoute(byCoordinates);
+    const resolved = await provider.computeRoute(byCoordinates);
 
-    expect(route.distanceMeters).toBe(26_900);
+    expect(resolved.route.distanceMeters).toBe(26_900);
+    // The priced end points are the provider's (snapped to the road), not the submitted ones.
+    expect(resolved.origin).toEqual(RESOLVED_START);
+    expect(resolved.destination).toEqual(RESOLVED_END);
     expect(sentBody(fetchMock)).toMatchObject({
       origin: { location: { latLng: { latitude: 48.8738, longitude: 2.295 } } },
       destination: { location: { latLng: { latitude: 49.0097, longitude: 2.5479 } } },
@@ -126,8 +147,66 @@ describe("GoogleRoutesProvider — success", () => {
     expect(parseDurationSeconds("59.999999999s")).toBe(60);
 
     const { provider } = setup([ok(1_000, "90.6s")]);
-    expect((await provider.computeRoute(byPlace)).durationSeconds).toBe(91);
+    expect((await provider.computeRoute(byPlace)).route.durationSeconds).toBe(91);
   });
+
+  it("reads an omitted proto3 zero coordinate as 0", async () => {
+    const { provider } = setup([
+      json(200, {
+        routes: [
+          {
+            distanceMeters: 1_000,
+            duration: "60s",
+            legs: [{ startLocation: { latLng: { latitude: 0.5 } }, endLocation: { latLng: {} } }],
+          },
+        ],
+      }),
+    ]);
+    await expect(provider.computeRoute(byPlace)).resolves.toMatchObject({
+      origin: { lat: 0.5, lng: 0 },
+      destination: { lat: 0, lng: 0 },
+    });
+  });
+});
+
+describe("GoogleRoutesProvider — resolved end points are required (VTC-035)", () => {
+  const routeWith = (extra: Record<string, unknown>) =>
+    json(200, { routes: [{ distanceMeters: 1_000, duration: "60s", ...extra }] });
+
+  it.each([
+    ["no legs", routeWith({})],
+    ["an empty legs array", routeWith({ legs: [] })],
+    ["two legs", routeWith({ legs: [leg(), leg()] })],
+    [
+      "a leg without start location",
+      routeWith({ legs: [{ endLocation: googleLocation(RESOLVED_END) }] }),
+    ],
+    [
+      "a leg without end location",
+      routeWith({ legs: [{ startLocation: googleLocation(RESOLVED_START) }] }),
+    ],
+    ["an out-of-range latitude", routeWith({ legs: [leg({ lat: 91, lng: 2 }, RESOLVED_END)] })],
+    [
+      "a non-numeric longitude",
+      routeWith({
+        legs: [
+          {
+            startLocation: { latLng: { latitude: 48.8, longitude: "2.3" } },
+            endLocation: googleLocation(RESOLVED_END),
+          },
+        ],
+      }),
+    ],
+  ])(
+    "raises ROUTING_PROVIDER_ERROR on %s: no price without priced points",
+    async (_l, response) => {
+      const { provider, fetchMock } = setup([response]);
+      const error = await routingError(provider.computeRoute(byPlace));
+      expect(error.code).toBe("ROUTING_PROVIDER_ERROR");
+      expect(error.reason).toBe("invalid_response");
+      expect(fetchMock).toHaveBeenCalledOnce();
+    },
+  );
 });
 
 describe("GoogleRoutesProvider — no route, never a fallback", () => {
@@ -211,14 +290,18 @@ describe("GoogleRoutesProvider — HTTP errors", () => {
 
   it("retries a 500 and succeeds on the next attempt", async () => {
     const { provider, fetchMock, sleep } = setup([json(500, {}), ok()]);
-    await expect(provider.computeRoute(byPlace)).resolves.toMatchObject({ distanceMeters: 31_250 });
+    await expect(provider.computeRoute(byPlace)).resolves.toMatchObject({
+      route: { distanceMeters: 31_250 },
+    });
     expect(fetchMock).toHaveBeenCalledTimes(2);
     expect(sleep).toHaveBeenCalledExactlyOnceWith(250);
   });
 
   it("retries a network error and succeeds on the next attempt", async () => {
     const { provider, fetchMock } = setup([new TypeError("fetch failed"), ok()]);
-    await expect(provider.computeRoute(byPlace)).resolves.toMatchObject({ distanceMeters: 31_250 });
+    await expect(provider.computeRoute(byPlace)).resolves.toMatchObject({
+      route: { distanceMeters: 31_250 },
+    });
     expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 
@@ -335,6 +418,10 @@ describe("GoogleRoutesProvider — logs and errors carry no place data nor key (
       "2.295",
       "49.0097",
       "2.5479",
+      String(RESOLVED_START.lat),
+      String(RESOLVED_START.lng),
+      String(RESOLVED_END.lat),
+      String(RESOLVED_END.lng),
     ]) {
       expect(output).not.toContain(forbidden);
     }

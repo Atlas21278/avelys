@@ -5,7 +5,11 @@ import { PROVISIONAL_RULE, route } from "@/domain/pricing/fixtures";
 import { parsePricingRule, PricingError, type RouteInput } from "@/domain/pricing/rule";
 import { parsePricingSnapshot } from "@/domain/pricing/snapshot";
 import { Prisma } from "@/generated/prisma/client";
-import { RoutingError, type RoutingProvider } from "@/integrations/maps/routing";
+import {
+  RoutingError,
+  type ResolvedRoute,
+  type RoutingProvider,
+} from "@/integrations/maps/routing";
 import { PricingRuleStoreError } from "@/server/pricing/rules";
 
 import { computeQuote, QuoteError, type QuoteDeps, type QuoteRequest } from "./quote";
@@ -15,6 +19,13 @@ const LEAD_MINUTES = 120;
 const NOW = new Date("2026-07-01T08:00:00.000Z");
 const RULE = parsePricingRule(PROVISIONAL_RULE);
 const ROUTE: RouteInput = route({ distanceMeters: 22_345, durationSeconds: 1_800 });
+// Where the provider resolved the waypoints to (VTC-035): distinct from the request.
+const PRICED_ORIGIN = { lat: 48.8584, lng: 2.2945 };
+const PRICED_DESTINATION = { lat: 49.0079, lng: 2.5508 };
+
+function resolved(routeInput: RouteInput): ResolvedRoute {
+  return { route: routeInput, origin: PRICED_ORIGIN, destination: PRICED_DESTINATION };
+}
 
 // 2026-07-02 14:30 in Paris (UTC+2) = 12:30Z.
 const REQUEST = {
@@ -26,7 +37,7 @@ const REQUEST = {
 } satisfies QuoteRequest;
 
 function deps(overrides: Partial<QuoteDeps> = {}) {
-  const computeRoute = vi.fn<RoutingProvider["computeRoute"]>().mockResolvedValue(ROUTE);
+  const computeRoute = vi.fn<RoutingProvider["computeRoute"]>().mockResolvedValue(resolved(ROUTE));
   const activePricingRule = vi.fn<QuoteDeps["activePricingRule"]>().mockResolvedValue(RULE);
   const all: QuoteDeps = {
     routing: { computeRoute },
@@ -97,6 +108,16 @@ describe("computeQuote", () => {
       origin: { placeId: "test-place-origin" },
       destination: { lat: 49.0097, lng: 2.5479 },
     });
+  });
+
+  it("returns the end points of the priced route, not the submitted coordinates (VTC-035)", async () => {
+    const { deps: d } = deps();
+    const quote = await computeQuote(REQUEST, d);
+
+    expect(quote.pricedOrigin).toEqual(PRICED_ORIGIN);
+    expect(quote.pricedDestination).toEqual(PRICED_DESTINATION);
+    // The submitted place stays as sent (label, routing input); only its priced point is new.
+    expect(quote.destination).toEqual(REQUEST.destination);
   });
 
   it("is reproducible: same inputs, route, rule and clock give the same snapshot id", async () => {
@@ -222,7 +243,7 @@ describe("computeQuote", () => {
 
     it("refuses a zero-distance route", async () => {
       const { deps: d, computeRoute } = deps();
-      computeRoute.mockResolvedValue(route({ distanceMeters: 0 }));
+      computeRoute.mockResolvedValue(resolved(route({ distanceMeters: 0 })));
       const error = await failure(computeQuote(REQUEST, d));
       expect(error.code).toBe("ROUTE_UNAVAILABLE");
       expect(error.reason).toBe("INVALID_ROUTE");
@@ -282,7 +303,7 @@ describe("computeQuote", () => {
 
     it("refuses an amount beyond the safe integer range", async () => {
       const { deps: d, computeRoute } = deps();
-      computeRoute.mockResolvedValue(route({ distanceMeters: Number.MAX_SAFE_INTEGER }));
+      computeRoute.mockResolvedValue(resolved(route({ distanceMeters: Number.MAX_SAFE_INTEGER })));
       const error = await failure(computeQuote(REQUEST, d));
       expect(error.code).toBe("PRICING_UNAVAILABLE");
       expect(error.reason).toBe("AMOUNT_OUT_OF_RANGE");

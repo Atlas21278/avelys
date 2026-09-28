@@ -31,9 +31,11 @@ import type { PaymentMethodGuard } from "./payment-method-guard";
 const LabelSchema = z.string().trim().min(1).max(200);
 
 /**
- * A place of the booking form: coordinates (stored on the booking for dispatch) plus, when the
- * place came from Places autocomplete, its id. The route is computed from the place id when
- * present, from the coordinates otherwise — as for the quote the customer saw.
+ * A place of the booking form: coordinates plus, when the place came from Places autocomplete,
+ * its id. The route is computed from the place id when present, from the coordinates otherwise —
+ * as for the quote the customer saw. The submitted coordinates are a routing input only: the
+ * booking stores the end points of the priced route (VTC-035), so a request cannot be priced
+ * A→B and dispatched C→D.
  */
 export const BookingPlaceSchema = z.strictObject({
   label: LabelSchema,
@@ -210,7 +212,8 @@ async function persist(
     await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`customer:${customer.email}`}, 0))::text AS locked`;
 
     // Matching rule: normalised email, guest profiles only (a profile linked to an account is
-    // never taken over by an anonymous request). An existing profile is reused as is: no merge.
+    // never taken over by an anonymous request). An existing profile is reused as is: no merge,
+    // never rewritten by a guest (DEC-25); the submitted contact is copied onto the booking.
     const existing = await tx.customer.findFirst({
       where: { email: customer.email, userId: null },
       orderBy: [{ createdAt: "asc" }, { id: "asc" }],
@@ -234,13 +237,20 @@ async function persist(
       data: {
         reference,
         customerId,
+        // Contact of this trip as submitted (VTC-037): the driver calls this number, even when
+        // the reused profile holds an older one. Never written to the audit trail (BR-60).
+        contactName: customer.name,
+        contactPhone: customer.phone ?? null,
+        contactLocale: customer.locale,
         pickupLabel: request.origin.label,
-        pickupLat: request.origin.lat,
-        pickupLng: request.origin.lng,
+        // Priced coordinates, resolved by the routing provider (VTC-035): the browser's are
+        // never stored.
+        pickupLat: quote.pricedOrigin.lat,
+        pickupLng: quote.pricedOrigin.lng,
         pickupPlaceId: request.origin.placeId ?? null,
         dropoffLabel: request.destination.label,
-        dropoffLat: request.destination.lat,
-        dropoffLng: request.destination.lng,
+        dropoffLat: quote.pricedDestination.lat,
+        dropoffLng: quote.pricedDestination.lng,
         dropoffPlaceId: request.destination.placeId ?? null,
         pickupAt: new Date(snapshot.inputs.pickupAt),
         pickupLocalDateTime: localDateTimeColumn(snapshot.inputs.pickupLocalDateTime),
