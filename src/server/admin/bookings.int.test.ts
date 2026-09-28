@@ -172,13 +172,13 @@ describe("back-office bookings (integration)", () => {
       expect(page).toMatchObject({ total: 5, page: 1, pageCount: 1 });
     });
 
-    it("returns minimal rows: no snapshot, no coordinates, customer name only", async () => {
+    it("returns minimal rows: no snapshot, no coordinates, contact name only", async () => {
       await booking("REQUESTED", "2026-11-02T09:00:00Z");
       const [item] = (await list(sessions.admin)).items;
       expect(item && Object.keys(item).sort()).toEqual(
         [
+          "contactName",
           "currency",
-          "customerName",
           "dropoffLabel",
           "luggageCount",
           "passengerCount",
@@ -189,7 +189,20 @@ describe("back-office bookings (integration)", () => {
           "totalTtcCents",
         ].sort(),
       );
-      expect(item).toMatchObject({ customerName: "Client Test", totalTtcCents: 12_345 });
+      // No contact copy on this row (created as before VTC-037): the customer name is used.
+      expect(item).toMatchObject({ contactName: "Client Test", totalTtcCents: 12_345 });
+    });
+
+    it("shows the booking's own contact name rather than the customer's (VTC-038)", async () => {
+      await booking("REQUESTED", "2026-11-02T09:00:00Z", {
+        contactName: "Autre Nom",
+        contactPhone: "+33199999999",
+        contactLocale: "en",
+      });
+      const [item] = (await list(sessions.admin)).items;
+      expect(item?.contactName).toBe("Autre Nom");
+      expect(item).not.toHaveProperty("contactPhone");
+      expect(item).not.toHaveProperty("contactLocale");
     });
 
     it("paginates on the server across the REQUESTED boundary", async () => {
