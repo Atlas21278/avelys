@@ -18,7 +18,7 @@ Interdit : `kubectl set image` / édition manuelle dans le cluster.
 
 ## RB-03 — Incident paiement
 
-- Webhooks en échec : vérifier l'endpoint et le secret de signature (sans l'afficher), rejouer les événements depuis le Dashboard Stripe ; l'idempotence garantit l'absence de double effet.
+- Webhooks en échec : vérifier l'endpoint et le secret de signature (sans l'afficher), rejouer les événements depuis le Dashboard Stripe ; l'idempotence garantit l'absence de double effet. Logs `stripe webhook refused` (`code` : `INVALID_WEBHOOK_SIGNATURE` → secret ou endpoint erroné, `WEBHOOK_NOT_CONFIGURED` → `STRIPE_WEBHOOK_SECRET` absent) et `stripe webhook failed` (`eventId`, `eventType`, `errorName` : handler en échec, transaction annulée, Stripe réessaie).
 - Paiement `REQUIRES_ACTION`/`FAILED` : vérifier l'email client, contacter le client, annuler si délai dépassé (DEC-13).
 
 ## RB-04 — Email indisponible
