@@ -50,6 +50,26 @@ Toute autre transition échoue avec une erreur typée (`INVALID_BOOKING_TRANSITI
 - Concurrence : verrou optimiste (colonne `version`) ou `SELECT … FOR UPDATE` ; deux transitions concurrentes ne peuvent pas réussir toutes les deux.
 - Les effets externes (email, Stripe) sont déclenchés après commit et sont idempotents (BR-50).
 
+### Service de création (VTC-028)
+
+`createBooking(input, deps)` dans `src/server/booking/create-booking.ts` crée une réservation `REQUESTED` (transition `— → REQUESTED`, acteur `CUSTOMER`). **Aucune route publique ni server action** à ce stade : le formulaire relève d'un ticket ultérieur. Câblage de production : `requestBooking()` (`src/server/booking/request-booking.ts`).
+
+- Dépendances injectées : devis serveur (`computeQuote`, avec son routing, sa règle active, son horloge et son délai minimal), `PaymentMethodGuard`, générateur de référence, client Prisma, point d'extension `afterCommit` facultatif.
+- Entrée (Zod, schéma strict) : lieux (libellé + lat/lng + `placeId` facultatif), heure locale Europe/Paris, passagers/bagages, client (nom, email, téléphone facultatif, langue), notes client, vol/train facultatifs (`scheduledAt` avec décalage), `termsAccepted: true` obligatoire, `displayedTotal` (montant affiché) et `paymentSetupId` opaque. Toute clé inconnue (prix, snapshot, `snapshotId`) est refusée.
+- **Prix** : toujours recalculé par le serveur (BR-12). `displayedTotal` sert uniquement à la comparaison : s'il diffère du total recalculé (montant ou devise), erreur `PRICE_CHANGED` avec le nouveau prix, rien n'est écrit. Le montant, les totaux et le `PricingSnapshot` stockés sont ceux du recalcul (BR-13), validés par `parsePricingSnapshot`, avec `pricingRuleId`/`pricingRuleVersion`.
+- Ordre des contrôles : entrée → droit de création (`assertCanCreateBooking("CUSTOMER")`) → devis serveur (heure locale, délai minimal `BOOKING_LEAD_TIME_TOO_SHORT`, règle active, `ROUTE_UNAVAILABLE`) → comparaison du prix → moyen de paiement → écriture.
+- **Port de paiement** : `PaymentMethodGuard.hasConfirmedPaymentMethod({ paymentSetupId })` (`src/server/booking/payment-method-guard.ts`). Sans moyen de paiement confirmé : `PAYMENT_METHOD_REQUIRED`. Jusqu'à VTC-031 (SetupIntent Stripe), la production utilise `paymentMethodGuardNotConfigured`, qui refuse toujours : **aucune réservation ne peut être créée** avant ce ticket.
+- **Client guest** : rapprochement par email normalisé (trim + minuscules) parmi les profils guest (`userId` nul) ; un profil existant est réutilisé tel quel (aucune fusion, nom/téléphone non modifiés) ; un profil lié à un compte n'est jamais rattaché à une demande anonyme. Un verrou consultatif PostgreSQL par email sérialise les demandes concurrentes.
+- **Transaction unique** : `Customer` (créé ou réutilisé) + `Booking` + `AuditLog` (`booking.create`, `before` nul, `after` = `bookingRef`, statut, version, total, devise, version de règle ; acteur `CUSTOMER` = id du `Customer` ; `correlationId` de la requête). Un échec d'audit ou de référence n'écrit aucune ligne.
+- **Référence** : `generateReference()`, nouvel essai sur violation d'unicité (`P2002` sur `reference`), au plus `MAX_REFERENCE_ATTEMPTS` (5) essais, puis `BOOKING_REFERENCE_UNAVAILABLE`.
+- **Après commit** : `afterCommit` (futur email de réception, EPIC-13) ; son échec est journalisé et n'annule ni ne fait échouer la réservation (BR-50).
+- Erreurs : `BookingCreationError` (`code`, `reason` technique, `details.total` pour `PRICE_CHANGED`, `details.temporary` pour un routing indisponible), sans donnée personnelle.
+- Logs : `bookingRef` et version de règle uniquement ; jamais de nom, email, téléphone, adresse ni coordonnée (BR-60).
+
+### Journal d'audit
+
+`writeAuditLog(tx, entry)` (`src/server/audit/audit-log.ts`) insère une ligne `AuditLog` dans la transaction de l'écriture qu'elle trace. `before`/`after` passent par une **liste blanche par action** (schémas Zod stricts) : toute clé hors liste (nom, email, téléphone, adresse) est refusée avant écriture (`INVALID_AUDIT_PAYLOAD`, message sans valeur). Une réservation y est identifiée par son `bookingRef`. Action couverte : `booking.create`.
+
 ## Champs Booking indispensables
 
 Modèle Prisma et champs reportés : `docs/architecture/database.md` (section VTC-026).

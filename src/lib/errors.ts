@@ -59,6 +59,27 @@ export const API_ERRORS = {
       en: "Pricing is temporarily unavailable.",
     },
   },
+  PRICE_CHANGED: {
+    status: 409,
+    message: {
+      fr: "Le prix de ce trajet a changé. Vérifiez le nouveau prix avant de confirmer votre demande.",
+      en: "The price of this trip has changed. Please review the new price before confirming your request.",
+    },
+  },
+  PAYMENT_METHOD_REQUIRED: {
+    status: 422,
+    message: {
+      fr: "Un moyen de paiement confirmé est nécessaire pour envoyer votre demande. Aucun montant n'est débité à cette étape.",
+      en: "A confirmed payment method is required to send your request. Nothing is charged at this stage.",
+    },
+  },
+  BOOKING_REFERENCE_UNAVAILABLE: {
+    status: 503,
+    message: {
+      fr: "Votre demande n'a pas pu être enregistrée. Réessayez dans un instant.",
+      en: "Your request could not be saved. Please try again in a moment.",
+    },
+  },
   DATABASE_UNAVAILABLE: {
     status: 503,
     message: {
