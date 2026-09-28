@@ -124,7 +124,7 @@ function BookingRow({ item }: { item: BookingListItem }) {
           {item.pickupLabel} <span aria-label="vers">→</span> {item.dropoffLabel}
         </span>
         <span className="text-sm text-graphite">
-          {item.customerName} · {formatCount(item.passengerCount, "passager", "passagers")} ·{" "}
+          {item.contactName} · {formatCount(item.passengerCount, "passager", "passagers")} ·{" "}
           {formatCount(item.luggageCount, "bagage", "bagages")}
         </span>
       </span>
