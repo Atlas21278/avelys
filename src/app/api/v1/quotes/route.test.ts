@@ -30,6 +30,10 @@ function sampleQuote(): Quote {
   const snapshot = buildPricingSnapshot({
     fare,
     quotedAt: new Date("2026-07-01T08:00:00.000Z"),
+    resolvedPoints: {
+      origin: { lat: 48.8584, lng: 2.2945 },
+      destination: { lat: 49.0096, lng: 2.548 },
+    },
     inputs: {
       origin: { placeId: "test-place-origin" },
       destination: { lat: 49.0097, lng: 2.5479 },

@@ -31,14 +31,16 @@ Aucun prix n'est inventé (BR-51). Le site affiche une invitation à contacter l
 
 Adaptateur `src/integrations/maps` (VTC-024) : les logs `routing attempt failed` / `routing unavailable` portent `code`, `reason`, `httpStatus`, `attempt`, `latencyMs` (jamais de lieu ni de clé).
 
-| `code` / `reason`                                 | Cause probable                                             | Action                                                     |
-| ------------------------------------------------- | ---------------------------------------------------------- | ---------------------------------------------------------- |
-| `ROUTING_PROVIDER_ERROR` / `not_configured`       | `GOOGLE_MAPS_SERVER_API_KEY` absente                       | Injecter la clé serveur (secret manager)                   |
-| `ROUTING_PROVIDER_ERROR` / `forbidden`            | Clé refusée : restriction API/IP, API non activée, billing | Vérifier la clé et ses restrictions dans la console Google |
-| `ROUTING_QUOTA_EXCEEDED` / `quota_exceeded`       | 429 ou `RESOURCE_EXHAUSTED`                                | Vérifier quotas et budget (DEC-17) ; pas de retry          |
-| `ROUTING_PROVIDER_ERROR` / `http_5xx`, `network`  | Incident Google ou réseau (déjà retenté une fois)          | Statut Google Maps Platform                                |
-| `ROUTING_PROVIDER_ERROR` / `timeout`              | Réponse > 5 s (non retentée)                               | Latence réseau sortante                                    |
-| `ROUTE_UNAVAILABLE` / `no_route`, `zero_distance` | Aucun itinéraire routier                                   | Normal : pas de prix, contact équipe                       |
+| `code` / `reason`                                 | Cause probable                                             | Action                                                      |
+| ------------------------------------------------- | ---------------------------------------------------------- | ----------------------------------------------------------- |
+| `ROUTING_PROVIDER_ERROR` / `not_configured`       | `GOOGLE_MAPS_SERVER_API_KEY` absente                       | Injecter la clé serveur (secret manager)                    |
+| `ROUTING_PROVIDER_ERROR` / `forbidden`            | Clé refusée : restriction API/IP, API non activée, billing | Vérifier la clé et ses restrictions dans la console Google  |
+| `ROUTING_QUOTA_EXCEEDED` / `quota_exceeded`       | 429 ou `RESOURCE_EXHAUSTED`                                | Vérifier quotas et budget (DEC-17) ; pas de retry           |
+| `ROUTING_PROVIDER_ERROR` / `http_5xx`, `network`  | Incident Google ou réseau (déjà retenté une fois)          | Statut Google Maps Platform                                 |
+| `ROUTING_PROVIDER_ERROR` / `timeout`              | Réponse > 5 s (non retentée)                               | Latence réseau sortante                                     |
+| `ROUTING_PROVIDER_ERROR` / `null_island`          | Point résolu à (0, 0) : réponse fournisseur incohérente    | Rejouer le trajet ; si récurrent, ouvrir un ticket          |
+| `ROUTING_PROVIDER_ERROR` / `outside_service_area` | Point résolu hors de `ROUTING_SERVICE_AREA` (provisoire)   | Lieu mal géocodé, ou zone trop étroite : vérifier la config |
+| `ROUTE_UNAVAILABLE` / `no_route`, `zero_distance` | Aucun itinéraire routier                                   | Normal : pas de prix, contact équipe                        |
 
 Côté devis (`POST /api/v1/quotes`, VTC-027), le log `quote refused` porte `code`, `reason` (`<code routing>:<reason>` pour une erreur de routing) et `temporary`. `ROUTE_UNAVAILABLE` temporaire → HTTP 503 ; `NO_ACTIVE_PRICING_RULE` ou `PRICING_UNAVAILABLE` (niveau `error`) → aucune `PricingRule` en vigueur ou règle stockée invalide : publier une version valide (admin).
 

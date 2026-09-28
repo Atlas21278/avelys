@@ -15,6 +15,7 @@ const defaults = {
   TRUSTED_PROXIES: [],
   AUTH_SESSION_MAX_AGE_SECONDS: 604_800,
   BOOKING_MIN_LEAD_TIME_MINUTES: 720,
+  ROUTING_SERVICE_AREA: { south: 41, west: -5.5, north: 51.5, east: 10 },
 };
 
 describe("parseServerEnv", () => {
@@ -81,6 +82,16 @@ describe("parseServerEnv", () => {
     expect(() => parseServerEnv({ ...valid, GOOGLE_MAPS_SERVER_API_KEY: "   " })).toThrowError(
       /GOOGLE_MAPS_SERVER_API_KEY/,
     );
+  });
+
+  it("reads the routing service area, defaulting to the provisional metropolitan France box", () => {
+    const read = (value: string) =>
+      parseServerEnv({ ...valid, ROUTING_SERVICE_AREA: value }).ROUTING_SERVICE_AREA;
+    expect(read("48.1,1.4,49.3,3.6")).toEqual({ south: 48.1, west: 1.4, north: 49.3, east: 3.6 });
+    expect(read("")).toEqual(defaults.ROUTING_SERVICE_AREA);
+    for (const value of ["48.1,1.4,49.3", "49.3,1.4,48.1,3.6", "Île-de-France"]) {
+      expect(() => read(value)).toThrowError(/ROUTING_SERVICE_AREA/);
+    }
   });
 
   it("rejects a non-PostgreSQL database URL", () => {

@@ -116,6 +116,11 @@ describe("computeQuote", () => {
 
     expect(quote.pricedOrigin).toEqual(PRICED_ORIGIN);
     expect(quote.pricedDestination).toEqual(PRICED_DESTINATION);
+    // The snapshot keeps them too (VTC-039), next to the routing inputs.
+    expect(quote.snapshot.resolvedPoints).toEqual({
+      origin: PRICED_ORIGIN,
+      destination: PRICED_DESTINATION,
+    });
     // The submitted place stays as sent (label, routing input); only its priced point is new.
     expect(quote.destination).toEqual(REQUEST.destination);
   });

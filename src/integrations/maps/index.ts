@@ -23,6 +23,7 @@ let instance: RoutingProvider | undefined;
 export function routingProvider(): RoutingProvider {
   instance ??= new GoogleRoutesProvider({
     apiKey: () => serverEnv().GOOGLE_MAPS_SERVER_API_KEY,
+    serviceArea: () => serverEnv().ROUTING_SERVICE_AREA,
     logger: {
       info: (fields, message) => logger().info(fields, message),
       warn: (fields, message) => logger().warn(fields, message),

@@ -1,5 +1,7 @@
 import * as z from "zod";
 
+import { PROVISIONAL_SERVICE_AREA, ServiceAreaSchema } from "@/domain/geo/service-area";
+
 /**
  * Server-side environment. Stripe, Maps and Resend variables are added by their own tickets.
  * Public (NEXT_PUBLIC_*) variables will get a separate schema when the first one is needed:
@@ -47,6 +49,13 @@ export const serverEnvSchema = z.object({
   BOOKING_MIN_LEAD_TIME_MINUTES: z.preprocess(
     (value) => (value === "" ? undefined : value),
     z.coerce.number().int().positive().default(720),
+  ),
+  // Broad service area of routed points, `south,west,north,east` in degrees (VTC-039): a
+  // resolved pickup or drop-off outside it, or at (0, 0), gets no price. PROVISIONAL: defaults to
+  // metropolitan France, pending the operating zone decision. Empty = default.
+  ROUTING_SERVICE_AREA: z.preprocess(
+    (value) => (value === "" ? undefined : value),
+    ServiceAreaSchema.default({ ...PROVISIONAL_SERVICE_AREA }),
   ),
   LOG_LEVEL: z.enum(["fatal", "error", "warn", "info", "debug", "trace", "silent"]).default("info"),
 });
