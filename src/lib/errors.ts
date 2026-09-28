@@ -87,6 +87,21 @@ export const API_ERRORS = {
       en: "Service temporarily unavailable.",
     },
   },
+  // Stripe webhook endpoint (VTC-030). Read by Stripe, not by a person: French by default.
+  INVALID_WEBHOOK_SIGNATURE: {
+    status: 400,
+    message: {
+      fr: "Signature du webhook absente ou invalide.",
+      en: "Missing or invalid webhook signature.",
+    },
+  },
+  WEBHOOK_NOT_CONFIGURED: {
+    status: 500,
+    message: {
+      fr: "La réception des webhooks n'est pas configurée.",
+      en: "Webhook reception is not configured.",
+    },
+  },
   INTERNAL_ERROR: {
     status: 500,
     message: {

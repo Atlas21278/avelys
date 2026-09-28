@@ -83,6 +83,68 @@ describe("parseServerEnv", () => {
     );
   });
 
+  describe("Stripe (test mode only)", () => {
+    // Syntactically shaped placeholders, not keys: built at runtime so no key-like literal exists.
+    const fake = (prefix: string) => `${prefix}${"0".repeat(24)}`;
+
+    it("treats the three Stripe variables as optional, empty meaning not configured", () => {
+      const env = parseServerEnv({
+        ...valid,
+        STRIPE_SECRET_KEY: "",
+        STRIPE_WEBHOOK_SECRET: "",
+        NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY: "",
+      });
+      expect(env.STRIPE_SECRET_KEY).toBeUndefined();
+      expect(env.STRIPE_WEBHOOK_SECRET).toBeUndefined();
+      expect(env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY).toBeUndefined();
+      expect(parseServerEnv(valid).STRIPE_SECRET_KEY).toBeUndefined();
+    });
+
+    it("accepts test mode keys and a webhook signing secret", () => {
+      const env = parseServerEnv({
+        ...valid,
+        STRIPE_SECRET_KEY: fake("sk_test_"),
+        STRIPE_WEBHOOK_SECRET: fake("whsec_"),
+        NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY: fake("pk_test_"),
+      });
+      expect(env.STRIPE_SECRET_KEY).toBe(fake("sk_test_"));
+      expect(env.STRIPE_WEBHOOK_SECRET).toBe(fake("whsec_"));
+      expect(env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY).toBe(fake("pk_test_"));
+      expect(
+        parseServerEnv({ ...valid, STRIPE_SECRET_KEY: fake("rk_test_") }).STRIPE_SECRET_KEY,
+      ).toBe(fake("rk_test_"));
+    });
+
+    it("refuses live or unknown secret keys, naming the variable but never the value", () => {
+      for (const value of [fake("sk_live_"), fake("rk_live_"), fake("pk_test_"), "sk_test_", "x"]) {
+        let message = "";
+        try {
+          parseServerEnv({ ...valid, STRIPE_SECRET_KEY: value });
+        } catch (error) {
+          message = (error as Error).message;
+        }
+        expect(message).toMatch(/STRIPE_SECRET_KEY/);
+        expect(message).not.toContain(value);
+      }
+    });
+
+    it("refuses live or unknown publishable keys", () => {
+      for (const value of [fake("pk_live_"), fake("sk_test_"), "pk_test_"]) {
+        expect(() =>
+          parseServerEnv({ ...valid, NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY: value }),
+        ).toThrowError(/NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY/);
+      }
+    });
+
+    it("refuses a webhook secret that is not a signing secret", () => {
+      for (const value of [fake("sk_test_"), "whsec_", " "]) {
+        expect(() => parseServerEnv({ ...valid, STRIPE_WEBHOOK_SECRET: value })).toThrowError(
+          /STRIPE_WEBHOOK_SECRET/,
+        );
+      }
+    });
+  });
+
   it("rejects a non-PostgreSQL database URL", () => {
     expect(() => parseServerEnv({ ...valid, DATABASE_URL: "mysql://x@y/z" })).toThrowError(
       /DATABASE_URL/,

@@ -287,3 +287,26 @@ model PricingRule {
   @@unique([id, version])
   @@index([effectiveFrom])
 }
+
+// ---------------------------------------------------------------------------
+// Payments (VTC-030, Master Spec §11, ADR-0006). Webhook idempotence only: the Payment model
+// and every Stripe object reference come with later EPIC-10 tickets.
+// ---------------------------------------------------------------------------
+
+enum WebhookProvider {
+  STRIPE
+}
+
+/// One row per webhook event already processed (BR-42). Inserted in the same transaction as the
+/// handler writes: a rolled back handler leaves no row, so the provider's retry is processed.
+/// Holds the event identity only, never a provider object or payload.
+model ProcessedWebhookEvent {
+  id         String          @id @default(cuid(2))
+  provider   WebhookProvider
+  /// Provider event id (Stripe `evt_…`).
+  eventId    String          @db.VarChar(255)
+  eventType  String          @db.VarChar(255)
+  receivedAt DateTime        @default(now()) @db.Timestamptz(3)
+
+  @@unique([provider, eventId])
+}
