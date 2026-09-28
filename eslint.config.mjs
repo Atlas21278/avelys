@@ -27,6 +27,20 @@ const appRestrictions = {
   ],
 };
 
+// Test-only modules (VTC-023): provisional pricing fixtures must never reach application code.
+// Matches `@/domain/pricing/fixtures`, `../pricing/fixtures` and `./fixtures` (inside pricing).
+const TEST_FILES = ["src/**/*.test.{ts,tsx}"];
+const testOnlyImports = {
+  regex: String.raw`(^|/)pricing/fixtures(\.ts)?$|^\./fixtures(\.ts)?$`,
+  message: "Pricing fixtures are test-only: import them from *.test.ts files only.",
+};
+
+// `no-restricted-imports` options are replaced, not merged, by a later matching block:
+// each block lists every pattern that applies to its files.
+function restrictImports(...patterns) {
+  return { "no-restricted-imports": ["error", { patterns }] };
+}
+
 export default defineConfig([
   ...nextVitals,
   ...nextTs,
@@ -48,8 +62,18 @@ export default defineConfig([
     },
   },
   {
+    files: ["**/*.{ts,tsx,js,mjs,cjs}"],
+    ignores: TEST_FILES,
+    rules: restrictImports(testOnlyImports),
+  },
+  {
     files: ["src/domain/**/*.{ts,tsx}"],
-    rules: { "no-restricted-imports": ["error", domainRestrictions] },
+    rules: restrictImports(...domainRestrictions.patterns),
+  },
+  {
+    files: ["src/domain/**/*.{ts,tsx}"],
+    ignores: TEST_FILES,
+    rules: restrictImports(...domainRestrictions.patterns, testOnlyImports),
   },
   {
     // Security-relevant randomness (booking references, ADR-0015) comes from node:crypto only.
@@ -67,7 +91,12 @@ export default defineConfig([
   },
   {
     files: ["src/app/**/*.{ts,tsx}"],
-    rules: { "no-restricted-imports": ["error", appRestrictions] },
+    rules: restrictImports(...appRestrictions.patterns),
+  },
+  {
+    files: ["src/app/**/*.{ts,tsx}"],
+    ignores: TEST_FILES,
+    rules: restrictImports(...appRestrictions.patterns, testOnlyImports),
   },
   prettier,
   globalIgnores([
