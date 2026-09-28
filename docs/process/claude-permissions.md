@@ -29,7 +29,7 @@ Les règles git, cluster et GitHub sensibles existent aussi en `PowerShell(...)`
 
 ## Écarts assumés par rapport au ticket
 
-- **`gh pr merge` n'est pas refusé.** Le propriétaire a donné l'autonomie à Claude le 2026-09-28 (« ne me demande pas de permission »). Règle de conduite : merge en squash **uniquement** quand `ci`, `secrets` et `deps` sont verts. Le ruleset de `main` (actif) l’impose côté GitHub. Passer à 1 approbation + revue CODEOWNERS quand le second associé aura un compte GitHub.
+- **`gh pr merge * --squash*` est explicitement autorisé** (`allow`, Bash + PowerShell), ajouté par le propriétaire le 2026-09-28 : sans cette règle, le classifieur du mode auto refuse le merge (« merge without review »). La commande doit être lancée seule, pas enchaînée. Le propriétaire a donné l'autonomie à Claude le 2026-09-28 (« ne me demande pas de permission »). Règle de conduite : merge en squash **uniquement** quand `ci`, `secrets` et `deps` sont verts. Le ruleset de `main` (actif) l’impose côté GitHub. Passer à 1 approbation + revue CODEOWNERS quand le second associé aura un compte GitHub.
 - **Pas de règles `ask`** (`git push`, `pnpm add`, `prisma migrate dev`) : elles déclencheraient des demandes, ce que le propriétaire a refusé. Le push vers une branche de travail reste possible ; vers `main`, il est refusé.
 - Pas de `.mcp.json` projet : aucun serveur MCP n'est nécessaire à ce stade (§27.2).
 
