@@ -29,7 +29,7 @@ Les route handlers publics sont préfixés `/api/v1` pour permettre une évoluti
 - `correlationId` présent dans les logs et Sentry.
 - Jamais de stack trace ni de détail interne en production.
 
-Catalogue actuel (`src/lib/errors.ts`) : `INVALID_INPUT` (400), `BOOKING_LEAD_TIME_TOO_SHORT`, `LOCAL_TIME_NONEXISTENT`, `LOCAL_TIME_AMBIGUOUS`, `ROUTE_UNAVAILABLE` (422), `NO_ACTIVE_PRICING_RULE`, `PRICING_UNAVAILABLE`, `DATABASE_UNAVAILABLE` (503), `INTERNAL_ERROR` (500). La langue du `message` suit `Accept-Language` (`en*` → anglais, sinon français).
+Catalogue actuel (`src/lib/errors.ts`) : `INVALID_INPUT` (400), `BOOKING_LEAD_TIME_TOO_SHORT`, `LOCAL_TIME_NONEXISTENT`, `LOCAL_TIME_AMBIGUOUS`, `ROUTE_UNAVAILABLE`, `PAYMENT_METHOD_REQUIRED` (422), `PRICE_CHANGED` (409), `NO_ACTIVE_PRICING_RULE`, `PRICING_UNAVAILABLE`, `BOOKING_REFERENCE_UNAVAILABLE`, `DATABASE_UNAVAILABLE` (503), `INTERNAL_ERROR` (500). `PRICE_CHANGED`, `PAYMENT_METHOD_REQUIRED` et `BOOKING_REFERENCE_UNAVAILABLE` sont produits par le service de création de réservation (VTC-028, `docs/product/booking.md`), qui n'a pas encore de route publique. La langue du `message` suit `Accept-Language` (`en*` → anglais, sinon français).
 
 ## `POST /api/v1/quotes` — devis serveur (VTC-027)
 
