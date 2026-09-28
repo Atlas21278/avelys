@@ -40,6 +40,8 @@ Adaptateur `src/integrations/maps` (VTC-024) : les logs `routing attempt failed`
 | `ROUTING_PROVIDER_ERROR` / `timeout`              | Réponse > 5 s (non retentée)                               | Latence réseau sortante                                    |
 | `ROUTE_UNAVAILABLE` / `no_route`, `zero_distance` | Aucun itinéraire routier                                   | Normal : pas de prix, contact équipe                       |
 
+Côté devis (`POST /api/v1/quotes`, VTC-027), le log `quote refused` porte `code`, `reason` (`<code routing>:<reason>` pour une erreur de routing) et `temporary`. `ROUTE_UNAVAILABLE` temporaire → HTTP 503 ; `NO_ACTIVE_PRICING_RULE` ou `PRICING_UNAVAILABLE` (niveau `error`) → aucune `PricingRule` en vigueur ou règle stockée invalide : publier une version valide (admin).
+
 ## RB-06 — Rotation de secret
 
 À compléter avec le secret manager retenu. Toute rotation production = `CRITICAL`, approbation humaine.
