@@ -3,9 +3,181 @@
     "title": "Avelys — Premium private driver in Paris",
     "description": "Premium private driver in Paris. Book ahead, with the price known before confirmation."
   },
+  "Site": {
+    "homeLabel": "Avelys, home",
+    "navLabel": "Main navigation",
+    "menu": "Menu",
+    "book": "Book",
+    "nav": {
+      "services": "Services",
+      "business": "Business",
+      "fleet": "Fleet",
+      "about": "About",
+      "contact": "Contact"
+    },
+    "footer": {
+      "tagline": "Premium private driver in Paris, driven by its two founders.",
+      "navTitle": "The site",
+      "legalTitle": "Legal information",
+      "legal": {
+        "legalNotice": "Legal notice",
+        "privacy": "Privacy",
+        "cookies": "Cookies",
+        "terms": "Terms and conditions of sale"
+      },
+      "legalPending": "Pages in preparation, published before bookings open.",
+      "identityTitle": "Company and contact",
+      "identity": {
+        "companyName": "Company name",
+        "address": "Address",
+        "siren": "SIREN",
+        "vtcRegistration": "VTC register number",
+        "insurance": "Insurance",
+        "phone": "Phone",
+        "email": "Email"
+      },
+      "provisional": "To be confirmed (provisional — {decisions})"
+    }
+  },
   "Home": {
-    "title": "Avelys",
-    "tagline": "Premium private driver in Paris"
+    "hero": {
+      "title": "Your private driver in Paris",
+      "lead": "The two founders of Avelys drive you themselves, in an electric saloon. The price is set before you book, from the actual road route."
+    },
+    "search": {
+      "title": "Plan your trip",
+      "pickup": "From",
+      "dropoff": "To",
+      "placePlaceholder": "Address, station, airport or hotel",
+      "date": "Date",
+      "time": "Time",
+      "timeHint": "Paris time",
+      "passengers": "Passengers",
+      "luggage": "Luggage",
+      "submit": "Get a quote",
+      "note": "The price is calculated at the next step, from the actual road route.",
+      "invalid": "Check the date, time and numbers entered: at least 1 passenger, and 0 or more pieces of luggage."
+    },
+    "services": {
+      "title": "Services",
+      "intro": "Trips arranged in advance, from one address to another, in Paris and beyond.",
+      "more": "See all services",
+      "items": {
+        "airports": {
+          "title": "Airports",
+          "text": "Charles de Gaulle and Orly, on arrival and on departure."
+        },
+        "door": {
+          "title": "Door to door",
+          "text": "A direct trip, from the address of your choice to your destination."
+        },
+        "stations": {
+          "title": "Stations and hotels",
+          "text": "Between your hotel and the Paris railway stations."
+        },
+        "excursions": {
+          "title": "Disneyland and Versailles",
+          "text": "From Paris, there and back."
+        },
+        "hourly": {
+          "title": "Chauffeur by the hour",
+          "text": "A driver at your side for 2, 4 or 8 hours, a full day or a custom length of time."
+        },
+        "longDistance": {
+          "title": "Long distance",
+          "text": "Longer trips to or from Paris."
+        },
+        "business": {
+          "title": "Business travel",
+          "text": "Meetings, staff and guests of your company."
+        },
+        "events": {
+          "title": "Events and weddings",
+          "text": "On quotation, to fit your programme."
+        }
+      }
+    },
+    "advantages": {
+      "title": "Why Avelys",
+      "items": {
+        "founders": {
+          "title": "The founders drive",
+          "text": "You are driven by one of the two partners of Avelys, not by an anonymous fleet."
+        },
+        "fixedPrice": {
+          "title": "A price set in advance",
+          "text": "Calculated from the actual road route and known before you book, with no surge pricing."
+        },
+        "electric": {
+          "title": "100% electric",
+          "text": "Two BYD Seal saloons, quiet and with zero tailpipe emissions."
+        },
+        "simple": {
+          "title": "Simple booking",
+          "text": "No account required, in English or French. We review every request before confirming it."
+        }
+      }
+    },
+    "fleet": {
+      "title": "The fleet",
+      "model": "BYD Seal",
+      "text": "Two 100% electric saloons, driven by their owners.",
+      "detailsPending": "Passenger and luggage capacity: to be confirmed.",
+      "photoPlaceholder": "Photo to come — provisional placeholder",
+      "more": "Discover the fleet"
+    },
+    "destinations": {
+      "title": "Popular destinations",
+      "intro": "Enter your starting point: the price is calculated at the next step.",
+      "cta": "Plan this trip",
+      "ctaTarget": "to {name}",
+      "items": {
+        "cdg": {
+          "name": "Charles de Gaulle Airport",
+          "detail": "Roissy, north of Paris"
+        },
+        "orly": {
+          "name": "Orly Airport",
+          "detail": "South of Paris"
+        },
+        "disneyland": {
+          "name": "Disneyland Paris",
+          "detail": "Marne-la-Vallée, east of Paris"
+        },
+        "versailles": {
+          "name": "Palace of Versailles",
+          "detail": "West of Paris"
+        }
+      }
+    },
+    "business": {
+      "title": "Business",
+      "text": "Travel for your teams, welcoming your guests, off-site meetings: tell us what you need.",
+      "cta": "Discover our business offer"
+    },
+    "faq": {
+      "title": "Frequently asked questions",
+      "contactPrompt": "Another question?",
+      "contactLink": "Contact us",
+      "items": {
+        "account": {
+          "question": "Do I need an account to book?",
+          "answer": "No. You book without an account. You can create one after your booking if you wish."
+        },
+        "languages": {
+          "question": "Which languages is the service provided in?",
+          "answer": "English and French: the website, the booking emails and your exchanges with your driver."
+        },
+        "validation": {
+          "question": "How is my booking confirmed?",
+          "answer": "One of the two partners reviews each request and accepts or declines it. You are informed by email."
+        },
+        "payment": {
+          "question": "Is payment secure?",
+          "answer": "Yes. Payment is handled by Stripe and your card details are never stored by us. Your card is saved when you make the request and is only charged once the booking is accepted."
+        }
+      }
+    }
   },
   "LocaleSwitcher": {
     "label": "Language",

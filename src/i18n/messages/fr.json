@@ -3,9 +3,181 @@
     "title": "Avelys — Chauffeur privé premium à Paris",
     "description": "Chauffeur privé premium à Paris. Réservation anticipée, prix connu avant confirmation."
   },
+  "Site": {
+    "homeLabel": "Avelys, accueil",
+    "navLabel": "Navigation principale",
+    "menu": "Menu",
+    "book": "Réserver",
+    "nav": {
+      "services": "Services",
+      "business": "Entreprises",
+      "fleet": "Flotte",
+      "about": "À propos",
+      "contact": "Contact"
+    },
+    "footer": {
+      "tagline": "Chauffeur privé premium à Paris, conduit par ses deux fondateurs.",
+      "navTitle": "Le site",
+      "legalTitle": "Informations légales",
+      "legal": {
+        "legalNotice": "Mentions légales",
+        "privacy": "Confidentialité",
+        "cookies": "Cookies",
+        "terms": "Conditions générales de vente"
+      },
+      "legalPending": "Pages en préparation, publiées avant l’ouverture des réservations.",
+      "identityTitle": "Société et contact",
+      "identity": {
+        "companyName": "Raison sociale",
+        "address": "Adresse",
+        "siren": "SIREN",
+        "vtcRegistration": "N° d’inscription au registre VTC",
+        "insurance": "Assurance",
+        "phone": "Téléphone",
+        "email": "Email"
+      },
+      "provisional": "À confirmer (provisoire — {decisions})"
+    }
+  },
   "Home": {
-    "title": "Avelys",
-    "tagline": "Chauffeur privé premium à Paris"
+    "hero": {
+      "title": "Votre chauffeur privé à Paris",
+      "lead": "Les deux fondateurs d’Avelys vous conduisent eux-mêmes, en berline électrique. Le prix est fixé avant la réservation, à partir du trajet routier réel."
+    },
+    "search": {
+      "title": "Préparer votre trajet",
+      "pickup": "Départ",
+      "dropoff": "Destination",
+      "placePlaceholder": "Adresse, gare, aéroport ou hôtel",
+      "date": "Date",
+      "time": "Heure",
+      "timeHint": "Heure de Paris",
+      "passengers": "Passagers",
+      "luggage": "Bagages",
+      "submit": "Voir le prix",
+      "note": "Le prix est calculé à l’étape suivante, sur le trajet routier réel.",
+      "invalid": "Vérifiez la date, l’heure et les nombres saisis : au moins 1 passager, et 0 bagage ou plus."
+    },
+    "services": {
+      "title": "Services",
+      "intro": "Des trajets préparés à l’avance, d’une adresse à une autre, dans Paris et au-delà.",
+      "more": "Voir tous les services",
+      "items": {
+        "airports": {
+          "title": "Aéroports",
+          "text": "Charles-de-Gaulle et Orly, à l’arrivée comme au départ."
+        },
+        "door": {
+          "title": "Adresse à adresse",
+          "text": "Un trajet direct, de l’adresse de votre choix à votre destination."
+        },
+        "stations": {
+          "title": "Gares et hôtels",
+          "text": "Entre votre hôtel et les gares parisiennes."
+        },
+        "excursions": {
+          "title": "Disneyland et Versailles",
+          "text": "Depuis Paris, à l’aller comme au retour."
+        },
+        "hourly": {
+          "title": "Mise à disposition",
+          "text": "Un chauffeur à vos côtés pour 2 h, 4 h, 8 h, la journée ou une durée sur mesure."
+        },
+        "longDistance": {
+          "title": "Longue distance",
+          "text": "Des trajets plus longs, au départ ou à destination de Paris."
+        },
+        "business": {
+          "title": "Déplacements professionnels",
+          "text": "Rendez-vous, collaborateurs et invités de votre entreprise."
+        },
+        "events": {
+          "title": "Événements et mariages",
+          "text": "Sur devis, selon votre programme."
+        }
+      }
+    },
+    "advantages": {
+      "title": "Pourquoi Avelys",
+      "items": {
+        "founders": {
+          "title": "Les fondateurs au volant",
+          "text": "Vous êtes conduit par l’un des deux associés d’Avelys, pas par une flotte anonyme."
+        },
+        "fixedPrice": {
+          "title": "Un prix fixé à l’avance",
+          "text": "Calculé sur le trajet routier réel et connu avant de réserver, sans majoration selon la demande."
+        },
+        "electric": {
+          "title": "100 % électrique",
+          "text": "Deux berlines BYD Seal, silencieuses et sans émissions à l’échappement."
+        },
+        "simple": {
+          "title": "Une réservation simple",
+          "text": "Sans compte obligatoire, en français ou en anglais. Chaque demande est examinée par nos soins avant confirmation."
+        }
+      }
+    },
+    "fleet": {
+      "title": "La flotte",
+      "model": "BYD Seal",
+      "text": "Deux berlines 100 % électriques, conduites par leurs propriétaires.",
+      "detailsPending": "Capacité en passagers et en bagages : à confirmer.",
+      "photoPlaceholder": "Photo à venir — emplacement provisoire",
+      "more": "Découvrir la flotte"
+    },
+    "destinations": {
+      "title": "Destinations fréquentes",
+      "intro": "Indiquez votre point de départ : le prix est calculé à l’étape suivante.",
+      "cta": "Préparer ce trajet",
+      "ctaTarget": "vers {name}",
+      "items": {
+        "cdg": {
+          "name": "Aéroport Charles-de-Gaulle",
+          "detail": "Roissy, au nord de Paris"
+        },
+        "orly": {
+          "name": "Aéroport d’Orly",
+          "detail": "Au sud de Paris"
+        },
+        "disneyland": {
+          "name": "Disneyland Paris",
+          "detail": "Marne-la-Vallée, à l’est de Paris"
+        },
+        "versailles": {
+          "name": "Château de Versailles",
+          "detail": "À l’ouest de Paris"
+        }
+      }
+    },
+    "business": {
+      "title": "Entreprises",
+      "text": "Déplacements de vos équipes, accueil de vos invités, séminaires : parlons de vos besoins.",
+      "cta": "Découvrir l’offre entreprises"
+    },
+    "faq": {
+      "title": "Questions fréquentes",
+      "contactPrompt": "Une autre question ?",
+      "contactLink": "Contactez-nous",
+      "items": {
+        "account": {
+          "question": "Faut-il créer un compte pour réserver ?",
+          "answer": "Non. Vous réservez sans compte. Vous pourrez en créer un après votre réservation, si vous le souhaitez."
+        },
+        "languages": {
+          "question": "Dans quelles langues le service est-il assuré ?",
+          "answer": "En français et en anglais : le site, les emails de réservation et les échanges avec votre chauffeur."
+        },
+        "validation": {
+          "question": "Comment ma réservation est-elle confirmée ?",
+          "answer": "Chaque demande est examinée par l’un des deux associés, qui l’accepte ou la refuse. Vous êtes informé par email."
+        },
+        "payment": {
+          "question": "Le paiement est-il sécurisé ?",
+          "answer": "Oui. Le paiement est traité par Stripe et vos données de carte ne sont jamais stockées chez nous. Votre carte est enregistrée lors de la demande et n’est débitée qu’après acceptation de la réservation."
+        }
+      }
+    }
   },
   "LocaleSwitcher": {
     "label": "Langue",
