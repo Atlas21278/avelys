@@ -1,5 +1,6 @@
 /**
- * Test fixtures only — never import from application code.
+ * Test fixtures only — never import from application code (enforced by `no-restricted-imports`
+ * in `eslint.config.mjs`: importable from `*.test.ts(x)` files only).
  *
  * PROVISIONAL — DEC-03: the amounts below are the provisional starting values of the private
  * pricing document (15 EUR pickup, 1.50 EUR/km, 35 EUR minimum, no time floor). Real values live

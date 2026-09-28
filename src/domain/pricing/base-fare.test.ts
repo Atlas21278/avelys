@@ -5,7 +5,13 @@ import { ROUNDING_MODES } from "@/lib/money";
 import { DomainError } from "../errors";
 import { computeBaseFare, EXACT_UNITS_PER_CENT } from "./base-fare";
 import { PROVISIONAL_RULE, route } from "./fixtures";
-import { PricingError, type PricingErrorCode, type PricingRuleConfigInput } from "./rule";
+import {
+  DEFAULT_PRICING_ROUNDING,
+  parsePricingRule,
+  PricingError,
+  type PricingErrorCode,
+  type PricingRuleConfigInput,
+} from "./rule";
 
 function withRule(overrides: Record<string, unknown>): PricingRuleConfigInput {
   return { ...PROVISIONAL_RULE, ...overrides } as PricingRuleConfigInput;
@@ -89,6 +95,9 @@ describe("computeBaseFare — provisional rule (PROVISIONAL — DEC-03)", () => 
 
   it("switches from the minimum to the metered fare at the exact threshold", () => {
     // 13 333 m -> 3 499.95 cents (minimum wins); 13 334 m -> 3 500.10 cents (metered wins)
+    // Guards DECISION-003 (A1): terms are compared exactly and only the total is rounded, once.
+    // Rounding the distance term or the metered fare first would turn 3 499.95 into 3 500.00
+    // and flip the 13 333 m binding to METERED. Do not weaken or "simplify" this test.
     const below = computeBaseFare(PROVISIONAL_RULE, route({ distanceMeters: 13_333 }));
     expect(below.binding).toBe("MINIMUM");
     expect(below.total.amountCents).toBe(3_500);
@@ -114,6 +123,19 @@ describe("computeBaseFare — provisional rule (PROVISIONAL — DEC-03)", () => 
 });
 
 describe("computeBaseFare — rounding mode comes from the rule", () => {
+  it("defaults to halfUp when the rule omits it (DECISION-003)", () => {
+    const withoutRounding = Object.fromEntries(
+      Object.entries(PROVISIONAL_RULE).filter(([key]) => key !== "rounding"),
+    ) as PricingRuleConfigInput;
+    expect(withoutRounding).not.toHaveProperty("rounding");
+    expect(DEFAULT_PRICING_ROUNDING).toBe("halfUp");
+    expect(parsePricingRule(withoutRounding).rounding).toBe("halfUp");
+    // 22 310 m -> 4 846.50 cents: halfUp gives 4 847 (halfEven or floor would give 4 846)
+    const fare = computeBaseFare(withoutRounding, route({ distanceMeters: 22_310 }));
+    expect(fare.rule.rounding).toBe("halfUp");
+    expect(fare.total.amountCents).toBe(4_847);
+  });
+
   // 22 310 m -> 4 846.50 cents; 22 345 m -> 4 851.75 cents
   it.each([
     ["halfUp", 22_310, 4_847],
@@ -183,6 +205,13 @@ describe("computeBaseFare — time floor (arbitrary test rates, not business val
     expect(fare.timeFloorApplied).toBe(false);
   });
 
+  it("rejects a zero hourly rate: disable the floor with null instead", () => {
+    expectPricingError(
+      () => computeBaseFare(withRule({ timeFloor: { perHourCents: 0 } }), route()),
+      "INVALID_PRICING_RULE",
+    );
+  });
+
   it("accepts a zero duration", () => {
     const rule = withRule({ timeFloor: { perHourCents: 6_000 } });
     const fare = computeBaseFare(rule, route({ durationSeconds: 0 }));
@@ -221,6 +250,10 @@ describe("computeBaseFare — invalid rule", () => {
     ["negative pickup", { pickupCents: -1 }],
     ["fractional per-km price", { perKmCents: 1.5 }],
     ["negative minimum", { minimumCents: -100 }],
+    ["zero minimum", { minimumCents: 0 }],
+    ["zero per-km price", { perKmCents: 0 }],
+    ["negative time floor", { timeFloor: { perHourCents: -1 } }],
+    ["null rounding", { rounding: null }],
     ["unsupported currency", { currency: "USD" }],
     ["HT basis (not decided)", { amountBasis: "HT" }],
     ["unknown rounding", { rounding: "commercial" }],
@@ -231,6 +264,28 @@ describe("computeBaseFare — invalid rule", () => {
     ["unknown field", { surchargeCents: 500 }],
   ])("rejects a rule with %s", (_label, overrides) => {
     expectPricingError(() => computeBaseFare(withRule(overrides), route()), "INVALID_PRICING_RULE");
+  });
+
+  it("rejects a rule whose amounts are all zero: it would price every trip at 0 EUR", () => {
+    const allZero = withRule({
+      pickupCents: 0,
+      perKmCents: 0,
+      minimumCents: 0,
+      timeFloor: { perHourCents: 0 },
+    });
+    expectPricingError(() => computeBaseFare(allZero, route()), "INVALID_PRICING_RULE");
+    expectPricingError(() => parsePricingRule(allZero), "INVALID_PRICING_RULE");
+  });
+
+  it("accepts a zero pickup: only the minimum and the per-km price must be positive", () => {
+    const fare = computeBaseFare(withRule({ pickupCents: 0 }), route({ distanceMeters: 30_000 }));
+    expect(fare.total.amountCents).toBe(4_500);
+  });
+
+  it("never prices a trip at 0 EUR, even at 1 m with the smallest valid rule", () => {
+    const smallest = withRule({ pickupCents: 0, perKmCents: 1, minimumCents: 1 });
+    const fare = computeBaseFare(smallest, route({ distanceMeters: 1 }));
+    expect(fare.total.amountCents).toBe(1);
   });
 });
 

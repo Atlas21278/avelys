@@ -5,21 +5,41 @@
 
 import { z } from "zod";
 
-import { CURRENCIES, ROUNDING_MODES } from "@/lib/money";
+import { CURRENCIES, ROUNDING_MODES, type RoundingMode } from "@/lib/money";
 
 import { DomainError } from "../errors";
 
 export const PRICING_RULE_SCHEMA_VERSION = 1;
 
+/**
+ * DECISION-003 (A1): nearest cent, halves away from zero, applied once to the total. Used when a
+ * rule omits `rounding`; any other mode must be set explicitly on the rule.
+ */
+export const DEFAULT_PRICING_ROUNDING = "halfUp" as const satisfies RoundingMode;
+
 /** Integer cents within the safe range (BR-10). */
 const cents = z.int().nonnegative();
+/** Same, strictly positive: a zero here would make the rule meaningless or price at 0 EUR. */
+const positiveCents = z.int().positive();
 
 /**
- * Time floor: `perHourCents × duration`, prorated to the second. Optional and disabled
- * (`null`) by default: its value is not decided yet (DEC-03).
+ * Time floor: `perHourCents × duration`, prorated to the second.
+ *
+ * PROVISIONAL STRUCTURE — DEC-03: neither its shape (hourly rate prorated to the second) nor its
+ * granularity is decided yet. Disabled (`null`) by default and must stay so in every real rule
+ * until DEC-03 settles it. When enabled, the hourly rate must be positive: a zero floor is
+ * expressed as `null`, not as `0`.
  */
-export const TimeFloorSchema = z.strictObject({ perHourCents: cents });
+export const TimeFloorSchema = z.strictObject({ perHourCents: positiveCents });
 
+/**
+ * Structural guarantees only; the amounts themselves are provisional business values (DEC-03)
+ * that live in a versioned `PricingRule`, never in code (BR-02).
+ *
+ * `minimumCents` and `perKmCents` are strictly positive (Master Spec §8: the fare is pickup plus
+ * a per-km price on the road distance, with a minimum always applied), so no valid rule can
+ * produce a 0 EUR fare. `pickupCents` may be zero.
+ */
 export const PricingRuleConfigSchema = z.strictObject({
   schemaVersion: z.literal(PRICING_RULE_SCHEMA_VERSION),
   id: z.string().min(1),
@@ -27,11 +47,11 @@ export const PricingRuleConfigSchema = z.strictObject({
   currency: z.enum(CURRENCIES),
   /** DECISION-003 (B1): rule amounts are TTC; HT/VAT are derived once DEC-04 sets the rate. */
   amountBasis: z.literal("TTC"),
-  /** DECISION-003 (A1): applied once, to the total only. */
-  rounding: z.enum(ROUNDING_MODES),
+  /** DECISION-003 (A1): applied once, to the total only. Defaults to `halfUp`. */
+  rounding: z.enum(ROUNDING_MODES).default(DEFAULT_PRICING_ROUNDING),
   pickupCents: cents,
-  perKmCents: cents,
-  minimumCents: cents,
+  perKmCents: positiveCents,
+  minimumCents: positiveCents,
   timeFloor: TimeFloorSchema.nullable().default(null),
 });
 
