@@ -1,7 +1,8 @@
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
 
-import { BACK_OFFICE_ROLES, type StaffRole } from "@/domain/auth/access";
+import { BACK_OFFICE_ROLES } from "@/domain/auth/access";
 import { db } from "@/server/db";
+import { enrolTotp, signIn, STAFF_PASSWORD as PASSWORD, staff } from "@/test/staff-session";
 import { totpFromUri } from "@/test/totp";
 
 import { checkAccess } from "./access";
@@ -10,62 +11,9 @@ import { createStaffUser, StaffUserExistsError } from "./staff-users";
 
 // Runs against the real test database (vitest "integration" project), migrations applied.
 
-const PASSWORD = "correct horse battery staple";
 const ORIGIN = "http://localhost:3000";
 // Stands in for the ingress: listed in TRUSTED_PROXIES by vitest.config.ts (198.51.100.0/24).
 const INGRESS = "198.51.100.10";
-
-/** Minimal browser-like cookie jar fed by Set-Cookie headers. */
-class CookieJar {
-  private readonly cookies = new Map<string, string>();
-
-  store(headers: Headers): void {
-    for (const line of headers.getSetCookie()) {
-      const [pair = "", ...attributes] = line.split(";");
-      const separator = pair.indexOf("=");
-      const name = pair.slice(0, separator).trim();
-      const value = pair.slice(separator + 1).trim();
-      const expired = attributes.some((attribute) => /^\s*max-age=0\s*$/i.test(attribute));
-      if (expired || value === "") this.cookies.delete(name);
-      else this.cookies.set(name, value);
-    }
-  }
-
-  headers(): Headers {
-    const cookie = [...this.cookies].map(([name, value]) => `${name}=${value}`).join("; ");
-    return new Headers(cookie ? { cookie } : {});
-  }
-}
-
-async function staff(role: StaffRole, email = `${role.toLowerCase()}@avelys.test`) {
-  await createStaffUser({ email, name: `Test ${role}`, role, password: PASSWORD });
-  return email;
-}
-
-async function signIn(email: string, jar = new CookieJar()) {
-  const { headers, response } = await auth().api.signInEmail({
-    body: { email, password: PASSWORD },
-    returnHeaders: true,
-  });
-  jar.store(headers);
-  return { jar, response };
-}
-
-/** Enrols TOTP the way the setup page does: enable with the password, then confirm a code. */
-async function enrolTotp(jar: CookieJar) {
-  const enabled = await auth().api.enableTwoFactor({
-    body: { password: PASSWORD },
-    headers: jar.headers(),
-  });
-  if (!("totpURI" in enabled) || !enabled.totpURI) throw new Error("TOTP enrolment failed.");
-  const { headers } = await auth().api.verifyTOTP({
-    body: { code: totpFromUri(enabled.totpURI) },
-    headers: jar.headers(),
-    returnHeaders: true,
-  });
-  jar.store(headers);
-  return enabled.totpURI;
-}
 
 function post(path: string, body: unknown, ip: string): Promise<Response> {
   return auth().handler(
