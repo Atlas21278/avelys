@@ -84,6 +84,44 @@ describe("divideRounded", () => {
     expect(divideRounded(numerator, denominator, mode)).toBe(expected);
   });
 
+  describe("halfUp rounds halves away from zero, symmetrically on negative amounts", () => {
+    // Refund and discount lines are negative: -x must always round to -(round(x)).
+    it.each([
+      [-25, 10, -3],
+      [-15, 10, -2],
+      [-5, 10, -1],
+      [-1, 2, -1],
+      [-24, 10, -2],
+      [-26, 10, -3],
+      [-20, 10, -2],
+      [-9_000, 18_000, -1],
+      [-8_999, 18_000, 0],
+    ])("%i / %i = %i", (numerator, denominator, expected) => {
+      expect(divideRounded(numerator, denominator, "halfUp")).toBe(expected);
+    });
+
+    it("is the exact opposite of the positive result", () => {
+      for (let numerator = 1; numerator <= 200; numerator += 1) {
+        const positive = divideRounded(numerator, 20, "halfUp");
+        expect(divideRounded(-numerator, 20, "halfUp")).toBe(positive === 0 ? 0 : -positive);
+      }
+    });
+
+    it("is not Math.round, which rounds negative halves towards +infinity", () => {
+      expect(Math.round(-2.5)).toBe(-2);
+      expect(divideRounded(-25, 10, "halfUp")).toBe(-3);
+    });
+  });
+
+  it.each(["floor", "ceil", "halfUp", "halfEven"] as const)(
+    "never returns negative zero (%s)",
+    (mode) => {
+      for (const numerator of [-1, -4, -5, 0]) {
+        expect(Object.is(divideRounded(numerator, 10, mode), -0)).toBe(false);
+      }
+    },
+  );
+
   it("rejects a non-positive denominator", () => {
     expect(() => divideRounded(1, 0, "halfUp")).toThrowError(RangeError);
   });

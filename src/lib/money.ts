@@ -64,13 +64,29 @@ export function sum(items: readonly Money[], currency: Currency = "EUR"): Money 
   return items.reduce((total, item) => add(total, item), money(0, currency));
 }
 
-/** Integer division of numerator by a positive denominator with the given rounding. */
+/**
+ * Integer division of numerator by a positive denominator with the given rounding.
+ *
+ * - `floor` / `ceil`: towards negative / positive infinity.
+ * - `halfUp`: to the nearest, halves **away from zero** (commercial rounding). It is symmetric:
+ *   `-2.5 -> -3` and `2.5 -> 3`, so a negative line (discount, refund) rounds to the exact
+ *   opposite of the matching positive line. Unlike `Math.round`, which rounds negative halves
+ *   towards positive infinity (`Math.round(-2.5) === -2`).
+ * - `halfEven`: to the nearest, halves to the even neighbour (banker's rounding).
+ *
+ * Never returns `-0`.
+ */
 export function divideRounded(numerator: number, denominator: number, mode: RoundingMode): number {
   assertSafeInteger(numerator, "numerator");
   assertSafeInteger(denominator, "denominator");
   if (denominator <= 0) {
     throw new RangeError("denominator must be positive");
   }
+  const result = roundQuotient(numerator, denominator, mode);
+  return result === 0 ? 0 : result;
+}
+
+function roundQuotient(numerator: number, denominator: number, mode: RoundingMode): number {
   const quotient = Math.trunc(numerator / denominator);
   const remainder = numerator - quotient * denominator;
   if (remainder === 0) return quotient;
