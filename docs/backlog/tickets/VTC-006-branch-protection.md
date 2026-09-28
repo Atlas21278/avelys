@@ -22,7 +22,7 @@ Rendre impossible l'intégration sur `main` sans PR et sans checks verts, et exi
 
 - [x] Push direct sur `main` refusé (ruleset actif + hook `.githooks/pre-push`).
 - [x] PR avec check rouge non mergeable (checks `ci`, `secrets`, `deps` requis par le ruleset).
-- [ ] Modifier un fichier sous `.github/workflows/` exige l'approbation CODEOWNER — **écart accepté** : un seul compte GitHub existe et l'auteur d'une PR ne peut pas l'approuver, donc `require_code_owner_review: false` et 0 approbation (`docs/infra/gitops.md`). À activer quand le second associé aura un compte (ticket de suivi dans `avelys-private`).
+- [ ] Modifier un fichier sous `.github/workflows/` exige l'approbation CODEOWNER — **écart accepté** : un seul compte GitHub existe et l'auteur d'une PR ne peut pas l'approuver, donc `require_code_owner_review: false` et 0 approbation (`docs/infra/gitops.md`). À activer quand le second associé aura un compte (INFRA-004, Atlas21278/avelys-private#59).
 
 ## Interdits / hors périmètre
 
