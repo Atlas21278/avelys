@@ -17,7 +17,7 @@ export { StripeWebhookError, type StripeWebhookErrorCode } from "@/integrations/
 export type ProcessedWebhook = {
   /** `duplicate`: the event id was already recorded, nothing was done. */
   outcome: "processed" | "duplicate";
-  /** Whether a handler exists for this event type (false: recorded only). */
+  /** Whether a handler ran for this delivery (false: recorded only, or duplicate). */
   handled: boolean;
 };
 
@@ -81,7 +81,7 @@ export async function processStripeWebhookEvent(
       data: [{ provider: "STRIPE", eventId: event.id, eventType: event.type }],
       skipDuplicates: true,
     });
-    if (count === 0) return { outcome: "duplicate", handled: handler !== undefined };
+    if (count === 0) return { outcome: "duplicate", handled: false };
 
     if (handler) await handler(event, tx);
     return { outcome: "processed", handled: handler !== undefined };

@@ -31,7 +31,7 @@ Les transitions Payment sont centralisées comme celles de Booking. Le Booking r
 
 `POST /api/webhooks/stripe` (`src/app/api/webhooks/stripe/route.ts`, runtime Node, jamais mis en cache). Hors authentification et hors CSRF : seule la signature Stripe fait foi.
 
-1. Corps brut (`request.text()`) et en-tête `stripe-signature` vérifiés par `verifyWebhookEvent` (`src/integrations/stripe/webhooks.ts`) avec `STRIPE_WEBHOOK_SECRET` (tolérance par défaut du SDK, 5 minutes), puis enveloppe de l'événement validée par Zod (`id` `evt_…`, `object: "event"`, `type`, `livemode`, `created`, `data.object`).
+1. Corps brut (`request.text()`) et en-tête `stripe-signature` vérifiés par `verifyWebhookEvent` (`src/integrations/stripe/webhooks.ts`) avec `STRIPE_WEBHOOK_SECRET` (tolérance par défaut du SDK, 5 minutes), puis enveloppe de l'événement validée par Zod (`id` `evt_…`, `object: "event"`, `type`, `livemode: false`, `created`, `data.object`).
 2. Service `receiveStripeWebhook` / `processStripeWebhookEvent` (`src/server/payments/process-webhook.ts`) : **une transaction** qui insère `(STRIPE, event.id, event.type)` dans `ProcessedWebhookEvent` avec `ON CONFLICT DO NOTHING`, puis exécute le handler éventuel du registre `src/server/payments/webhook-handlers.ts` (vide pour l'instant) avec le client transactionnel.
 3. Effets externes d'un futur handler (email, appel Stripe) : **après commit** (BR-50), jamais dans la transaction.
 
@@ -43,8 +43,13 @@ Les transitions Payment sont centralisées comme celles de Booking. Le Booking r
 | Livraisons concurrentes du même événement    | 200 pour chacune                         | une ligne, handler exécuté une fois      |
 | Signature absente, invalide ou trop ancienne | 400 `INVALID_WEBHOOK_SIGNATURE`          | rien                                     |
 | Corps signé mais enveloppe invalide          | 400 `INVALID_INPUT`                      | rien                                     |
+| Événement live (`livemode: true`), signé     | 400 `INVALID_INPUT`                      | rien                                     |
 | Handler (ou base) en échec                   | 500 `INTERNAL_ERROR` : Stripe réessaie   | rien (rollback) ; le renvoi est retraité |
 | `STRIPE_WEBHOOK_SECRET` absent               | 500 `WEBHOOK_NOT_CONFIGURED`, journalisé | rien                                     |
+
+**Événements live refusés** (BR-44) : un secret de signature test et un secret live sont indiscernables, donc tout événement `livemode: true` est refusé (400, rien écrit) tant que le ticket d'activation live (`CRITICAL`) n'est pas livré.
+
+**Taille du corps** : aucune limite applicative sur cet endpoint public ; INFRA-005 doit imposer une limite de taille du corps sur `/api/webhooks/stripe` (ingress), en plus du rate limiting.
 
 Concurrence : le second `INSERT` attend la transaction du premier sur l'index unique ; commit → il n'insère rien (doublon) ; rollback → il traite l'événement. Logs : `eventId`, `eventType`, `correlationId`, résultat, nom d'erreur uniquement ; jamais le payload, l'en-tête de signature ni un secret.
 

@@ -88,7 +88,7 @@ describe("processStripeWebhookEvent (integration)", () => {
     await processStripeWebhookEvent(received, { handlers });
     const replay = await processStripeWebhookEvent(received, { handlers });
 
-    expect(replay.outcome).toBe("duplicate");
+    expect(replay).toEqual({ outcome: "duplicate", handled: false });
     expect(await rows(received.id)).toHaveLength(1);
     expect(spy).toHaveBeenCalledOnce();
     expect(await handlerWrites(received.id)).toBe(1);

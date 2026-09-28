@@ -23,13 +23,13 @@ vi.mock("@/server/payments/webhook-handlers", () => ({
 const { POST } = await import("./route");
 const { db } = await import("@/server/db");
 
-function signedEvent(type = "payment_intent.succeeded") {
+function signedEvent(type = "payment_intent.succeeded", livemode = false) {
   const id = `evt_${randomUUID().replaceAll("-", "")}`;
   const body = JSON.stringify({
     id,
     object: "event",
     type,
-    livemode: false,
+    livemode,
     created: 1_790_000_000,
     api_version: Stripe.API_VERSION,
     data: { object: { id: "pi_test0001", object: "payment_intent" } },
@@ -89,6 +89,21 @@ describe("POST /api/webhooks/stripe (integration)", () => {
     const other = signedEvent();
     expect((await deliver(other.body, signature)).status).toBe(400);
     expect(await rowCount()).toBe(0);
+  });
+
+  it("refuses a correctly signed live mode event with 400 and writes nothing", async () => {
+    const handler = vi.fn(async () => {});
+    handlers.current = { "payment_intent.succeeded": handler };
+    const { id, body, signature } = signedEvent("payment_intent.succeeded", true);
+
+    const response = await deliver(body, signature);
+
+    expect(response.status).toBe(400);
+    expect(((await response.json()) as { error: { code: string } }).error.code).toBe(
+      "INVALID_INPUT",
+    );
+    expect(await rowCount(id)).toBe(0);
+    expect(handler).not.toHaveBeenCalled();
   });
 
   it("answers 200 without effect when the same event is delivered again", async () => {

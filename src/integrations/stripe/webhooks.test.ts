@@ -93,12 +93,20 @@ describe("verifyWebhookEvent", () => {
       eventBody({ object: "payment_intent" }),
       eventBody({ type: "" }),
       eventBody({ livemode: "false" }),
+      eventBody({ livemode: true }),
       eventBody({ data: null }),
     ]) {
       expect(codeOf(() => verifier.verifyWebhookEvent(body, sign(body)))).toBe(
         "INVALID_WEBHOOK_PAYLOAD",
       );
     }
+  });
+
+  it("refuses a correctly signed live mode event (test mode only)", () => {
+    const body = eventBody({ livemode: true });
+    expect(codeOf(() => verifier.verifyWebhookEvent(body, sign(body)))).toBe(
+      "INVALID_WEBHOOK_PAYLOAD",
+    );
   });
 
   it("fails as not configured when the signing secret is missing, before any check", () => {

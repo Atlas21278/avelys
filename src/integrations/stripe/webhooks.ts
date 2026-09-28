@@ -26,7 +26,9 @@ const eventEnvelopeSchema = z.looseObject({
     .regex(/^evt_[A-Za-z0-9]+$/),
   object: z.literal("event"),
   type: z.string().min(1).max(255),
-  livemode: z.boolean(),
+  // Test mode only (BR-44): test and live signing secrets are indistinguishable, so a live event
+  // is refused here until the live-activation ticket (CRITICAL).
+  livemode: z.literal(false),
   created: z.number().int(),
   data: z.looseObject({ object: z.looseObject({}) }),
 });
