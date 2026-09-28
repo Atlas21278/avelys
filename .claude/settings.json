@@ -81,7 +81,11 @@
       "PowerShell(argocd *)",
       "PowerShell(gh secret *)",
       "PowerShell(gh repo delete *)",
-      "PowerShell(gh repo edit * --visibility *)"
+      "PowerShell(gh repo edit * --visibility *)",
+      "Bash(gh pr merge * --admin*)",
+      "PowerShell(gh pr merge * --admin*)",
+      "Bash(gh api * rulesets*)",
+      "PowerShell(gh api * rulesets*)"
     ]
   }
 }
