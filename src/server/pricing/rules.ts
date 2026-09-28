@@ -1,0 +1,198 @@
+import "server-only";
+
+import { randomUUID } from "node:crypto";
+
+import {
+  parsePricingRule,
+  PRICING_RULE_SCHEMA_VERSION,
+  PricingError,
+  type PricingRuleConfig,
+  type PricingRuleConfigInput,
+} from "@/domain/pricing/rule";
+import { Prisma, type PricingRule } from "@/generated/prisma/client";
+import { logger } from "@/lib/logger";
+import { currentCorrelationId } from "@/lib/request-context";
+import { db } from "@/server/db";
+
+/**
+ * Versioned pricing rules (VTC-025, ADR-0009, BR-13). A version is inserted once and never
+ * updated or deleted by the application: a new tariff is a new version, and a booking keeps its
+ * own snapshot plus (pricingRuleId, pricingRuleVersion). No tariff value lives here (BR-02).
+ */
+
+/** Keys carried by the columns, never by the stored `config` JSON. */
+const COLUMN_KEYS = ["schemaVersion", "id", "version"] as const;
+
+/** Tariff part of a rule, as supplied by the author: identity and version come from the store. */
+export type PricingRuleTariffInput = Omit<PricingRuleConfigInput, (typeof COLUMN_KEYS)[number]>;
+
+export interface CreatePricingRuleVersionInput {
+  /** Instant (UTC) from which this version applies, until a higher version takes over. */
+  readonly effectiveFrom: Date;
+  readonly tariff: PricingRuleTariffInput;
+}
+
+/** Only an admin (authorised by the caller) or the dev seed publishes a version. */
+export type PricingRuleActor =
+  { readonly type: "ADMIN"; readonly userId: string } | { readonly type: "SYSTEM" };
+
+export type PricingRuleStoreErrorCode = "NO_ACTIVE_PRICING_RULE" | "PRICING_RULE_VERSION_CONFLICT";
+
+/** Raised by the store; an invalid stored or submitted rule raises PricingError instead. */
+export class PricingRuleStoreError extends Error {
+  override readonly name = "PricingRuleStoreError";
+
+  constructor(
+    readonly code: PricingRuleStoreErrorCode,
+    message: string,
+  ) {
+    super(message);
+  }
+}
+
+/**
+ * Concurrent publications both read the same `max(version)`: the unique index lets one win and
+ * the other retries with the next number. Each round commits at least one writer, so this bound
+ * covers that many simultaneous publications (far above the expected admin usage).
+ */
+export const MAX_VERSION_ATTEMPTS = 5;
+
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function invalid(message: string): PricingError {
+  return new PricingError("INVALID_PRICING_RULE", message);
+}
+
+/** Rejects a tariff that tries to carry the identity or version held by the columns. */
+function assertTariffShape(tariff: unknown, where: string): Record<string, unknown> {
+  if (!isPlainObject(tariff)) throw invalid(`Invalid pricing rule: ${where} is not an object`);
+  const reserved = COLUMN_KEYS.filter((key) => Object.hasOwn(tariff, key));
+  if (reserved.length > 0) {
+    throw invalid(`Invalid pricing rule: ${where} must not contain ${reserved.join(", ")}`);
+  }
+  return tariff;
+}
+
+function toStoredTariff(config: PricingRuleConfig): Prisma.InputJsonObject {
+  const reserved: ReadonlySet<string> = new Set(COLUMN_KEYS);
+  return Object.fromEntries(
+    Object.entries(config).filter(([key]) => !reserved.has(key)),
+  ) as Prisma.InputJsonObject;
+}
+
+/** Rebuilds and validates the full configuration of a stored row (BR-51: invalid = no price). */
+function toConfig(row: PricingRule): PricingRuleConfig {
+  const tariff = assertTariffShape(row.config, `stored config of version ${row.version}`);
+  return parsePricingRule({
+    ...tariff,
+    schemaVersion: row.schemaVersion,
+    id: row.id,
+    version: row.version,
+  });
+}
+
+function assertValidInstant(value: Date, name: string): void {
+  if (!(value instanceof Date) || Number.isNaN(value.getTime())) {
+    throw new TypeError(`${name} must be a valid Date`);
+  }
+}
+
+/**
+ * Rule active at `at`: the highest version whose `effectiveFrom <= at`. A later version thus
+ * supersedes every earlier one from its own `effectiveFrom`, including one scheduled after it.
+ * Never falls back to a default: no rule means no price.
+ */
+export async function getActivePricingRule(at: Date): Promise<PricingRuleConfig> {
+  assertValidInstant(at, "at");
+  const row = await db().pricingRule.findFirst({
+    where: { effectiveFrom: { lte: at } },
+    orderBy: { version: "desc" },
+  });
+  if (!row) {
+    throw new PricingRuleStoreError(
+      "NO_ACTIVE_PRICING_RULE",
+      `No pricing rule is active at ${at.toISOString()}: no price is computed`,
+    );
+  }
+  return toConfig(row);
+}
+
+function isUniqueViolation(error: unknown): boolean {
+  return error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002";
+}
+
+/**
+ * Publishes a new immutable version (version = max + 1) and its audit row in one transaction.
+ * The configuration is validated by parsePricingRule before the write and again on read-back.
+ */
+export async function createPricingRuleVersion(
+  input: CreatePricingRuleVersionInput,
+  actor: PricingRuleActor,
+): Promise<PricingRuleConfig> {
+  assertValidInstant(input.effectiveFrom, "effectiveFrom");
+  const tariff = assertTariffShape(input.tariff, "tariff");
+  const id = randomUUID();
+  const createdBy = actor.type === "ADMIN" ? actor.userId : null;
+
+  for (let attempt = 1; ; attempt += 1) {
+    try {
+      const created = await db().$transaction(async (tx) => {
+        const { _max } = await tx.pricingRule.aggregate({ _max: { version: true } });
+        const version = (_max.version ?? 0) + 1;
+        const config = parsePricingRule({
+          ...tariff,
+          schemaVersion: PRICING_RULE_SCHEMA_VERSION,
+          id,
+          version,
+        });
+
+        const row = await tx.pricingRule.create({
+          data: {
+            id,
+            version,
+            effectiveFrom: input.effectiveFrom,
+            config: toStoredTariff(config),
+            schemaVersion: config.schemaVersion,
+            createdBy,
+          },
+        });
+
+        // Tariff values only: no personal data in the audit trail (BR-60).
+        await tx.auditLog.create({
+          data: {
+            actorType: actor.type,
+            actorId: createdBy,
+            entityType: "PricingRule",
+            entityId: row.id,
+            action: "pricingRule.create",
+            after: {
+              version: row.version,
+              effectiveFrom: row.effectiveFrom.toISOString(),
+              schemaVersion: row.schemaVersion,
+              config: toStoredTariff(config),
+            },
+            correlationId: currentCorrelationId() ?? null,
+          },
+        });
+
+        return toConfig(row);
+      });
+
+      logger().info(
+        { pricingRuleId: created.id, pricingRuleVersion: created.version },
+        "pricing rule version created",
+      );
+      return created;
+    } catch (error) {
+      if (!isUniqueViolation(error)) throw error;
+      if (attempt >= MAX_VERSION_ATTEMPTS) {
+        throw new PricingRuleStoreError(
+          "PRICING_RULE_VERSION_CONFLICT",
+          `Could not allocate a pricing rule version after ${MAX_VERSION_ATTEMPTS} attempts`,
+        );
+      }
+    }
+  }
+}
