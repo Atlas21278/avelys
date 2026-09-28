@@ -1,4 +1,7 @@
 allowBuilds:
+  # Optional tooling pulled by next-intl (message extraction, unused): no install script needed.
+  "@parcel/watcher": false
+  "@swc/core": false
   # Official Prisma packages: download the schema engine used by the migration CLI.
   "@prisma/engines": true
   prisma: true

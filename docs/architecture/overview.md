@@ -30,6 +30,8 @@ Une application Next.js monolithique modulaire (UI publique, espace client, back
 | Intégrations | `src/integrations/` | Adaptateurs Stripe, Maps, Resend, Sentry avec timeouts/retry                                               | Règles métier                                                     |
 | Utilitaires  | `src/lib/`          | `env` (Zod), `logger` (pino), `errors`, `money`, `dates`                                                   | —                                                                 |
 
+Internationalisation FR/EN (next-intl, `src/i18n/`, proxy `src/proxy.ts`) : `docs/architecture/i18n.md`.
+
 Flux type (demande de réservation) : server action → validation Zod → `server/booking.requestBooking()` → `domain/pricing` recalcule → transaction (Booking `REQUESTED` + snapshot + AuditLog) → après commit : email via `integrations/resend` (échec toléré, BR-50).
 
 ## Décisions figées (ADR)

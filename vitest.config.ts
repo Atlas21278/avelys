@@ -15,6 +15,9 @@ export default defineConfig({
   },
   test: {
     environment: "node",
+    // next-intl imports `next/server` without an extension, which Node's ESM resolver rejects:
+    // let Vite resolve it instead.
+    server: { deps: { inline: ["next-intl"] } },
     coverage: {
       provider: "v8",
       include: ["src/**/*.ts"],
