@@ -42,6 +42,13 @@ Mobile-first. Univers hôtel haut de gamme / maison de luxe. Noir ou anthracite 
 
 Accueil : header (Services, Entreprises, Flotte, À propos, Contact, FR/EN, Réserver) ; hero avec module de recherche visible (départ, destination, date, heure, passagers, bagages) ; CTA « Voir le prix » / « Get a quote » ; sections services, avantages, flotte, destinations, business, FAQ, footer.
 
+Mise en œuvre (VTC-014) :
+
+- Le module de recherche n'affiche **aucun prix**. « Voir le prix » mène à la page réservation (`/reservation`, `/en/booking`) avec les champs remplis en paramètres d'URL : `pickup`, `dropoff`, `date` (`AAAA-MM-JJ`), `time` (`HH:MM`, heure de Paris), `passengers` (entier ≥ 1), `luggage` (entier ≥ 0). Aucun maximum de capacité (DEC-02) et aucun champ montant : schéma Zod et construction du lien dans `src/lib/booking-search.ts`, réutilisables par la page réservation pour relire ces paramètres. Sans JavaScript, le formulaire reste un simple `GET` vers la même page.
+- Header et footer partagés : `src/components/site/`. Coordonnées, SIREN, n° VTC, assurance et contact direct viennent de `src/lib/site-identity.ts` ; tant qu'une valeur vaut `null`, le footer affiche « À confirmer (provisoire — DEC-08 / DEC-20) ». Les pages légales y sont listées sans lien jusqu'à VTC-018.
+- FAQ limitée aux faits décidés (sans compte, FR/EN, validation manuelle, paiement Stripe débité après acceptation) : rien sur le prix, l'annulation, le remboursement, l'attente ou le no-show (DEC-03, DEC-05, DEC-06).
+- Emplacement photo de la flotte marqué provisoire tant qu'aucune vraie photo n'existe.
+
 ## Pages
 
 | Route FR       | Route EN       | But                                                                |

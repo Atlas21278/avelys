@@ -49,3 +49,36 @@ describe("message catalogues", () => {
     }
   });
 });
+
+describe("home page and site chrome messages", () => {
+  const required = [
+    "Site.menu",
+    "Site.book",
+    "Site.footer.provisional",
+    "Home.hero.title",
+    "Home.search.submit",
+    "Home.search.invalid",
+    "Home.fleet.photoPlaceholder",
+  ];
+
+  it.each(Object.entries(catalogues))("are all present in %s", (_locale, messages) => {
+    for (const key of required) expect(messages.has(key), key).toBe(true);
+  });
+
+  it.each(Object.entries(catalogues))(
+    "name the open decisions in the provisional placeholder in %s",
+    (_locale, messages) => {
+      expect(messages.get("Site.footer.provisional")).toContain("{decisions}");
+    },
+  );
+
+  it.each(Object.entries(catalogues))(
+    "show no amount on the home page in %s",
+    (_locale, messages) => {
+      for (const [key, value] of messages) {
+        if (!key.startsWith("Home.")) continue;
+        expect(value as string, key).not.toMatch(/€|\bEUR\b|\d+[,.]\d{2}/);
+      }
+    },
+  );
+});
