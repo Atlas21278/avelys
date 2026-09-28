@@ -72,6 +72,20 @@ Base de test locale existante : les anciens tests laissaient des bookings `prici
 
 Rollback : revert de la PR ; la table reste inutilisée. En dev local uniquement : `ALTER TABLE "Booking" DROP CONSTRAINT "Booking_pricingRuleId_pricingRuleVersion_fkey"` puis suppression de la table.
 
+### Idempotence des webhooks : `ProcessedWebhookEvent` (VTC-030)
+
+Migration `20260929080000_processed_webhook_event`, **additive** (un enum `WebhookProvider` = `STRIPE`, une table, aucune modification de l'existant). Service : `src/server/payments/process-webhook.ts` ; tests d'intégration : `process-webhook.int.test.ts` et `src/app/api/webhooks/stripe/route.int.test.ts`.
+
+| Élément     | Choix                                                                                                                                                                                                                                     |
+| ----------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Colonnes    | `id` (cuid2), `provider` (`WebhookProvider`), `eventId VARCHAR(255)` (`evt_…`), `eventType VARCHAR(255)`, `receivedAt TIMESTAMPTZ(3)` (défaut `now()`). **Aucun objet ni payload Stripe** stocké.                                         |
+| Unicité     | `@@unique([provider, eventId])` : un événement n'est enregistré qu'une fois par fournisseur.                                                                                                                                              |
+| Insertion   | `createMany({ skipDuplicates: true })` (`INSERT … ON CONFLICT DO NOTHING`) **dans la transaction du handler** : 0 ligne insérée = doublon, sans effet. Un handler en échec annule aussi l'insertion, et le renvoi de Stripe est retraité. |
+| Concurrence | Deux livraisons simultanées : le second `INSERT` attend la transaction du premier sur l'index unique, puis n'insère rien (commit) ou traite l'événement (rollback). Prouvé par les tests d'intégration.                                   |
+| Rétention   | Aucune purge pour l'instant (volume faible, lignes sans PII). Une purge éventuelle ne supprimerait que des lignes plus anciennes que la fenêtre de renvoi de Stripe : à décider avec son ticket.                                          |
+
+Rollback : revert de la PR ; la table reste inutilisée. Suppression manuelle en dev local uniquement.
+
 ### Contact par réservation (VTC-037)
 
 Migration `20260928224334_booking_contact`, **additive** (expand) : trois colonnes **nullables** sur `Booking`, sans valeur par défaut, sans backfill ni modification de l'existant. Décision : DEC-25 (option 1). Tests : `src/server/booking/create-booking.int.test.ts`, `src/server/admin/bookings.int.test.ts`, `src/domain/booking/contact.test.ts`.

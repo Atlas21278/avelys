@@ -1,6 +1,15 @@
 import * as z from "zod";
 
 import { PROVISIONAL_SERVICE_AREA, ServiceAreaSchema } from "@/domain/geo/service-area";
+import {
+  isTestModePublishableKey,
+  isTestModeSecretKey,
+  isWebhookSigningSecret,
+} from "@/integrations/stripe/keys";
+
+/** An empty value (as copied from .env.example) means "not configured". */
+const optionalString = (schema: z.ZodType<string>) =>
+  z.preprocess((value) => (value === "" ? undefined : value), schema.optional());
 
 /**
  * Server-side environment. Stripe, Maps and Resend variables are added by their own tickets.
@@ -34,6 +43,13 @@ export const serverEnvSchema = z.object({
     (value) => (value === "" ? undefined : value),
     z.coerce.number().int().positive().default(604_800),
   ),
+  // Stripe (VTC-030, ADR-0006), TEST MODE ONLY in every environment (BR-44): a live key or an
+  // unrecognised format is refused here and again by the adapter. Optional so that `next build`
+  // works without them; the adapter fails with a typed error on first use. Empty = not configured.
+  STRIPE_SECRET_KEY: optionalString(z.string().refine(isTestModeSecretKey)),
+  STRIPE_WEBHOOK_SECRET: optionalString(z.string().refine(isWebhookSigningSecret)),
+  // Checked server-side only; the browser build will read it literally (Payment Element ticket).
+  NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY: optionalString(z.string().refine(isTestModePublishableKey)),
   // Google Maps Platform server key (VTC-024, ADR-0010): Routes API only, restricted by API and
   // IP. Optional at startup so that `next build` and pages without routing work without it;
   // the routing adapter fails with a typed error on first use when it is missing.

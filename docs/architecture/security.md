@@ -54,6 +54,8 @@ L'IP client est lue dans `X-Forwarded-For`. Ce header est fourni par le client e
 
 Clé Google Maps serveur (`GOOGLE_MAPS_SERVER_API_KEY`, VTC-024) : distincte de la clé navigateur, restreinte à la Routes API et aux IP de sortie, lue uniquement par `src/integrations/maps` au premier appel (jamais au build), envoyée en en-tête `X-Goog-Api-Key` (jamais en query string), masquée par le logger. Les logs de routing ne contiennent ni adresse, ni coordonnée, ni `placeId` (BR-60).
 
+Stripe (VTC-030, BR-44) : **test mode uniquement** dans tous les environnements. `STRIPE_SECRET_KEY` (`sk_test_`/`rk_test_`) et `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY` (`pk_test_`) sont refusées si live ou de format inconnu, par le schéma d'environnement et par l'adaptateur `src/integrations/stripe` (lu au premier usage, jamais au build) ; `STRIPE_WEBHOOK_SECRET` (`whsec_…`) signe l'endpoint webhook. Valeurs et en-tête `stripe-signature` masqués par le logger ; les erreurs ne reprennent jamais une valeur. Tests : secrets jetables générés à l'exécution, aucun littéral de clé dans le dépôt.
+
 gitleaks en CI et en pre-commit recommandé. Claude ne lit ni n'affiche jamais une valeur de secret.
 
 ## RGPD
