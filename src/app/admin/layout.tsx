@@ -12,13 +12,14 @@ export const metadata: Metadata = {
 
 // Root layout of the back-office: French only, outside the localized site (excluded from the
 // next-intl proxy). No access check here: a layout does not re-render on client navigation.
-// Every page calls its own guard from src/server/auth/back-office.ts.
+// Every page calls its own guard from src/server/auth/back-office.ts. Each page sets its own
+// measure: narrow for sign-in forms, wide for operational lists.
 export default function AdminLayout({ children }: LayoutProps<"/admin">) {
   return (
     <html lang="fr" className={`${bodoni.variable} ${schibsted.variable}`}>
       <body>
         <main className="min-h-dvh bg-paper py-14 text-ink">
-          <Container className="max-w-md">{children}</Container>
+          <Container>{children}</Container>
         </main>
       </body>
     </html>

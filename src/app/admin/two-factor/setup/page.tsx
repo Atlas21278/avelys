@@ -9,7 +9,7 @@ export default async function AdminTwoFactorSetup() {
   await requirePendingTwoFactorEnrolment();
 
   return (
-    <div className="flex flex-col gap-10">
+    <div className="mx-auto flex w-full max-w-md flex-col gap-10">
       <AuthHeading title="Activer la double authentification">
         Obligatoire pour accéder au back-office. Munissez-vous d’une application d’authentification
         (par exemple celle de votre gestionnaire de mots de passe).

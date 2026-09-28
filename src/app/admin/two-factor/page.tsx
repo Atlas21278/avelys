@@ -7,7 +7,7 @@ export const dynamic = "force-dynamic";
 // short-lived cookie that only the Better Auth verification endpoints accept.
 export default function AdminTwoFactor() {
   return (
-    <div className="flex flex-col gap-10">
+    <div className="mx-auto flex w-full max-w-md flex-col gap-10">
       <AuthHeading title="Vérification">
         Saisissez le code à 6 chiffres affiché par votre application d’authentification.
       </AuthHeading>

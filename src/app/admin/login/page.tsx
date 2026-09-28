@@ -14,7 +14,7 @@ export default async function AdminLogin() {
   if (access.ok) redirect("/admin");
 
   return (
-    <div className="flex flex-col gap-10">
+    <div className="mx-auto flex w-full max-w-md flex-col gap-10">
       <AuthHeading title="Connexion">
         Accès réservé à l’équipe. Les comptes sont créés par un administrateur.
       </AuthHeading>
