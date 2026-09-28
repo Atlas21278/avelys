@@ -7,6 +7,8 @@
   },
   "permissions": {
     "allow": [
+      "Bash(gh pr merge * --squash*)",
+      "PowerShell(gh pr merge * --squash*)",
       "Bash(pnpm install *)",
       "Bash(pnpm lint *)",
       "Bash(pnpm typecheck *)",
