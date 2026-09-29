@@ -15,6 +15,7 @@ const defaults = {
   TRUSTED_PROXIES: [],
   AUTH_SESSION_MAX_AGE_SECONDS: 604_800,
   BOOKING_MIN_LEAD_TIME_MINUTES: 720,
+  ROUTING_SERVICE_AREA: { south: 41, west: -5.5, north: 51.5, east: 10 },
 };
 
 describe("parseServerEnv", () => {
@@ -81,6 +82,78 @@ describe("parseServerEnv", () => {
     expect(() => parseServerEnv({ ...valid, GOOGLE_MAPS_SERVER_API_KEY: "   " })).toThrowError(
       /GOOGLE_MAPS_SERVER_API_KEY/,
     );
+  });
+
+  it("reads the routing service area, defaulting to the provisional metropolitan France box", () => {
+    const read = (value: string) =>
+      parseServerEnv({ ...valid, ROUTING_SERVICE_AREA: value }).ROUTING_SERVICE_AREA;
+    expect(read("48.1,1.4,49.3,3.6")).toEqual({ south: 48.1, west: 1.4, north: 49.3, east: 3.6 });
+    expect(read("")).toEqual(defaults.ROUTING_SERVICE_AREA);
+    for (const value of ["48.1,1.4,49.3", "49.3,1.4,48.1,3.6", "Île-de-France"]) {
+      expect(() => read(value)).toThrowError(/ROUTING_SERVICE_AREA/);
+    }
+  });
+
+  describe("Stripe (test mode only)", () => {
+    // Syntactically shaped placeholders, not keys: built at runtime so no key-like literal exists.
+    const fake = (prefix: string) => `${prefix}${"0".repeat(24)}`;
+
+    it("treats the three Stripe variables as optional, empty meaning not configured", () => {
+      const env = parseServerEnv({
+        ...valid,
+        STRIPE_SECRET_KEY: "",
+        STRIPE_WEBHOOK_SECRET: "",
+        NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY: "",
+      });
+      expect(env.STRIPE_SECRET_KEY).toBeUndefined();
+      expect(env.STRIPE_WEBHOOK_SECRET).toBeUndefined();
+      expect(env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY).toBeUndefined();
+      expect(parseServerEnv(valid).STRIPE_SECRET_KEY).toBeUndefined();
+    });
+
+    it("accepts test mode keys and a webhook signing secret", () => {
+      const env = parseServerEnv({
+        ...valid,
+        STRIPE_SECRET_KEY: fake("sk_test_"),
+        STRIPE_WEBHOOK_SECRET: fake("whsec_"),
+        NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY: fake("pk_test_"),
+      });
+      expect(env.STRIPE_SECRET_KEY).toBe(fake("sk_test_"));
+      expect(env.STRIPE_WEBHOOK_SECRET).toBe(fake("whsec_"));
+      expect(env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY).toBe(fake("pk_test_"));
+      expect(
+        parseServerEnv({ ...valid, STRIPE_SECRET_KEY: fake("rk_test_") }).STRIPE_SECRET_KEY,
+      ).toBe(fake("rk_test_"));
+    });
+
+    it("refuses live or unknown secret keys, naming the variable but never the value", () => {
+      for (const value of [fake("sk_live_"), fake("rk_live_"), fake("pk_test_"), "sk_test_", "x"]) {
+        let message = "";
+        try {
+          parseServerEnv({ ...valid, STRIPE_SECRET_KEY: value });
+        } catch (error) {
+          message = (error as Error).message;
+        }
+        expect(message).toMatch(/STRIPE_SECRET_KEY/);
+        expect(message).not.toContain(value);
+      }
+    });
+
+    it("refuses live or unknown publishable keys", () => {
+      for (const value of [fake("pk_live_"), fake("sk_test_"), "pk_test_"]) {
+        expect(() =>
+          parseServerEnv({ ...valid, NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY: value }),
+        ).toThrowError(/NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY/);
+      }
+    });
+
+    it("refuses a webhook secret that is not a signing secret", () => {
+      for (const value of [fake("sk_test_"), "whsec_", " "]) {
+        expect(() => parseServerEnv({ ...valid, STRIPE_WEBHOOK_SECRET: value })).toThrowError(
+          /STRIPE_WEBHOOK_SECRET/,
+        );
+      }
+    });
   });
 
   it("rejects a non-PostgreSQL database URL", () => {

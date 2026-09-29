@@ -258,7 +258,12 @@ export async function computeQuote(input: unknown, deps: QuoteDeps): Promise<Quo
 
   let snapshot: PricingSnapshot;
   try {
-    snapshot = buildPricingSnapshot({ fare, inputs, quotedAt: now });
+    snapshot = buildPricingSnapshot({
+      fare,
+      inputs,
+      resolvedPoints: { origin: resolved.origin, destination: resolved.destination },
+      quotedAt: now,
+    });
   } catch (error) {
     if (!(error instanceof PricingError)) throw error;
     throw new QuoteError("PRICING_UNAVAILABLE", error.code, error.message, false, {

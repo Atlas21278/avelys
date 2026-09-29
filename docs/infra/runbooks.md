@@ -18,7 +18,7 @@ Interdit : `kubectl set image` / édition manuelle dans le cluster.
 
 ## RB-03 — Incident paiement
 
-- Webhooks en échec : vérifier l'endpoint et le secret de signature (sans l'afficher), rejouer les événements depuis le Dashboard Stripe ; l'idempotence garantit l'absence de double effet.
+- Webhooks en échec : vérifier l'endpoint et le secret de signature (sans l'afficher), rejouer les événements depuis le Dashboard Stripe ; l'idempotence garantit l'absence de double effet. Logs `stripe webhook refused` (`code` : `INVALID_WEBHOOK_SIGNATURE` → secret ou endpoint erroné, `WEBHOOK_NOT_CONFIGURED` → `STRIPE_WEBHOOK_SECRET` absent) et `stripe webhook failed` (`eventId`, `eventType`, `errorName` : handler en échec, transaction annulée, Stripe réessaie).
 - Paiement `REQUIRES_ACTION`/`FAILED` : vérifier l'email client, contacter le client, annuler si délai dépassé (DEC-13).
 
 ## RB-04 — Email indisponible
@@ -31,16 +31,20 @@ Aucun prix n'est inventé (BR-51). Le site affiche une invitation à contacter l
 
 Adaptateur `src/integrations/maps` (VTC-024) : les logs `routing attempt failed` / `routing unavailable` portent `code`, `reason`, `httpStatus`, `attempt`, `latencyMs` (jamais de lieu ni de clé).
 
-| `code` / `reason`                                 | Cause probable                                             | Action                                                     |
-| ------------------------------------------------- | ---------------------------------------------------------- | ---------------------------------------------------------- |
-| `ROUTING_PROVIDER_ERROR` / `not_configured`       | `GOOGLE_MAPS_SERVER_API_KEY` absente                       | Injecter la clé serveur (secret manager)                   |
-| `ROUTING_PROVIDER_ERROR` / `forbidden`            | Clé refusée : restriction API/IP, API non activée, billing | Vérifier la clé et ses restrictions dans la console Google |
-| `ROUTING_QUOTA_EXCEEDED` / `quota_exceeded`       | 429 ou `RESOURCE_EXHAUSTED`                                | Vérifier quotas et budget (DEC-17) ; pas de retry          |
-| `ROUTING_PROVIDER_ERROR` / `http_5xx`, `network`  | Incident Google ou réseau (déjà retenté une fois)          | Statut Google Maps Platform                                |
-| `ROUTING_PROVIDER_ERROR` / `timeout`              | Réponse > 5 s (non retentée)                               | Latence réseau sortante                                    |
-| `ROUTE_UNAVAILABLE` / `no_route`, `zero_distance` | Aucun itinéraire routier                                   | Normal : pas de prix, contact équipe                       |
+| `code` / `reason`                                 | Cause probable                                             | Action                                                      |
+| ------------------------------------------------- | ---------------------------------------------------------- | ----------------------------------------------------------- |
+| `ROUTING_PROVIDER_ERROR` / `not_configured`       | `GOOGLE_MAPS_SERVER_API_KEY` absente                       | Injecter la clé serveur (secret manager)                    |
+| `ROUTING_PROVIDER_ERROR` / `forbidden`            | Clé refusée : restriction API/IP, API non activée, billing | Vérifier la clé et ses restrictions dans la console Google  |
+| `ROUTING_QUOTA_EXCEEDED` / `quota_exceeded`       | 429 ou `RESOURCE_EXHAUSTED`                                | Vérifier quotas et budget (DEC-17) ; pas de retry           |
+| `ROUTING_PROVIDER_ERROR` / `http_5xx`, `network`  | Incident Google ou réseau (déjà retenté une fois)          | Statut Google Maps Platform                                 |
+| `ROUTING_PROVIDER_ERROR` / `timeout`              | Réponse > 5 s (non retentée)                               | Latence réseau sortante                                     |
+| `ROUTING_PROVIDER_ERROR` / `null_island`          | Point résolu à (0, 0) : réponse fournisseur incohérente    | Rejouer le trajet ; si récurrent, ouvrir un ticket          |
+| `ROUTING_PROVIDER_ERROR` / `outside_service_area` | Point résolu hors de `ROUTING_SERVICE_AREA` (provisoire)   | Lieu mal géocodé, ou zone trop étroite : vérifier la config |
+| `ROUTE_UNAVAILABLE` / `no_route`, `zero_distance` | Aucun itinéraire routier                                   | Normal : pas de prix, contact équipe                        |
 
 Côté devis (`POST /api/v1/quotes`, VTC-027), le log `quote refused` porte `code`, `reason` (`<code routing>:<reason>` pour une erreur de routing) et `temporary`. `ROUTE_UNAVAILABLE` temporaire → HTTP 503 ; `NO_ACTIVE_PRICING_RULE` ou `PRICING_UNAVAILABLE` (niveau `error`) → aucune `PricingRule` en vigueur ou règle stockée invalide : publier une version valide (admin).
+
+`ROUTING_SERVICE_AREA` invalide (VTC-039 : format autre que `sud,ouest,nord,est`, bornes hors limites ou rectangle vide) : la validation de l'environnement lève `EnvValidationError` au premier devis, avant tout appel facturé. `POST /api/v1/quotes` répond alors une erreur générique `INTERNAL_ERROR` (HTTP 500) et journalise `quote failed` avec `errorName: EnvValidationError` ; le message de l'erreur nomme la variable, jamais sa valeur. Action : corriger la variable (ou la vider pour revenir au défaut provisoire) et redéployer.
 
 ## RB-06 — Rotation de secret
 

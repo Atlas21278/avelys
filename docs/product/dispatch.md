@@ -20,6 +20,10 @@ Résultat : `COMPATIBLE`, `TIGHT` (marge faible), `CONFLICT` avec raisons lisibl
 
 > Le temps de repositionnement nécessite un appel routing ; en V1, une estimation (matrice Maps ou heuristique documentée) est acceptable si elle est explicite dans l'UI. Choix fixé dans le ticket EPIC-11 concerné.
 
+## Navigation vers les points de prise en charge et de dépose (VTC-039)
+
+Le dispatch et le chauffeur naviguent **uniquement** vers les coordonnées de l'itinéraire tarifé (`pickupLat`/`pickupLng`, `dropoffLat`/`dropoffLng`, identiques à `resolvedPoints` du snapshot de prix) ou, à défaut, vers le `placeId` soumis. **Jamais vers le libellé saisi par le client** : il est affiché pour information, mais n'est ni géocodé ni transmis à une application de navigation, car il peut être ambigu, incomplet ou différent du point réellement tarifé. Voir `docs/product/booking.md` (coordonnées stockées = coordonnées tarifées).
+
 ## Anti double-affectation (défense en profondeur)
 
 - Applicatif : vérification avant écriture pour renvoyer un message clair.

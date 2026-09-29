@@ -5,6 +5,7 @@ import { PROVISIONAL_RULE, route } from "@/domain/pricing/fixtures";
 import type { PricingRuleConfig } from "@/domain/pricing/rule";
 import { parsePricingSnapshot } from "@/domain/pricing/snapshot";
 import { Prisma, type PrismaClient } from "@/generated/prisma/client";
+import { GoogleRoutesProvider } from "@/integrations/maps/google-routes";
 import { RoutingError, type RoutingProvider } from "@/integrations/maps/routing";
 import { runWithRequestContext } from "@/lib/request-context";
 import { db } from "@/server/db";
@@ -174,6 +175,11 @@ describe("booking creation service (integration)", () => {
     const snapshot = parsePricingSnapshot(booking.pricingSnapshot);
     expect(snapshot.rule).toEqual(rule);
     expect(snapshot.totals.ttcCents).toBe(booking.totalTtcCents);
+    // The snapshot keeps the priced end points, the same as the booking columns (VTC-039).
+    expect(snapshot.resolvedPoints).toEqual({
+      origin: { lat: booking.pickupLat, lng: booking.pickupLng },
+      destination: { lat: booking.dropoffLat, lng: booking.dropoffLng },
+    });
 
     const customer = await db().customer.findUniqueOrThrow({ where: { id: created.customerId } });
     expect(customer).toMatchObject({
@@ -250,6 +256,66 @@ describe("booking creation service (integration)", () => {
     await expectNothingWritten();
   });
 
+  describe("with the Google Routes adapter (mocked fetch): implausible resolved points (VTC-039)", () => {
+    const googleLocation = ({ lat, lng }: { lat: number; lng: number }) => ({
+      latLng: { latitude: lat, longitude: lng },
+    });
+    const adapterFor = (destination: { lat: number; lng: number }) => {
+      const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(
+        new Response(
+          JSON.stringify({
+            routes: [
+              {
+                distanceMeters: ROUTE.distanceMeters,
+                duration: `${ROUTE.durationSeconds}s`,
+                legs: [
+                  {
+                    startLocation: googleLocation(PRICED_ORIGIN),
+                    endLocation: googleLocation(destination),
+                  },
+                ],
+              },
+            ],
+          }),
+          { status: 200, headers: { "Content-Type": "application/json" } },
+        ),
+      );
+      const provider = new GoogleRoutesProvider({
+        // Test-only placeholder: fetch is mocked, Google is never called.
+        apiKey: () => "test-key-never-real-0000",
+        fetch: fetchMock,
+        now: () => NOW,
+        logger: { info: vi.fn(), warn: vi.fn() },
+      });
+      return { provider, fetchMock };
+    };
+
+    it.each([
+      ["resolved to (0, 0)", { lat: 0, lng: 0 }],
+      ["resolved outside the service area", { lat: 40.7128, lng: -74.006 }],
+    ])("writes nothing when a point is %s", async (_label, destination) => {
+      const { provider, fetchMock } = adapterFor(destination);
+      computeRoute.mockImplementation((routeRequest) => provider.computeRoute(routeRequest));
+
+      const error = await refusal(createBooking(request(), deps()));
+      expect(error.code).toBe("ROUTE_UNAVAILABLE");
+      expect(fetchMock).toHaveBeenCalledOnce();
+      await expectNothingWritten();
+    });
+
+    it("creates the booking when both points are inside the service area", async () => {
+      const { provider } = adapterFor(PRICED_DESTINATION);
+      computeRoute.mockImplementation((routeRequest) => provider.computeRoute(routeRequest));
+
+      const created = await createBooking(request(), deps());
+      const stored = await db().booking.findUniqueOrThrow({ where: { id: created.bookingId } });
+      expect(parsePricingSnapshot(stored.pricingSnapshot).resolvedPoints).toEqual({
+        origin: PRICED_ORIGIN,
+        destination: PRICED_DESTINATION,
+      });
+    });
+  });
+
   it("reuses an existing guest customer matched by normalised email, without merging", async () => {
     const first = await createBooking(request(), deps());
     const profileBefore = await db().customer.findUniqueOrThrow({
@@ -299,6 +365,83 @@ describe("booking creation service (integration)", () => {
     for (const personal of ["Other Name", "+33199999999", "guest@"]) {
       expect(serialised).not.toContain(personal);
     }
+  });
+
+  it("serialises two concurrent requests for one email onto one guest customer (VTC-036)", async () => {
+    // Deterministic overlap, no sleep: a third transaction holds the per-email advisory lock
+    // (same key as `persist`), both requests are started and the test waits until PostgreSQL
+    // reports both of them blocked on that lock; only then is the lock released. Without the
+    // lock (or with a different key) they never wait and the test fails instead of passing.
+    const email = "guest@avelys.test";
+    let releaseHolder!: () => void;
+    const holderReleased = new Promise<void>((resolve) => (releaseHolder = resolve));
+    let holderLocked!: () => void;
+    const holderHasLock = new Promise<void>((resolve) => (holderLocked = resolve));
+
+    const holder = db().$transaction(
+      async (tx) => {
+        await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`customer:${email}`}, 0))::text AS locked`;
+        holderLocked();
+        await holderReleased;
+      },
+      { timeout: 14_000 },
+    );
+    await holderHasLock;
+
+    let settled = false;
+    const both = Promise.allSettled([
+      createBooking(request(), deps()),
+      createBooking(
+        request({ customer: { name: "Second Guest", email: " GUEST@Avelys.TEST", locale: "en" } }),
+        deps(),
+      ),
+    ]).finally(() => (settled = true));
+
+    try {
+      // Bounded poll (the interval is a polling pace, not a timing assumption).
+      const deadline = Date.now() + 10_000;
+      for (;;) {
+        if (settled) throw new Error("the requests completed without waiting for the email lock");
+        const [row] = await db().$queryRaw<{ waiting: number }[]>`
+          SELECT count(*)::int AS waiting FROM pg_locks
+          WHERE locktype = 'advisory' AND NOT granted
+            AND database = (SELECT oid FROM pg_database WHERE datname = current_database())`;
+        if (row?.waiting === 2) break;
+        if (Date.now() > deadline) {
+          throw new Error(
+            `both requests were not blocked on the email lock within 10 s (waiting: ${row?.waiting ?? 0})`,
+          );
+        }
+        await new Promise((resolve) => setTimeout(resolve, 25));
+      }
+    } finally {
+      releaseHolder();
+      // An expired holder must not mask the original error.
+      await holder.catch(() => undefined);
+      // Let both requests finish, so none writes rows during the next test's beforeEach.
+      await both;
+    }
+
+    const results = await both;
+    const created = results.map((result) => {
+      if (result.status === "rejected") throw result.reason;
+      return result.value;
+    });
+    const [first, second] = created;
+
+    expect(first?.customerId).toBeDefined();
+    expect(second?.customerId).toBe(first?.customerId);
+    expect(second?.reference).not.toBe(first?.reference);
+    await expect(db().customer.count()).resolves.toBe(1);
+    await expect(db().customer.count({ where: { email, userId: null } })).resolves.toBe(1);
+    await expect(db().booking.count()).resolves.toBe(2);
+    const trail = await db().auditLog.findMany({
+      where: { entityType: "Booking", action: "booking.create" },
+    });
+    expect(trail).toHaveLength(2);
+    expect(new Set(trail.map((row) => row.entityId))).toEqual(
+      new Set(created.map((booking) => booking.bookingId)),
+    );
   });
 
   it("stores no phone on the booking when none is submitted, whatever the profile holds", async () => {
