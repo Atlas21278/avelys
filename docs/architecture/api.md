@@ -77,7 +77,7 @@ Réponse 200 (`cache-control: no-store`) :
 
 - HT et TVA restent `null` tant que DEC-04 (taux de TVA) est ouvert.
 - `snapshotId` : SHA-256 du JSON du snapshot ; identifie ce devis chiffré exact (pas de stockage).
-- `PricingSnapshot` (`src/domain/pricing/snapshot.ts`, `schemaVersion` 1) : `quotedAt`, inputs (points routés sans libellé, heure locale + fuseau + instant UTC, passagers, bagages), règle complète (id, version, configuration), route, composantes `BaseFare`, totaux TTC/HT/TVA. Sa validation recalcule le tarif de base avec sa propre règle et sa route : un snapshot incohérent est refusé.
+- `PricingSnapshot` (`src/domain/pricing/snapshot.ts`, `schemaVersion` 1) : `quotedAt`, inputs (points routés sans libellé, heure locale + fuseau + instant UTC, passagers, bagages), règle complète (id, version, configuration), route, points de départ et d'arrivée résolus par le fournisseur (`resolvedPoints`, VTC-039 : ajout rétrocompatible sans changement de `schemaVersion`, les snapshots antérieurs sans ce champ restent valides), composantes `BaseFare`, totaux TTC/HT/TVA. Sa validation recalcule le tarif de base avec sa propre règle et sa route : un snapshot incohérent est refusé.
 
 Erreurs (aucun prix n'est produit) :
 

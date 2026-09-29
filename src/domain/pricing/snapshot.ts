@@ -19,14 +19,26 @@ import { PricingError, PricingRuleConfigSchema, RouteInputSchema } from "./rule"
 
 export const PRICING_SNAPSHOT_SCHEMA_VERSION = 1;
 
+const SnapshotLatLngSchema = z.strictObject({
+  lat: z.number().min(-90).max(90),
+  lng: z.number().min(-180).max(180),
+});
+
 /** Routed point as sent to the routing provider: a place id or coordinates, never both. */
 const SnapshotWaypointSchema = z.union([
   z.strictObject({ placeId: z.string().min(1) }),
-  z.strictObject({
-    lat: z.number().min(-90).max(90),
-    lng: z.number().min(-180).max(180),
-  }),
+  SnapshotLatLngSchema,
 ]);
+
+/**
+ * Where the priced road route actually starts and ends, as resolved by the routing provider
+ * (VTC-035, VTC-039): the coordinates the price was computed for, and the ones stored on the
+ * booking. Dispatch navigates to these, never to the label typed by the customer.
+ */
+export const PricingSnapshotResolvedPointsSchema = z.strictObject({
+  origin: SnapshotLatLngSchema,
+  destination: SnapshotLatLngSchema,
+});
 
 const exact = z.int().nonnegative();
 
@@ -54,6 +66,11 @@ export const PricingSnapshotSchema = z
     inputs: PricingSnapshotInputsSchema,
     rule: PricingRuleConfigSchema,
     route: RouteInputSchema,
+    /**
+     * Added by VTC-039 without a schema version bump: every new snapshot has it, snapshots
+     * stored before it do not and remain valid (schema version 1 is read either way).
+     */
+    resolvedPoints: PricingSnapshotResolvedPointsSchema.optional(),
     baseFare: z.strictObject({
       schemaVersion: z.literal(BASE_FARE_SCHEMA_VERSION),
       exactUnitsPerCent: z.literal(EXACT_UNITS_PER_CENT),
@@ -101,6 +118,7 @@ export const PricingSnapshotSchema = z
 
 export type PricingSnapshot = z.output<typeof PricingSnapshotSchema>;
 export type PricingSnapshotInputs = z.output<typeof PricingSnapshotInputsSchema>;
+export type PricingSnapshotResolvedPoints = z.output<typeof PricingSnapshotResolvedPointsSchema>;
 
 function baseFarePart(fare: BaseFare): PricingSnapshot["baseFare"] {
   return {
@@ -146,19 +164,27 @@ export function parsePricingSnapshot(input: unknown): PricingSnapshot {
   return result.data;
 }
 
-/** Builds the snapshot of a base fare computed by `computeBaseFare`, validated by its schema. */
+/**
+ * Builds the snapshot of a base fare computed by `computeBaseFare`, validated by its schema.
+ * `resolvedPoints` is required here: only snapshots stored before VTC-039 lack it.
+ */
 export function buildPricingSnapshot(args: {
   fare: BaseFare;
   inputs: PricingSnapshotInputs;
+  resolvedPoints: PricingSnapshotResolvedPoints;
   quotedAt: Date;
 }): PricingSnapshot {
-  const { fare, inputs, quotedAt } = args;
+  const { fare, inputs, resolvedPoints, quotedAt } = args;
   return parsePricingSnapshot({
     schemaVersion: PRICING_SNAPSHOT_SCHEMA_VERSION,
     quotedAt: quotedAt.toISOString(),
     inputs,
     rule: { ...fare.rule },
     route: { ...fare.route },
+    resolvedPoints: {
+      origin: { lat: resolvedPoints.origin.lat, lng: resolvedPoints.origin.lng },
+      destination: { lat: resolvedPoints.destination.lat, lng: resolvedPoints.destination.lng },
+    },
     baseFare: baseFarePart(fare),
     totals: {
       currency: fare.total.currency,

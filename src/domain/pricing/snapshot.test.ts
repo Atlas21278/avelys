@@ -19,11 +19,23 @@ const INPUTS: PricingSnapshotInputs = {
   passengers: 2,
   luggage: 1,
 };
+const RESOLVED_POINTS = {
+  origin: { lat: 48.8584, lng: 2.2945 },
+  destination: { lat: 49.0096, lng: 2.548 },
+};
 const QUOTED_AT = new Date("2026-10-20T08:00:00.000Z");
 
 function snapshot(distanceMeters = 22_345) {
   const fare = computeBaseFare(PROVISIONAL_RULE, route({ distanceMeters }));
-  return { fare, snapshot: buildPricingSnapshot({ fare, inputs: INPUTS, quotedAt: QUOTED_AT }) };
+  return {
+    fare,
+    snapshot: buildPricingSnapshot({
+      fare,
+      inputs: INPUTS,
+      resolvedPoints: RESOLVED_POINTS,
+      quotedAt: QUOTED_AT,
+    }),
+  };
 }
 
 function codeOf(fn: () => unknown): unknown {
@@ -45,6 +57,7 @@ describe("PricingSnapshot", () => {
       inputs: INPUTS,
       rule: fare.rule,
       route: fare.route,
+      resolvedPoints: RESOLVED_POINTS,
       baseFare: {
         schemaVersion: fare.schemaVersion,
         exactUnitsPerCent: fare.exactUnitsPerCent,
@@ -68,6 +81,15 @@ describe("PricingSnapshot", () => {
   it("round-trips through JSON (as stored in Booking.pricingSnapshot)", () => {
     const { snapshot: built } = snapshot();
     expect(parsePricingSnapshot(JSON.parse(JSON.stringify(built)))).toEqual(built);
+  });
+
+  it("still reads a snapshot stored before VTC-039, without resolved points", () => {
+    const { snapshot: built } = snapshot();
+    const { resolvedPoints, ...legacy } = built;
+    expect(resolvedPoints).toEqual(RESOLVED_POINTS);
+    const parsed = parsePricingSnapshot(JSON.parse(JSON.stringify(legacy)));
+    expect(parsed).toEqual(legacy);
+    expect(parsed.resolvedPoints).toBeUndefined();
   });
 
   it("records a minimum-bound fare", () => {
@@ -110,6 +132,34 @@ describe("PricingSnapshot", () => {
         ...s,
         inputs: { ...INPUTS, origin: { placeId: "p", lat: 48.8, lng: 2.3 } },
       }),
+    ],
+    [
+      "resolved points given as a place id",
+      (s: object) => ({
+        ...s,
+        resolvedPoints: { ...RESOLVED_POINTS, origin: { placeId: "test-place-origin" } },
+      }),
+    ],
+    [
+      "a resolved point with an extra label",
+      (s: object) => ({
+        ...s,
+        resolvedPoints: {
+          ...RESOLVED_POINTS,
+          destination: { ...RESOLVED_POINTS.destination, label: "Test destination" },
+        },
+      }),
+    ],
+    [
+      "an out-of-range resolved point",
+      (s: object) => ({
+        ...s,
+        resolvedPoints: { ...RESOLVED_POINTS, origin: { lat: 91, lng: 2.29 } },
+      }),
+    ],
+    [
+      "a resolved destination missing",
+      (s: object) => ({ ...s, resolvedPoints: { origin: RESOLVED_POINTS.origin } }),
     ],
     ["zero passengers", (s: object) => ({ ...s, inputs: { ...INPUTS, passengers: 0 } })],
     ["an invalid route", (s: object) => ({ ...s, route: route({ distanceMeters: 0 }) })],

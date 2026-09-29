@@ -157,14 +157,20 @@ describe("GoogleRoutesProvider — success", () => {
           {
             distanceMeters: 1_000,
             duration: "60s",
-            legs: [{ startLocation: { latLng: { latitude: 0.5 } }, endLocation: { latLng: {} } }],
+            // Longitude 0 is the Greenwich meridian, inside the provisional area (Normandy).
+            legs: [
+              {
+                startLocation: { latLng: { latitude: 49.2 } },
+                endLocation: googleLocation(RESOLVED_END),
+              },
+            ],
           },
         ],
       }),
     ]);
     await expect(provider.computeRoute(byPlace)).resolves.toMatchObject({
-      origin: { lat: 0.5, lng: 0 },
-      destination: { lat: 0, lng: 0 },
+      origin: { lat: 49.2, lng: 0 },
+      destination: RESOLVED_END,
     });
   });
 });
@@ -207,6 +213,111 @@ describe("GoogleRoutesProvider — resolved end points are required (VTC-035)", 
       expect(fetchMock).toHaveBeenCalledOnce();
     },
   );
+});
+
+describe("GoogleRoutesProvider — resolved points must be plausible (VTC-039)", () => {
+  const routeWith = (start: { lat: number; lng: number }, end: { lat: number; lng: number }) =>
+    json(200, { routes: [{ distanceMeters: 1_000, duration: "60s", legs: [leg(start, end)] }] });
+  const NEW_YORK = { lat: 40.7128, lng: -74.006 };
+
+  it.each([
+    [
+      "an origin at (0, 0)",
+      json(200, {
+        routes: [
+          {
+            distanceMeters: 1_000,
+            duration: "60s",
+            legs: [{ startLocation: { latLng: {} }, endLocation: googleLocation(RESOLVED_END) }],
+          },
+        ],
+      }),
+      "null_island",
+    ],
+    ["a destination at (0, 0)", routeWith(RESOLVED_START, { lat: 0, lng: 0 }), "null_island"],
+    ["an origin outside the area", routeWith(NEW_YORK, RESOLVED_END), "outside_service_area"],
+    ["a destination outside the area", routeWith(RESOLVED_START, NEW_YORK), "outside_service_area"],
+    [
+      "swapped latitude and longitude",
+      routeWith({ lat: RESOLVED_START.lng, lng: RESOLVED_START.lat }, RESOLVED_END),
+      "outside_service_area",
+    ],
+  ])(
+    "raises ROUTING_PROVIDER_ERROR on %s: no price, no retry",
+    async (_label, response, reason) => {
+      const { provider, fetchMock, logs } = setup([response, ok()]);
+      const error = await routingError(provider.computeRoute(byPlace));
+      expect(error.code).toBe("ROUTING_PROVIDER_ERROR");
+      expect(error.reason).toBe(reason);
+      expect(fetchMock).toHaveBeenCalledOnce();
+      // Neither the message nor the log names the point (BR-60).
+      const logged = JSON.stringify(logs);
+      expect(logged).toContain(reason);
+      for (const text of [error.message, logged]) {
+        expect(text).not.toMatch(/40\.71|74\.00|48\.85|2\.29|49\.00|2\.55/);
+      }
+    },
+  );
+
+  it("uses the configured service area, read on each call", async () => {
+    const paris = { south: 48.7, west: 2.2, north: 49.1, east: 2.6 };
+    let area = paris;
+    const serviceArea = vi.fn(() => area);
+    const { provider } = setup([ok(), ok()], { serviceArea });
+
+    await expect(provider.computeRoute(byPlace)).resolves.toMatchObject({
+      origin: RESOLVED_START,
+      destination: RESOLVED_END,
+    });
+    area = { south: 48.8, west: 2.2, north: 48.9, east: 2.4 };
+    const error = await routingError(provider.computeRoute(byPlace));
+    expect(error.reason).toBe("outside_service_area");
+    expect(serviceArea).toHaveBeenCalledTimes(2);
+  });
+
+  it("reads the service area before the billed call", async () => {
+    const serviceArea = vi.fn((): never => {
+      throw new Error("invalid ROUTING_SERVICE_AREA");
+    });
+    const { provider, fetchMock } = setup([ok()], { serviceArea });
+    await expect(provider.computeRoute(byPlace)).rejects.toThrow("invalid ROUTING_SERVICE_AREA");
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("reads a missing latitude as 0 and accepts it with a world-wide service area", async () => {
+    const { provider } = setup(
+      [
+        json(200, {
+          routes: [
+            {
+              distanceMeters: 1_000,
+              duration: "60s",
+              // Only the longitude is set: proto3 omitted the zero latitude (the equator).
+              legs: [
+                {
+                  startLocation: { latLng: { longitude: 2.3 } },
+                  endLocation: googleLocation(RESOLVED_END),
+                },
+              ],
+            },
+          ],
+        }),
+      ],
+      { serviceArea: () => ({ south: -90, west: -180, north: 90, east: 180 }) },
+    );
+    await expect(provider.computeRoute(byPlace)).resolves.toMatchObject({
+      origin: { lat: 0, lng: 2.3 },
+      destination: RESOLVED_END,
+    });
+  });
+
+  it("refuses (0, 0) even with a world-wide service area", async () => {
+    const { provider } = setup([routeWith(RESOLVED_START, { lat: 0, lng: 0 })], {
+      serviceArea: () => ({ south: -90, west: -180, north: 90, east: 180 }),
+    });
+    const error = await routingError(provider.computeRoute(byPlace));
+    expect(error.reason).toBe("null_island");
+  });
 });
 
 describe("GoogleRoutesProvider — no route, never a fallback", () => {

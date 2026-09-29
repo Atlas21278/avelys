@@ -2,6 +2,11 @@ import "server-only";
 
 import { z } from "zod";
 
+import {
+  checkServiceArea,
+  PROVISIONAL_SERVICE_AREA,
+  type ServiceArea,
+} from "@/domain/geo/service-area";
 import { RouteInputSchema } from "@/domain/pricing/rule";
 
 import {
@@ -71,6 +76,11 @@ export interface GoogleRoutesOptions {
   /** Linear backoff: `retryDelayMs × attempt` before the next attempt. */
   retryDelayMs?: number;
   routingPreference?: RoutingPreference;
+  /**
+   * Broad area every resolved end point must fall in (VTC-039), read on each call like the key.
+   * Defaults to `PROVISIONAL_SERVICE_AREA`. A point outside it, or at (0, 0), gets no price.
+   */
+  serviceArea?: () => ServiceArea;
 }
 
 /** A `google.type.LatLng`; proto3 omits zero values, so an absent axis means 0. */
@@ -189,6 +199,9 @@ export class GoogleRoutesProvider implements RoutingProvider {
       throw error;
     }
 
+    // Read before the (billed) provider call: a misconfigured area fails without spending one.
+    const serviceArea = this.options.serviceArea?.() ?? PROVISIONAL_SERVICE_AREA;
+
     const body = JSON.stringify({
       origin: toGoogleWaypoint(parsed.data.origin),
       destination: toGoogleWaypoint(parsed.data.destination),
@@ -199,7 +212,7 @@ export class GoogleRoutesProvider implements RoutingProvider {
 
     for (let attempt = 1; ; attempt += 1) {
       const started = performance.now();
-      const result = await this.attempt(apiKey, body);
+      const result = await this.attempt(apiKey, body, serviceArea);
       const latencyMs = Math.round(performance.now() - started);
 
       if (result.ok) {
@@ -229,7 +242,11 @@ export class GoogleRoutesProvider implements RoutingProvider {
     }
   }
 
-  private async attempt(apiKey: string, body: string): Promise<AttemptResult> {
+  private async attempt(
+    apiKey: string,
+    body: string,
+    serviceArea: ServiceArea,
+  ): Promise<AttemptResult> {
     let response: Response;
     let text: string;
     try {
@@ -348,6 +365,24 @@ export class GoogleRoutesProvider implements RoutingProvider {
         false,
         status,
       );
+    }
+
+    // A point the provider resolved to (0, 0) or far outside the service area is a geocoding or
+    // provider error, not a trip: never priced, never stored (VTC-039). Not retried: the same
+    // request resolves the same way. The reason names the check, never the point (BR-60).
+    for (const point of [origin, destination]) {
+      const check = checkServiceArea(point, serviceArea);
+      if (check !== "INSIDE") {
+        return failure(
+          "ROUTING_PROVIDER_ERROR",
+          check === "NULL_ISLAND" ? "null_island" : "outside_service_area",
+          check === "NULL_ISLAND"
+            ? "Routing provider resolved a point to (0, 0)"
+            : "Routing provider resolved a point outside the service area",
+          false,
+          status,
+        );
+      }
     }
     return { ok: true, route: { route: route.data, origin, destination } };
   }
