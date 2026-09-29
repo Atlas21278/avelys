@@ -46,6 +46,8 @@ export default defineConfig({
             BETTER_AUTH_SECRET: "integration-tests-only-placeholder-not-a-secret",
             // Documentation range standing in for the ingress hops (RFC 5737 TEST-NET-2).
             TRUSTED_PROXIES: "198.51.100.0/24",
+            // Public booking routes are enabled in CI (VTC-045); off by default elsewhere.
+            PUBLIC_BOOKING_ENABLED: "true",
             LOG_LEVEL: "silent",
           },
           fileParallelism: false,

@@ -7,8 +7,8 @@ Source : Master Spec §21, §18.
 | Surface           | Mécanisme                                                             | Auth                                             |
 | ----------------- | --------------------------------------------------------------------- | ------------------------------------------------ |
 | Devis public      | Route handler `POST /api/v1/quotes` (ou server action)                | Anonyme, rate-limitée, anti-spam                 |
-| Réservation       | Server actions / `POST /api/v1/bookings`                              | Anonyme (guest) ou session client                |
-| Moyen de paiement | `POST /api/v1/payment-setups` (VTC-031, `docs/product/payments.md`)   | Anonyme ; rate limiting à venir (INFRA-005)      |
+| Réservation       | `POST /api/v1/bookings` (VTC-045, ci-dessous)                         | Anonyme (guest) ; interrupteur, INFRA-005        |
+| Moyen de paiement | `POST /api/v1/payment-setups` (VTC-031, `docs/product/payments.md`)   | Anonyme ; interrupteur, INFRA-005                |
 | Espace client     | Server components + actions                                           | Session `CUSTOMER`                               |
 | Back-office       | Server components + actions sous `/admin`                             | Session `ADMIN`/`DISPATCHER` + 2FA               |
 | Chauffeur         | Actions dédiées (démarrer/terminer/no-show)                           | Session `DRIVER`                                 |
@@ -30,7 +30,7 @@ Les route handlers publics sont préfixés `/api/v1` pour permettre une évoluti
 - `correlationId` présent dans les logs et Sentry.
 - Jamais de stack trace ni de détail interne en production.
 
-Catalogue actuel (`src/lib/errors.ts`) : `INVALID_INPUT` (400), `BOOKING_LEAD_TIME_TOO_SHORT`, `LOCAL_TIME_NONEXISTENT`, `LOCAL_TIME_AMBIGUOUS`, `ROUTE_UNAVAILABLE`, `PAYMENT_METHOD_REQUIRED` (422), `PRICE_CHANGED` (409), `NO_ACTIVE_PRICING_RULE`, `PRICING_UNAVAILABLE`, `BOOKING_REFERENCE_UNAVAILABLE`, `PAYMENT_UNAVAILABLE` (VTC-031, enregistrement du moyen de paiement), `DATABASE_UNAVAILABLE` (503), `INTERNAL_ERROR` (500) ; webhook Stripe (VTC-030) : `INVALID_WEBHOOK_SIGNATURE` (400), `WEBHOOK_NOT_CONFIGURED` (500). `PRICE_CHANGED`, `PAYMENT_METHOD_REQUIRED` et `BOOKING_REFERENCE_UNAVAILABLE` sont produits par le service de création de réservation (VTC-028, `docs/product/booking.md`), qui n'a pas encore de route publique. La langue du `message` suit `Accept-Language` (`en*` → anglais, sinon français).
+Catalogue actuel (`src/lib/errors.ts`) : `INVALID_INPUT` (400), `BOOKING_LEAD_TIME_TOO_SHORT`, `LOCAL_TIME_NONEXISTENT`, `LOCAL_TIME_AMBIGUOUS`, `ROUTE_UNAVAILABLE`, `PAYMENT_METHOD_REQUIRED` (422), `PRICE_CHANGED`, `PAYMENT_SETUP_CONFLICT` (409, VTC-045), `NO_ACTIVE_PRICING_RULE`, `PRICING_UNAVAILABLE`, `BOOKING_REFERENCE_UNAVAILABLE`, `PAYMENT_UNAVAILABLE` (VTC-031, Stripe inutilisable), `DATABASE_UNAVAILABLE` (503), `NOT_FOUND` (404, route publique désactivée, VTC-045), `INTERNAL_ERROR` (500) ; webhook Stripe (VTC-030) : `INVALID_WEBHOOK_SIGNATURE` (400), `WEBHOOK_NOT_CONFIGURED` (500). `PRICE_CHANGED`, `PAYMENT_METHOD_REQUIRED` et `BOOKING_REFERENCE_UNAVAILABLE` sont produits par le service de création de réservation (VTC-028, `docs/product/booking.md`), exposé par `POST /api/v1/bookings` (VTC-045). La langue du `message` suit `Accept-Language` (`en*` → anglais, sinon français).
 
 ## `POST /api/v1/quotes` — devis serveur (VTC-027)
 
@@ -96,6 +96,61 @@ Erreurs (aucun prix n'est produit) :
 | `INTERNAL_ERROR`              | 500  | Erreur inattendue (détail dans les logs uniquement)                      |
 
 Ordre des contrôles : entrée → heure locale → délai → règle active → appel de routing (facturé en dernier). Logs : code, raison technique, `snapshotId`, version de règle, total, distance — jamais d'adresse, de libellé, de coordonnée ni de `placeId` (BR-60). Une erreur inattendue n'est journalisée que par son nom (`errorName`) et le `correlationId` : ni message ni stack, qui pourraient citer un lieu.
+
+## Interrupteur des routes de réservation publiques (VTC-045)
+
+`PUBLIC_BOOKING_ENABLED` (booléen `true`/`false`, Zod, **`false` par défaut dans tous les environnements**). Tant qu'il n'est pas `true`, `POST /api/v1/bookings` **et** `POST /api/v1/payment-setups` répondent 404 `NOT_FOUND` avant de lire le corps : aucun appel Stripe ni Maps, aucune écriture. Activé en local (`.env.example`) et en CI (tests d'intégration) ; en production uniquement par INFRA-006, après la limitation par IP et les proxys de confiance d'INFRA-005. Environnement illisible : 500, fermé. Retour arrière sans déploiement de code : repasser la variable à `false`.
+
+Sur ces deux routes anonymes, le `correlationId` (logs, réponses, `AuditLog`) est **toujours tiré par le serveur** : l'en-tête `x-request-id` du client est ignoré (`correlationIdFrom(headers, { ignoreIncoming: true })`, `src/lib/request-context.ts`), pour qu'un client ne choisisse pas l'identifiant de sa piste d'audit. La réponse le renvoie dans `x-request-id`.
+
+## `POST /api/v1/bookings` — demande de réservation (VTC-045)
+
+Crée une réservation `REQUESTED` (`docs/product/booking.md`, service de création et soumission idempotente) : prix toujours recalculé par le serveur (BR-12), moyen de paiement enregistré par `payment-setups` et vérifié chez Stripe. Runtime Node, jamais mis en cache.
+
+> **Pas de limitation par IP** ici : prérequis bloquant de l'activation en production (INFRA-005, INFRA-006).
+
+Requête (JSON, schéma strict de `createBooking` : toute clé inconnue, un montant ou un snapshot en particulier, est refusée) :
+
+```json
+{
+  "origin": { "label": "Gare de Lyon", "lat": 48.8443, "lng": 2.3743, "placeId": "ChIJ…" },
+  "destination": { "label": "CDG T2", "lat": 49.0097, "lng": 2.5479 },
+  "pickupLocalDateTime": "2026-10-25T14:30",
+  "passengers": 2,
+  "luggage": 1,
+  "customer": { "name": "…", "email": "…", "phone": "+33…", "locale": "fr" },
+  "customerNotes": "…",
+  "transport": { "kind": "FLIGHT", "number": "AF123", "scheduledAt": "2026-10-25T14:10:00+01:00" },
+  "termsAccepted": true,
+  "displayedTotal": { "amountCents": 4852, "currency": "EUR" },
+  "paymentSetupId": "seti_…"
+}
+```
+
+`displayedTotal` n'est qu'une comparaison avec le prix recalculé, jamais un prix.
+
+Réponse (`cache-control: no-store`), rien d'autre (ni prix, ni id interne, ni id Stripe) :
+
+- **201** : réservation créée — `{ "booking": { "reference": "VTC-…", "status": "REQUESTED" } }`.
+- **200** : même corps, **rejeu** d'une soumission déjà enregistrée (même `paymentSetupId`, même email normalisé), statut courant ; aucune écriture ni appel Stripe/Maps. Deux soumissions concurrentes : une réservation, deux réponses identiques (201 et 200).
+
+Erreurs `{ "error": { "code", "message", "correlationId" } }`, message selon `Accept-Language` :
+
+| Code                                                                                                     | HTTP | Cause                                                                                                                                     |
+| -------------------------------------------------------------------------------------------------------- | ---- | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| `NOT_FOUND`                                                                                              | 404  | `PUBLIC_BOOKING_ENABLED` désactivé (défaut)                                                                                               |
+| `INVALID_INPUT`                                                                                          | 400  | JSON ou schéma invalide, clé inconnue                                                                                                     |
+| `LOCAL_TIME_NONEXISTENT`, `LOCAL_TIME_AMBIGUOUS`                                                         | 422  | Heure locale inexistante ou ambiguë                                                                                                       |
+| `BOOKING_LEAD_TIME_TOO_SHORT`                                                                            | 422  | Délai minimal (BR-31)                                                                                                                     |
+| `ROUTE_UNAVAILABLE`                                                                                      | 422  | Aucun itinéraire routier                                                                                                                  |
+| `ROUTE_UNAVAILABLE`                                                                                      | 503  | Fournisseur de routing indisponible (BR-51)                                                                                               |
+| `PRICE_CHANGED`                                                                                          | 409  | Prix recalculé différent ; le corps porte aussi `"total": { "amountCents", "currency" }` (nouveau TTC serveur)                            |
+| `PAYMENT_METHOD_REQUIRED`                                                                                | 422  | SetupIntent absent, invalide, non confirmé, d'un autre email, ou déjà utilisé par la demande d'un autre email                             |
+| `PAYMENT_UNAVAILABLE`                                                                                    | 503  | Panne Stripe, erreur réseau, clé absente ou non test, levées par le garde : **aucun message ni cause Stripe** dans la réponse ou les logs |
+| `NO_ACTIVE_PRICING_RULE`, `PRICING_UNAVAILABLE`, `BOOKING_REFERENCE_UNAVAILABLE`, `DATABASE_UNAVAILABLE` | 503  | Indisponibilités serveur                                                                                                                  |
+| `INTERNAL_ERROR`                                                                                         | 500  | Inattendu (nom d'erreur seul dans les logs)                                                                                               |
+
+Ordre des contrôles : interrupteur → JSON → schéma → rejeu (`paymentSetupId`, lecture seule) → devis serveur → comparaison du prix → garde du moyen de paiement (Stripe) → transaction. Logs : code, raison technique, `bookingRef` ; jamais de nom, email, téléphone, lieu, id Stripe ni message Stripe (BR-60).
 
 ## Règles
 

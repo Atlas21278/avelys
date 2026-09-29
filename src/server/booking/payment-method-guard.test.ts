@@ -1,9 +1,16 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import type { PaymentSetupGateway, SetupIntentSummary } from "@/integrations/stripe";
+import Stripe from "stripe";
+
+import {
+  StripeConfigError,
+  type PaymentSetupGateway,
+  type SetupIntentSummary,
+} from "@/integrations/stripe";
 
 import {
   createStripePaymentMethodGuard,
+  PaymentMethodUnavailableError,
   type StripePaymentMethodGuardDeps,
 } from "./payment-method-guard";
 
@@ -30,6 +37,7 @@ const SUCCEEDED: SetupIntentSummary = {
   livemode: false,
   fromBookingRequestFlow: true,
   customerId: "cus_Test123",
+  customerEmail: "guest@avelys.test",
   paymentMethodId: "pm_Test123",
 };
 
@@ -39,8 +47,8 @@ beforeEach(() => {
   retrieveSetupIntent.mockResolvedValue(SUCCEEDED);
 });
 
-function check(paymentSetupId: string | undefined) {
-  return guard.confirmedPaymentMethod({ paymentSetupId });
+function check(paymentSetupId: string | undefined, email = "guest@avelys.test") {
+  return guard.confirmedPaymentMethod({ paymentSetupId, email });
 }
 
 function loggedReason(): unknown {
@@ -109,14 +117,62 @@ describe("Stripe payment method guard", () => {
     expect(loggedReason()).toBe(reason);
   });
 
+  it.each([
+    ["the same email", "guest@avelys.test", "guest@avelys.test"],
+    ["another case", "Guest@Avelys.TEST", "guest@avelys.test"],
+    ["surrounding spaces", "guest@avelys.test", "  guest@avelys.test "],
+  ])("accepts a Customer holding %s as the request", async (_label, stored, requested) => {
+    retrieveSetupIntent.mockResolvedValue({ ...SUCCEEDED, customerEmail: stored });
+    await expect(check("seti_Test123", requested)).resolves.not.toBeNull();
+  });
+
+  it.each([
+    ["another email", "other@avelys.test"],
+    ["no email", null],
+  ])("refuses a SetupIntent whose Customer holds %s", async (_label, stored) => {
+    retrieveSetupIntent.mockResolvedValue({ ...SUCCEEDED, customerEmail: stored });
+    await expect(check("seti_Test123")).resolves.toBeNull();
+    expect(loggedReason()).toBe("payment_setup_email_mismatch");
+    expect(JSON.stringify(log.info.mock.calls)).not.toMatch(/avelys\.test/);
+  });
+
   it("logs no Stripe id", async () => {
     retrieveSetupIntent.mockResolvedValue({ ...SUCCEEDED, status: "requires_payment_method" });
     await check("seti_Test123");
     expect(JSON.stringify(log.info.mock.calls)).not.toMatch(/seti_|cus_|pm_/);
   });
 
-  it("propagates a Stripe failure instead of reporting a missing payment method", async () => {
-    retrieveSetupIntent.mockRejectedValue(new Error("Stripe unavailable"));
-    await expect(check("seti_Test123")).rejects.toThrow("Stripe unavailable");
+  it.each([
+    [
+      "a Stripe API failure",
+      new Stripe.errors.StripeAPIError({ type: "api_error", message: "guest@avelys.test" }),
+      "stripe_error",
+    ],
+    [
+      "a network failure",
+      new Stripe.errors.StripeConnectionError({ type: "api_error", message: "down" }),
+      "stripe_error",
+    ],
+  ])("reports %s as unavailable, without the Stripe error", async (_label, failure, reason) => {
+    retrieveSetupIntent.mockRejectedValue(failure);
+    const error: unknown = await check("seti_Test123").catch((caught: unknown) => caught);
+    expect(error).toBeInstanceOf(PaymentMethodUnavailableError);
+    expect((error as PaymentMethodUnavailableError).reason).toBe(reason);
+    expect((error as Error).cause).toBeUndefined();
+    expect((error as Error).message).not.toContain("guest");
+  });
+
+  it("reports a missing or live key as unavailable", async () => {
+    gateway.mockImplementationOnce(() => {
+      throw new StripeConfigError("not_configured");
+    });
+    const error: unknown = await check("seti_Test123").catch((caught: unknown) => caught);
+    expect(error).toBeInstanceOf(PaymentMethodUnavailableError);
+    expect((error as PaymentMethodUnavailableError).reason).toBe("stripe_not_configured");
+  });
+
+  it("propagates an unexpected failure as is", async () => {
+    retrieveSetupIntent.mockRejectedValue(new TypeError("bug"));
+    await expect(check("seti_Test123")).rejects.toBeInstanceOf(TypeError);
   });
 });
