@@ -78,4 +78,51 @@ describe("writeAuditLog", () => {
       writeAuditLog(client, { ...ENTRY, after: { ...AFTER, bookingRef: "guest@avelys.test" } }),
     ).rejects.toBeInstanceOf(AuditLogPayloadError);
   });
+
+  it.each(["booking.accept", "booking.refuse"] as const)(
+    "writes a %s transition with reference, status and version only",
+    async (action) => {
+      const { client, create } = writer();
+      const before = { bookingRef: "VTC-7K2M9QXB", status: "REQUESTED", version: 1 } as const;
+      const after = {
+        ...before,
+        status: action === "booking.accept" ? "ACCEPTED" : "REFUSED",
+        version: 2,
+      } as const;
+      await writeAuditLog(client, {
+        action,
+        actorType: "DISPATCHER",
+        actorId: "user-id",
+        entityId: "booking-id",
+        before,
+        after,
+        correlationId: null,
+      });
+      expect(create).toHaveBeenCalledWith({
+        data: expect.objectContaining({ entityType: "Booking", action, before, after }),
+      });
+    },
+  );
+
+  it("refuses a transition state carrying anything beyond reference, status and version", async () => {
+    const { client, create } = writer();
+    const before = { bookingRef: "VTC-7K2M9QXB", status: "REQUESTED", version: 1 } as const;
+    await expect(
+      writeAuditLog(client, {
+        action: "booking.refuse",
+        actorType: "ADMIN",
+        actorId: "user-id",
+        entityId: "booking-id",
+        before,
+        after: {
+          ...before,
+          status: "REFUSED",
+          version: 2,
+          reason: "free text",
+        } as unknown as typeof before,
+        correlationId: null,
+      }),
+    ).rejects.toBeInstanceOf(AuditLogPayloadError);
+    expect(create).not.toHaveBeenCalled();
+  });
 });
