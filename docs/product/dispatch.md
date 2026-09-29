@@ -38,7 +38,7 @@ Vue jour par défaut (semaine/mois secondaires) · demandes `REQUESTED` en prior
 
 ### Réservations en lecture seule (VTC-029)
 
-Écrans livrés, en français comme le reste de `/admin`, réservés à `ADMIN` et `DISPATCHER` avec 2FA. Aucune action d'écriture (acceptation/refus : VTC-032), aucun statut de paiement (VTC-031).
+Écrans livrés, en français comme le reste de `/admin`, réservés à `ADMIN` et `DISPATCHER` avec 2FA. Seule action d'écriture : accepter / refuser une demande `REQUESTED` depuis le détail (VTC-032, `booking.md` § Service de décision). Aucun statut de paiement (VTC-031).
 
 | Élément      | Comportement                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
 | ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |

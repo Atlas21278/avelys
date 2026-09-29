@@ -69,9 +69,22 @@ Toute autre transition échoue avec une erreur typée (`INVALID_BOOKING_TRANSITI
 - Erreurs : `BookingCreationError` (`code`, `reason` technique, `details.total` pour `PRICE_CHANGED`, `details.temporary` pour un routing indisponible), sans donnée personnelle.
 - Logs : `bookingRef` et version de règle uniquement ; jamais de nom, email, téléphone, adresse ni coordonnée (BR-60).
 
+### Service de décision (VTC-032)
+
+`acceptBooking` / `refuseBooking(reference, expectedVersion, actor, deps?)` dans `src/server/booking/decide-booking.ts` appliquent `REQUESTED → ACCEPTED` et `REQUESTED → REFUSED`.
+
+- **Une transaction** : lecture de la réservation, `assertTransition(statut, cible, rôle)` (table du domaine, droits inchangés : `ADMIN` et `DISPATCHER`), contrôle de version, `UPDATE … WHERE id AND version AND status` avec incrément de `version`, puis `AuditLog` (`booking.accept` / `booking.refuse`, acteur `ADMIN`/`DISPATCHER` + id utilisateur, `before`/`after` = `bookingRef`, statut, version ; `correlationId`). Un échec d'audit annule tout.
+- **Verrou optimiste** : le client renvoie la version affichée. Version différente → `BOOKING_CONCURRENT_UPDATE` ; statut déjà changé → `INVALID_BOOKING_TRANSITION` (le statut est contrôlé en premier). Deux décisions simultanées : l'`UPDATE` conditionnel de la seconde ne trouve plus de ligne, une seule réussit. Référence inconnue → `BOOKING_NOT_FOUND`. Rien n'est écrit dans ces cas.
+- **Le service refuse aussi tout acteur hors table** (`DRIVER`, `CUSTOMER`, `SYSTEM`), même si l'appelant a omis le contrôle d'accès.
+- **Refus** : aucun débit ; le moyen de paiement enregistré n'est pas utilisé. Pas de motif de refus ni d'email client (EPIC-13).
+- **Port après commit** : `onBookingAccepted(bookingId)` (`src/server/booking/after-decision.ts`), appelé uniquement après le commit d'une acceptation. No-op par défaut ; le débit off-session s'y branchera (VTC-033) et devra être idempotent. Son échec est journalisé (`bookingRef`, nom d'erreur) et la réservation **reste `ACCEPTED`** (BR-50, `payments.md`).
+- **Server actions** (`src/app/admin/reservations/[reference]/actions.ts`) : corps testable dans `runBookingDecision` (`src/server/booking/decision-action.ts`). À chaque appel : session, rôle `ADMIN`/`DISPATCHER` et 2FA revérifiés côté serveur (`checkAccess`), sinon `ACCESS_DENIED` sans écriture ; entrée Zod stricte (`reference` tolérante, `expectedVersion`), sinon `INVALID_INPUT`. Vérification d'`Origin` (CSRF) par Next.js. Erreurs renvoyées en `{ code, message, correlationId }` (messages français : `src/server/booking/decision-errors.ts`) ; la page est rafraîchie après chaque issue.
+- **Écran** : sur le détail `/admin/reservations/[reference]`, boutons « Accepter » / « Refuser » affichés seulement si `allowedTransitions(statut, rôle)` les contient, chacun derrière une confirmation explicite. Après un conflit, le message reste affiché au-dessus de l'état rafraîchi.
+- Logs : `bookingRef`, statuts, rôle et code d'erreur uniquement (BR-60).
+
 ### Journal d'audit
 
-`writeAuditLog(tx, entry)` (`src/server/audit/audit-log.ts`) insère une ligne `AuditLog` dans la transaction de l'écriture qu'elle trace. `before`/`after` passent par une **liste blanche par action** (schémas Zod stricts) : toute clé hors liste (nom, email, téléphone, adresse) est refusée avant écriture (`INVALID_AUDIT_PAYLOAD`, message sans valeur). Une réservation y est identifiée par son `bookingRef`. Action couverte : `booking.create`.
+`writeAuditLog(tx, entry)` (`src/server/audit/audit-log.ts`) insère une ligne `AuditLog` dans la transaction de l'écriture qu'elle trace. `before`/`after` passent par une **liste blanche par action** (schémas Zod stricts) : toute clé hors liste (nom, email, téléphone, adresse) est refusée avant écriture (`INVALID_AUDIT_PAYLOAD`, message sans valeur). Une réservation y est identifiée par son `bookingRef`. Actions couvertes : `booking.create` ; `booking.accept` et `booking.refuse` (VTC-032, `before`/`after` limités à `bookingRef`, statut et version).
 
 ## Champs Booking indispensables
 
