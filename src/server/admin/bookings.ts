@@ -190,6 +190,8 @@ const DETAIL_SELECT = {
   transportScheduledAt: true,
   customerNotes: true,
   internalNotes: true,
+  // Optimistic lock sent back by the accept/refuse actions (VTC-032).
+  version: true,
   createdAt: true,
   updatedAt: true,
   cancelledAt: true,

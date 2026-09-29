@@ -6,6 +6,7 @@ import type { ReactNode } from "react";
 
 import { RouteLine } from "@/components/ui/route-line";
 import { textLinkClasses } from "@/components/ui/text-link";
+import { allowedTransitions } from "@/domain/booking/transitions";
 import { formatParisDateTime, formatParisOffset } from "@/lib/dates";
 import { type BookingAuditEntry, getBackOfficeBooking } from "@/server/admin/bookings";
 import { requireBackOfficeUser } from "@/server/auth/back-office";
@@ -22,6 +23,7 @@ import {
   TRANSPORT_LABELS,
 } from "../_components/format";
 import { StatusBadge } from "../_components/status-badge";
+import { BookingDecision } from "./booking-decision";
 
 export const dynamic = "force-dynamic";
 
@@ -30,13 +32,17 @@ export const metadata: Metadata = { title: "Réservation — Back-office Avelys"
 export default async function BookingDetailPage({
   params,
 }: PageProps<"/admin/reservations/[reference]">) {
-  await requireBackOfficeUser();
+  const user = await requireBackOfficeUser();
 
   const { reference } = await params;
   const booking = await getBackOfficeBooking(await headers(), reference);
   if (!booking) notFound();
 
   const pickup = booking.pickupAt;
+  // Buttons follow the domain table for this status and role; the server action re-checks it.
+  const decisions = allowedTransitions(booking.status, user.role).filter(
+    (status): status is "ACCEPTED" | "REFUSED" => status === "ACCEPTED" || status === "REFUSED",
+  );
 
   return (
     <>
@@ -59,6 +65,11 @@ export default async function BookingDetailPage({
               (heure de Paris, {formatParisOffset(pickup)})
             </span>
           </p>
+          <BookingDecision
+            reference={booking.reference}
+            version={booking.version}
+            allowed={decisions}
+          />
         </header>
 
         <Section title="Trajet">

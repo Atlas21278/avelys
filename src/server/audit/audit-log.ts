@@ -39,6 +39,13 @@ export const PaymentAuditStateSchema = z.strictObject({
   attempt: z.int().nonnegative(),
 });
 
+/** Booking state recorded for a status transition (VTC-032): reference, status and version only. */
+export const BookingTransitionAuditStateSchema = BookingAuditStateSchema.pick({
+  bookingRef: true,
+  status: true,
+  version: true,
+});
+
 /** Whitelist: one entry per audited action, with its entity type and before/after schemas. */
 const AUDIT_ACTIONS = {
   /** `— → REQUESTED` (VTC-028). */
@@ -52,6 +59,18 @@ const AUDIT_ACTIONS = {
     entityType: "Payment",
     before: z.null(),
     after: PaymentAuditStateSchema,
+  },
+  /** `REQUESTED → ACCEPTED` (VTC-032). */
+  "booking.accept": {
+    entityType: "Booking",
+    before: BookingTransitionAuditStateSchema,
+    after: BookingTransitionAuditStateSchema,
+  },
+  /** `REQUESTED → REFUSED` (VTC-032). */
+  "booking.refuse": {
+    entityType: "Booking",
+    before: BookingTransitionAuditStateSchema,
+    after: BookingTransitionAuditStateSchema,
   },
 } as const satisfies Record<
   string,
