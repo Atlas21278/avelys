@@ -48,7 +48,8 @@ Champs §20.1 reportés, ajoutés plus tard par migration additive :
 | Champ                                                                            | Ticket                                                 |
 | -------------------------------------------------------------------------------- | ------------------------------------------------------ |
 | `driverId`, `vehicleId`, `blockedFrom`, `blockedUntil` + contraintes d'exclusion | EPIC-11 (modèles `Driver` / `Vehicle`, SQL ci-dessous) |
-| Référence au `Payment` courant (le statut reste lu depuis `Payment`, BR-41)      | EPIC-10 (modèle `Payment`)                             |
+
+La référence au `Payment` courant (`currentPaymentId`) est livrée par VTC-031 (section `Payment` ci-dessous).
 
 Rollback : revert de la PR ; les tables restent inutilisées tant qu'aucun service ne les écrit. Suppression manuelle en dev local uniquement, jamais de `DROP` ailleurs.
 
@@ -86,6 +87,25 @@ Migration `20260929080000_processed_webhook_event`, **additive** (un enum `Webho
 
 Rollback : revert de la PR ; la table reste inutilisée. Suppression manuelle en dev local uniquement.
 
+### Paiement : `Payment` (VTC-031)
+
+Migration `20260929120000_payment`, **additive** (expand) : un enum `PaymentStatus`, une table `Payment`, une colonne **nullable** `Booking.currentPaymentId` ; aucune modification ni backfill de l'existant. Domaine : `src/domain/payment/{status,transitions}.ts` ; écriture : `createBooking` (`src/server/booking/create-booking.ts`) ; tests d'intégration : `src/server/booking/create-booking.int.test.ts`. Flux et table de transitions : `docs/product/payments.md`.
+
+| Élément                    | Choix                                                                                                                                                                                                                                                                                                                                |
+| -------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `PaymentStatus`            | Les 8 valeurs de `payments.md`, dans l'ordre de `PAYMENT_STATUSES` (test de parité unitaire, comme `BookingStatus`). `AUTHORIZED` réservé, sans transition.                                                                                                                                                                          |
+| Colonnes                   | `id` (cuid2), `bookingId`, `status` (défaut `PENDING`), `amountCents INT` + `currency CHAR(3)` (TTC du booking à la création, BR-10), `stripeCustomerId`, `stripeSetupIntentId`, `stripePaymentMethodId`, `stripePaymentIntentId` (nullable, VTC-033), `attempt INT` (défaut 0), `version INT` (défaut 1), `createdAt`, `updatedAt`. |
+| Données carte              | **Aucune** (BR-40) : uniquement des identifiants d'objets Stripe (`VARCHAR(255)`). Ni PAN, ni CVC, ni `last4`, ni date d'expiration (test de parité sur les colonnes).                                                                                                                                                               |
+| Unicité                    | `stripeSetupIntentId` unique : **un SetupIntent sert à une seule réservation**, même sous concurrence (la seconde transaction échoue en `P2002` → `PAYMENT_METHOD_REQUIRED`, tout est annulé). `stripePaymentIntentId` unique (plusieurs `NULL` admis).                                                                              |
+| `Booking.currentPaymentId` | Nullable, **unique** (un Payment n'est courant que pour un booking), clé étrangère vers `Payment` `ON DELETE SET NULL ON UPDATE RESTRICT`. Le statut de paiement est lu depuis `Payment`, jamais copié sur `Booking` (BR-41). Nul seulement pour les bookings antérieurs à VTC-031.                                                  |
+| `Payment.bookingId`        | Clé étrangère `ON DELETE RESTRICT ON UPDATE RESTRICT` (index) : un booking qui a des paiements ne se supprime pas. Le code applicatif ne supprime jamais un `Payment` ; le `SET NULL` du pointeur courant ne sert qu'au nettoyage des bases de dev/test.                                                                             |
+| Écriture                   | Dans la transaction de création : `Booking` → `Payment` `PENDING` → `Booking.currentPaymentId` → `AuditLog` `payment.create` (`entityType` `Payment`, sans id Stripe ni PII). Le pointeur fait partie de la création : la `version` du booking reste 1.                                                                              |
+| Verrou                     | `version` (verrou optimiste) et `attempt` (clé d'idempotence `booking:{id}:charge:{attempt}`) seront incrémentés par le service de débit (VTC-033).                                                                                                                                                                                  |
+
+Nettoyage des tests d'intégration : supprimer les `Payment` avant les `Booking` (`payment.deleteMany()` puis `booking.deleteMany()`).
+
+Rollback : revert de la PR ; la colonne et la table restent en place, ignorées par l'ancienne version. Suppression manuelle en dev local uniquement (`ALTER TABLE "Booking" DROP COLUMN "currentPaymentId"`, puis la table et l'enum), jamais de `DROP` ailleurs.
+
 ### Contact par réservation (VTC-037)
 
 Migration `20260928224334_booking_contact`, **additive** (expand) : trois colonnes **nullables** sur `Booking`, sans valeur par défaut, sans backfill ni modification de l'existant. Décision : DEC-25 (option 1). Tests : `src/server/booking/create-booking.int.test.ts`, `src/server/admin/bookings.int.test.ts`, `src/domain/booking/contact.test.ts`.
@@ -111,7 +131,7 @@ Rollback : revert du code ; les colonnes restent en place, ignorées par l'ancie
 | `DriverAvailability`, `VehicleAvailability` | Créneaux d'indisponibilité datés   | `tstzrange` ou `startsAt`/`endsAt` UTC                                        |
 | `Booking`                                   | Réservation + snapshot tarifaire   | voir `docs/product/booking.md`                                                |
 | `BookingStop`                               | Étapes                             | ordre, adresse                                                                |
-| `Payment`                                   | État + références Stripe           | `stripePaymentIntentId`, `stripeSetupIntentId`, montant centimes              |
+| `Payment`                                   | État + références Stripe           | Livré (VTC-031) : voir la section `Payment` ci-dessus                         |
 | `Refund`                                    | Remboursements                     | montant, motif, acteur                                                        |
 | `Invoice`                                   | Facture immuable                   | numéro (DEC-04), snapshot légal                                               |
 | `PromoCode` (+ `PromoRedemption`)           | Promotions                         | compteur d'utilisations transactionnel                                        |

@@ -45,6 +45,7 @@ let customerId = "";
 async function resetBookings() {
   const client = db();
   await client.auditLog.deleteMany();
+  await client.payment.deleteMany();
   await client.booking.deleteMany();
   await client.customer.deleteMany();
   await client.pricingRule.deleteMany();

@@ -7,7 +7,7 @@ const serverEnv = vi.fn(() => ({
 
 vi.mock("@/lib/env/server", () => ({ serverEnv: () => serverEnv() }));
 
-const { stripeClient, stripeWebhooks, StripeConfigError, StripeWebhookError } =
+const { stripeClient, stripePaymentSetup, stripeWebhooks, StripeConfigError, StripeWebhookError } =
   await import("./index");
 
 describe("Stripe adapter wiring", () => {
@@ -19,6 +19,15 @@ describe("Stripe adapter wiring", () => {
   it("fails with a typed error on first use when the secret key is not configured", () => {
     expect(() => stripeClient()).toThrowError(StripeConfigError);
     expect(serverEnv).toHaveBeenCalled();
+  });
+
+  it("gives no SetupIntent gateway without a usable test key", () => {
+    expect(() => stripePaymentSetup()).toThrowError(StripeConfigError);
+    serverEnv.mockReturnValueOnce({
+      STRIPE_SECRET_KEY: ["sk", "live", "notARealKey000"].join("_"),
+      STRIPE_WEBHOOK_SECRET: undefined,
+    });
+    expect(() => stripePaymentSetup()).toThrowError(StripeConfigError);
   });
 
   it("fails as not configured when the webhook signing secret is missing", () => {

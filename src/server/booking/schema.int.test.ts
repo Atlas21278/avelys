@@ -61,6 +61,7 @@ describe("booking schema (integration)", () => {
   beforeEach(async () => {
     const client = db();
     await client.auditLog.deleteMany();
+    await client.payment.deleteMany();
     await client.booking.deleteMany();
     await client.customer.deleteMany();
     await client.pricingRule.deleteMany();
@@ -69,6 +70,7 @@ describe("booking schema (integration)", () => {
 
   afterAll(async () => {
     // Leave no booking behind: stale rows would break later foreign key validations.
+    await db().payment.deleteMany();
     await db().booking.deleteMany();
     await db().$disconnect();
   });

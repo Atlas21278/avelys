@@ -73,6 +73,13 @@ export const API_ERRORS = {
       en: "A confirmed payment method is required to send your request. Nothing is charged at this stage.",
     },
   },
+  PAYMENT_UNAVAILABLE: {
+    status: 503,
+    message: {
+      fr: "L'enregistrement du moyen de paiement est momentanément indisponible. Aucun montant n'a été débité.",
+      en: "Saving a payment method is temporarily unavailable. Nothing has been charged.",
+    },
+  },
   BOOKING_REFERENCE_UNAVAILABLE: {
     status: 503,
     message: {

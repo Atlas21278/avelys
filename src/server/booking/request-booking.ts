@@ -1,23 +1,26 @@
 import "server-only";
 
+import { stripePaymentSetup } from "@/integrations/stripe";
 import { quote } from "@/server/quotes";
 import { db } from "@/server/db";
 
 import { createBooking, type CreateBookingDeps, type CreatedBooking } from "./create-booking";
-import { paymentMethodGuardNotConfigured } from "./payment-method-guard";
+import { createStripePaymentMethodGuard } from "./payment-method-guard";
 import { generateReference } from "./reference";
 
 /**
- * Production wiring of the booking creation service. The payment guard fails closed until
- * VTC-031 provides the Stripe implementation: no booking can be created before that.
- * No route calls this yet (the public form is a later ticket).
+ * Production wiring of the booking creation service. The payment guard reads the SetupIntent
+ * back from Stripe (test mode only, VTC-031); without a usable Stripe test key it fails with a
+ * `StripeConfigError` and no booking is created. No route calls this yet (the public form is a
+ * later ticket).
  */
 export function createBookingDeps(): CreateBookingDeps {
+  const client = db();
   return {
     quote,
-    paymentMethodGuard: paymentMethodGuardNotConfigured,
+    paymentMethodGuard: createStripePaymentMethodGuard({ gateway: stripePaymentSetup, db: client }),
     generateReference,
-    db: db(),
+    db: client,
   };
 }
 
