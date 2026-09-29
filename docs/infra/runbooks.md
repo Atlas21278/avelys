@@ -44,6 +44,8 @@ Adaptateur `src/integrations/maps` (VTC-024) : les logs `routing attempt failed`
 
 Côté devis (`POST /api/v1/quotes`, VTC-027), le log `quote refused` porte `code`, `reason` (`<code routing>:<reason>` pour une erreur de routing) et `temporary`. `ROUTE_UNAVAILABLE` temporaire → HTTP 503 ; `NO_ACTIVE_PRICING_RULE` ou `PRICING_UNAVAILABLE` (niveau `error`) → aucune `PricingRule` en vigueur ou règle stockée invalide : publier une version valide (admin).
 
+`ROUTING_SERVICE_AREA` invalide (VTC-039 : format autre que `sud,ouest,nord,est`, bornes hors limites ou rectangle vide) : la validation de l'environnement lève `EnvValidationError` au premier devis, avant tout appel facturé. `POST /api/v1/quotes` répond alors une erreur générique `INTERNAL_ERROR` (HTTP 500) et journalise `quote failed` avec `errorName: EnvValidationError` ; le message de l'erreur nomme la variable, jamais sa valeur. Action : corriger la variable (ou la vider pour revenir au défaut provisoire) et redéployer.
+
 ## RB-06 — Rotation de secret
 
 À compléter avec le secret manager retenu. Toute rotation production = `CRITICAL`, approbation humaine.

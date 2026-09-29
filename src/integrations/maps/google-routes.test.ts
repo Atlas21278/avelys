@@ -284,6 +284,33 @@ describe("GoogleRoutesProvider — resolved points must be plausible (VTC-039)",
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
+  it("reads a missing latitude as 0 and accepts it with a world-wide service area", async () => {
+    const { provider } = setup(
+      [
+        json(200, {
+          routes: [
+            {
+              distanceMeters: 1_000,
+              duration: "60s",
+              // Only the longitude is set: proto3 omitted the zero latitude (the equator).
+              legs: [
+                {
+                  startLocation: { latLng: { longitude: 2.3 } },
+                  endLocation: googleLocation(RESOLVED_END),
+                },
+              ],
+            },
+          ],
+        }),
+      ],
+      { serviceArea: () => ({ south: -90, west: -180, north: 90, east: 180 }) },
+    );
+    await expect(provider.computeRoute(byPlace)).resolves.toMatchObject({
+      origin: { lat: 0, lng: 2.3 },
+      destination: RESOLVED_END,
+    });
+  });
+
   it("refuses (0, 0) even with a world-wide service area", async () => {
     const { provider } = setup([routeWith(RESOLVED_START, { lat: 0, lng: 0 })], {
       serviceArea: () => ({ south: -90, west: -180, north: 90, east: 180 }),
