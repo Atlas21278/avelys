@@ -7,6 +7,7 @@ import { parsePricingSnapshot } from "@/domain/pricing/snapshot";
 import { Prisma, type PrismaClient } from "@/generated/prisma/client";
 import { GoogleRoutesProvider } from "@/integrations/maps/google-routes";
 import { RoutingError, type RoutingProvider } from "@/integrations/maps/routing";
+import type { PaymentSetupGateway } from "@/integrations/stripe";
 import { runWithRequestContext } from "@/lib/request-context";
 import { db } from "@/server/db";
 import {
@@ -23,6 +24,11 @@ import {
   type CreateBookingDeps,
   type CreateBookingRequest,
 } from "./create-booking";
+import {
+  createStripePaymentMethodGuard,
+  type ConfirmedPaymentMethod,
+  type PaymentMethodGuard,
+} from "./payment-method-guard";
 import { generateReference } from "./reference";
 
 // Runs against the real test database (vitest "integration" project), migrations applied.
@@ -52,7 +58,18 @@ const RESOLVED = { route: ROUTE, origin: PRICED_ORIGIN, destination: PRICED_DEST
 
 let rule: PricingRuleConfig;
 let computeRoute: ReturnType<typeof vi.fn<RoutingProvider["computeRoute"]>>;
-let hasConfirmedPaymentMethod: ReturnType<typeof vi.fn<() => Promise<boolean>>>;
+let confirmedPaymentMethod: ReturnType<typeof vi.fn<PaymentMethodGuard["confirmedPaymentMethod"]>>;
+let setupCounter = 0;
+
+/** A distinct (fake) confirmed SetupIntent per call: one booking per SetupIntent. */
+function nextPaymentMethod(): ConfirmedPaymentMethod {
+  setupCounter += 1;
+  return {
+    setupIntentId: `seti_Test${setupCounter}`,
+    customerId: `cus_Test${setupCounter}`,
+    paymentMethodId: `pm_Test${setupCounter}`,
+  };
+}
 
 function expectedTotalCents(): number {
   return computeBaseFare(rule, ROUTE).total.amountCents;
@@ -71,7 +88,7 @@ function request(overrides: Partial<CreateBookingRequest> = {}): CreateBookingRe
     transport: { kind: "TRAIN", number: "TGV 6201", scheduledAt: "2026-10-25T02:50:00+01:00" },
     termsAccepted: true,
     displayedTotal: { amountCents: expectedTotalCents(), currency: "EUR" },
-    paymentSetupId: "test-setup",
+    paymentSetupId: "seti_TestRequest",
     ...overrides,
   };
 }
@@ -86,7 +103,7 @@ function deps(overrides: Partial<CreateBookingDeps> = {}): CreateBookingDeps {
         // Arbitrary test lead time, not the business value (BR-31).
         minLeadTimeMinutes: 60,
       }),
-    paymentMethodGuard: { hasConfirmedPaymentMethod },
+    paymentMethodGuard: { confirmedPaymentMethod },
     generateReference,
     db: db(),
     ...overrides,
@@ -102,13 +119,17 @@ async function refusal(promise: Promise<unknown>): Promise<BookingCreationError>
 async function expectNothingWritten(): Promise<void> {
   await expect(db().customer.count()).resolves.toBe(0);
   await expect(db().booking.count()).resolves.toBe(0);
-  await expect(db().auditLog.count({ where: { entityType: "Booking" } })).resolves.toBe(0);
+  await expect(db().payment.count()).resolves.toBe(0);
+  await expect(
+    db().auditLog.count({ where: { entityType: { in: ["Booking", "Payment"] } } }),
+  ).resolves.toBe(0);
 }
 
 describe("booking creation service (integration)", () => {
   beforeEach(async () => {
     const client = db();
     await client.auditLog.deleteMany();
+    await client.payment.deleteMany();
     await client.booking.deleteMany();
     await client.customer.deleteMany();
     await client.pricingRule.deleteMany();
@@ -117,11 +138,14 @@ describe("booking creation service (integration)", () => {
       { type: "SYSTEM" },
     );
     computeRoute = vi.fn<RoutingProvider["computeRoute"]>().mockResolvedValue(RESOLVED);
-    hasConfirmedPaymentMethod = vi.fn<() => Promise<boolean>>().mockResolvedValue(true);
+    confirmedPaymentMethod = vi
+      .fn<PaymentMethodGuard["confirmedPaymentMethod"]>()
+      .mockImplementation(() => Promise.resolve(nextPaymentMethod()));
   });
 
   afterAll(async () => {
     // Leave no booking behind: stale rows would break later foreign key validations.
+    await db().payment.deleteMany();
     await db().booking.deleteMany();
     await db().customer.deleteMany();
     await db().$disconnect();
@@ -214,6 +238,58 @@ describe("booking creation service (integration)", () => {
     for (const personal of ["Guest", "guest@", "+331", "Test origin", "Test destination"]) {
       expect(serialised).not.toContain(personal);
     }
+  });
+
+  it("creates the PENDING Payment, the current payment reference and its audit row (VTC-031)", async () => {
+    const method = nextPaymentMethod();
+    confirmedPaymentMethod.mockResolvedValue(method);
+    const created = await runWithRequestContext({ correlationId: "test-correlation-2" }, () =>
+      createBooking(request(), deps()),
+    );
+
+    const booking = await db().booking.findUniqueOrThrow({
+      where: { id: created.bookingId },
+      include: { currentPayment: true, payments: { select: { id: true } } },
+    });
+    expect(booking.currentPaymentId).toBe(created.paymentId);
+    expect(booking.payments).toEqual([{ id: created.paymentId }]);
+    // The payment reference is part of the creation: the booking keeps its initial version.
+    expect(booking.version).toBe(1);
+    expect(booking.currentPayment).toMatchObject({
+      bookingId: booking.id,
+      status: "PENDING",
+      amountCents: booking.totalTtcCents,
+      currency: booking.currency,
+      stripeCustomerId: method.customerId,
+      stripeSetupIntentId: method.setupIntentId,
+      stripePaymentMethodId: method.paymentMethodId,
+      // Nothing charged: no PaymentIntent at the request stage.
+      stripePaymentIntentId: null,
+      attempt: 0,
+      version: 1,
+    });
+
+    const trail = await db().auditLog.findMany({
+      where: { entityType: "Payment", entityId: created.paymentId },
+    });
+    expect(trail).toHaveLength(1);
+    expect(trail[0]).toMatchObject({
+      actorType: "CUSTOMER",
+      actorId: created.customerId,
+      action: "payment.create",
+      before: null,
+      after: {
+        bookingRef: booking.reference,
+        status: "PENDING",
+        version: 1,
+        amountCents: booking.totalTtcCents,
+        currency: "EUR",
+        attempt: 0,
+      },
+      correlationId: "test-correlation-2",
+    });
+    // Neither a Stripe id nor personal data in the trail (BR-40, BR-60).
+    expect(JSON.stringify(trail[0])).not.toMatch(/seti_|cus_|pm_|guest/i);
   });
 
   it("stores the priced coordinates of a forged request, never the submitted ones (VTC-035)", async () => {
@@ -469,6 +545,7 @@ describe("booking creation service (integration)", () => {
       const created = await createBooking(request(), deps());
       expect(created.customerId).not.toBe(linked.id);
     } finally {
+      await db().payment.deleteMany();
       await db().booking.deleteMany();
       await db().customer.deleteMany();
       await db().user.delete({ where: { id: user.id } });
@@ -503,9 +580,140 @@ describe("booking creation service (integration)", () => {
   });
 
   it("refuses without a confirmed payment method and writes nothing", async () => {
-    hasConfirmedPaymentMethod.mockResolvedValue(false);
+    confirmedPaymentMethod.mockResolvedValue(null);
     const error = await refusal(createBooking(request(), deps()));
     expect(error.code).toBe("PAYMENT_METHOD_REQUIRED");
+    expect(confirmedPaymentMethod).toHaveBeenCalledWith({ paymentSetupId: "seti_TestRequest" });
+    await expectNothingWritten();
+  });
+
+  it("refuses a SetupIntent already used by a booking (unique constraint) and writes nothing more", async () => {
+    const reused = nextPaymentMethod();
+    confirmedPaymentMethod.mockResolvedValue(reused);
+    const first = await createBooking(request(), deps());
+
+    const error = await refusal(
+      createBooking(
+        request({ customer: { name: "Other Guest", email: "other-guest@avelys.test" } }),
+        deps(),
+      ),
+    );
+    expect(error.code).toBe("PAYMENT_METHOD_REQUIRED");
+    expect(error.reason).toBe("payment_setup_already_used");
+    expect(error.cause).toBeInstanceOf(Prisma.PrismaClientKnownRequestError);
+    // The second request's customer, booking, payment and audit rows were all rolled back.
+    await expect(db().customer.count()).resolves.toBe(1);
+    await expect(db().booking.count()).resolves.toBe(1);
+    await expect(db().payment.findMany({ select: { bookingId: true } })).resolves.toEqual([
+      { bookingId: first.bookingId },
+    ]);
+    await expect(
+      db().auditLog.count({ where: { entityType: { in: ["Booking", "Payment"] } } }),
+    ).resolves.toBe(2);
+  });
+
+  it("with the Stripe guard (mocked gateway): creates once, then refuses the used SetupIntent", async () => {
+    const retrieveSetupIntent = vi.fn<PaymentSetupGateway["retrieveSetupIntent"]>(() =>
+      Promise.resolve({
+        id: "seti_GuardTest1",
+        status: "succeeded",
+        usage: "off_session",
+        livemode: false,
+        fromBookingRequestFlow: true,
+        customerId: "cus_GuardTest1",
+        paymentMethodId: "pm_GuardTest1",
+      }),
+    );
+    const paymentMethodGuard = createStripePaymentMethodGuard({
+      gateway: () => ({
+        createSetupIntent: () => Promise.reject(new Error("not used")),
+        retrieveSetupIntent,
+      }),
+      db: db(),
+    });
+
+    const created = await createBooking(
+      request({ paymentSetupId: "seti_GuardTest1" }),
+      deps({ paymentMethodGuard }),
+    );
+    await expect(
+      db().payment.findUniqueOrThrow({ where: { id: created.paymentId } }),
+    ).resolves.toMatchObject({ stripeSetupIntentId: "seti_GuardTest1", status: "PENDING" });
+
+    const error = await refusal(
+      createBooking(
+        request({
+          paymentSetupId: "seti_GuardTest1",
+          customer: { name: "Other Guest", email: "other-guest@avelys.test" },
+        }),
+        deps({ paymentMethodGuard }),
+      ),
+    );
+    expect(error.code).toBe("PAYMENT_METHOD_REQUIRED");
+    // Refused from the database before Stripe is asked again.
+    expect(retrieveSetupIntent).toHaveBeenCalledTimes(1);
+    await expect(db().booking.count()).resolves.toBe(1);
+  });
+
+  it("rejects a second booking on the same SetupIntent at the database level", async () => {
+    const created = await createBooking(request(), deps());
+    const payment = await db().payment.findUniqueOrThrow({ where: { id: created.paymentId } });
+    const error: unknown = await db()
+      .payment.create({
+        data: {
+          bookingId: created.bookingId,
+          amountCents: 100,
+          currency: "EUR",
+          stripeCustomerId: "cus_Other1",
+          stripeSetupIntentId: payment.stripeSetupIntentId,
+          stripePaymentMethodId: "pm_Other1",
+        },
+      })
+      .catch((caught: unknown) => caught);
+    expect(error).toMatchObject({ code: "P2002" });
+  });
+
+  it("allows one current Payment per booking and no Payment without a booking", async () => {
+    const first = await createBooking(request(), deps());
+    const second = await createBooking(
+      request({ customer: { name: "Other Guest", email: "other-guest@avelys.test" } }),
+      deps(),
+    );
+    const sharedCurrent: unknown = await db()
+      .booking.update({
+        where: { id: second.bookingId },
+        data: { currentPaymentId: first.paymentId },
+      })
+      .catch((caught: unknown) => caught);
+    expect(sharedCurrent).toMatchObject({ code: "P2002" });
+
+    const orphan: unknown = await db()
+      .payment.create({
+        data: {
+          bookingId: "missing-booking",
+          amountCents: 100,
+          currency: "EUR",
+          stripeCustomerId: "cus_Other2",
+          stripeSetupIntentId: "seti_Other2",
+          stripePaymentMethodId: "pm_Other2",
+        },
+      })
+      .catch((caught: unknown) => caught);
+    expect(orphan).toMatchObject({ code: "P2003" });
+  });
+
+  it("rolls every row back when the payment write fails", async () => {
+    const failingPayment = db().$extends({
+      query: {
+        payment: {
+          create: () => Promise.reject(new Error("payment write failure (test)")),
+        },
+      },
+    }) as unknown as PrismaClient;
+
+    await expect(createBooking(request(), deps({ db: failingPayment }))).rejects.toThrow(
+      "payment write failure (test)",
+    );
     await expectNothingWritten();
   });
 

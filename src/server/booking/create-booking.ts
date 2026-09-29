@@ -2,8 +2,10 @@ import "server-only";
 
 import { z } from "zod";
 
+import { ContactEmailSchema } from "@/domain/booking/contact";
 import { INITIAL_BOOKING_STATUS, type BookingStatus } from "@/domain/booking/status";
 import { assertCanCreateBooking } from "@/domain/booking/transitions";
+import { INITIAL_PAYMENT_STATUS } from "@/domain/payment/status";
 import { parsePricingSnapshot } from "@/domain/pricing/snapshot";
 import { Prisma, type PrismaClient } from "@/generated/prisma/client";
 import type { ApiErrorCode } from "@/lib/errors";
@@ -18,13 +20,14 @@ import {
   type QuoteRequest,
 } from "@/server/quotes/quote";
 
-import type { PaymentMethodGuard } from "./payment-method-guard";
+import type { ConfirmedPaymentMethod, PaymentMethodGuard } from "./payment-method-guard";
 
 /**
  * Creation of a `REQUESTED` booking (VTC-028, Master Spec §6.2, §54.4, ADR-0008, ADR-0009).
  * The price is always recomputed by the server (BR-12): the amount displayed to the customer is
- * only compared with it, and the stored snapshot is the server's own (BR-13). Customer, Booking
- * and AuditLog are written in one transaction. No public route or server action here.
+ * only compared with it, and the stored snapshot is the server's own (BR-13). Customer, Booking,
+ * its `PENDING` Payment (VTC-031) and the AuditLog rows are written in one transaction. Nothing
+ * is charged: no PaymentIntent exists at this stage. No public route or server action here.
  */
 
 /** Display label of a place: stored on the booking, never priced, never logged. */
@@ -44,9 +47,6 @@ export const BookingPlaceSchema = z.strictObject({
   placeId: z.string().trim().min(1).max(1024).optional(),
 });
 
-/** Normalised email: trimmed and lower-cased, the matching key of guest customers. */
-const EmailSchema = z.string().trim().toLowerCase().max(254).pipe(z.email());
-
 const OptionalText = (max: number) => z.string().trim().min(1).max(max).optional();
 
 /**
@@ -63,7 +63,7 @@ export const CreateBookingRequestSchema = z.strictObject({
   luggage: z.int().min(0),
   customer: z.strictObject({
     name: z.string().trim().min(1).max(200),
-    email: EmailSchema,
+    email: ContactEmailSchema,
     phone: z
       .string()
       .trim()
@@ -87,7 +87,7 @@ export const CreateBookingRequestSchema = z.strictObject({
     amountCents: z.int().nonnegative(),
     currency: z.enum(CURRENCIES),
   }),
-  /** Opaque payment setup reference, checked by the `PaymentMethodGuard` (VTC-031). */
+  /** SetupIntent id (`seti_…`) of the saved payment method, checked by the guard (VTC-031). */
   paymentSetupId: z.string().trim().min(1).max(255).optional(),
 });
 
@@ -134,6 +134,8 @@ export type CreatedBooking = Readonly<{
   reference: string;
   status: BookingStatus;
   customerId: string;
+  /** Current Payment of the booking, `PENDING` (VTC-031). */
+  paymentId: string;
   total: Money;
 }>;
 
@@ -185,12 +187,25 @@ async function recompute(request: ParsedRequest, deps: CreateBookingDeps): Promi
   }
 }
 
-/** Unique violation on `Booking.reference` (the only unique column this transaction fills). */
-function isReferenceCollision(error: unknown): boolean {
+/** Unique violation (P2002) on `column`; the target is read from the error metadata. */
+function isUniqueViolationOn(error: unknown, column: string): boolean {
   if (!(error instanceof Prisma.PrismaClientKnownRequestError) || error.code !== "P2002") {
     return false;
   }
-  return JSON.stringify(error.meta ?? {}).includes("reference");
+  return JSON.stringify(error.meta ?? {}).includes(column);
+}
+
+/** Unique violation on `Booking.reference`: another reference is drawn. */
+function isReferenceCollision(error: unknown): boolean {
+  return isUniqueViolationOn(error, "reference");
+}
+
+/**
+ * Unique violation on `Payment.stripeSetupIntentId`: a concurrent request used the same
+ * SetupIntent first (one booking per SetupIntent).
+ */
+function isSetupIntentReuse(error: unknown): boolean {
+  return isUniqueViolationOn(error, "stripeSetupIntentId");
 }
 
 /** Wall-clock time without offset, stored in a `timestamp` column (read back with getUTC*). */
@@ -202,6 +217,7 @@ async function persist(
   request: ParsedRequest,
   quote: Quote,
   reference: string,
+  paymentMethod: ConfirmedPaymentMethod,
   deps: CreateBookingDeps,
 ): Promise<CreatedBooking> {
   const snapshot = parsePricingSnapshot(quote.snapshot);
@@ -294,11 +310,50 @@ async function persist(
       correlationId: currentCorrelationId() ?? null,
     });
 
+    // First Payment of the booking (VTC-031): the saved payment method, nothing charged. Its
+    // amount is the booking's TTC total; the charge at acceptance recomputes from the snapshot.
+    const payment = await tx.payment.create({
+      data: {
+        bookingId: booking.id,
+        status: INITIAL_PAYMENT_STATUS,
+        amountCents: snapshot.totals.ttcCents,
+        currency: snapshot.totals.currency,
+        stripeCustomerId: paymentMethod.customerId,
+        stripeSetupIntentId: paymentMethod.setupIntentId,
+        stripePaymentMethodId: paymentMethod.paymentMethodId,
+      },
+      select: { id: true, status: true, version: true, amountCents: true, attempt: true },
+    });
+    // Part of the creation, not a later change: the booking keeps its initial version.
+    await tx.booking.update({
+      where: { id: booking.id },
+      data: { currentPaymentId: payment.id },
+      select: { id: true },
+    });
+
+    await writeAuditLog(tx, {
+      action: "payment.create",
+      actorType: "CUSTOMER",
+      actorId: customerId,
+      entityId: payment.id,
+      before: null,
+      after: {
+        bookingRef: booking.reference,
+        status: payment.status,
+        version: payment.version,
+        amountCents: payment.amountCents,
+        currency: snapshot.totals.currency,
+        attempt: payment.attempt,
+      },
+      correlationId: currentCorrelationId() ?? null,
+    });
+
     return {
       bookingId: booking.id,
       reference: booking.reference,
       status: booking.status,
       customerId,
+      paymentId: payment.id,
       total: { amountCents: snapshot.totals.ttcCents, currency: snapshot.totals.currency },
     };
   });
@@ -331,10 +386,10 @@ export async function createBooking(
     );
   }
 
-  const hasPaymentMethod = await deps.paymentMethodGuard.hasConfirmedPaymentMethod({
+  const paymentMethod = await deps.paymentMethodGuard.confirmedPaymentMethod({
     paymentSetupId: request.paymentSetupId,
   });
-  if (!hasPaymentMethod) {
+  if (!paymentMethod) {
     throw new BookingCreationError(
       "PAYMENT_METHOD_REQUIRED",
       "no_confirmed_payment_method",
@@ -346,8 +401,18 @@ export async function createBooking(
   for (let attempt = 1; created === undefined; attempt += 1) {
     const reference = deps.generateReference();
     try {
-      created = await persist(request, quote, reference, deps);
+      created = await persist(request, quote, reference, paymentMethod, deps);
     } catch (error) {
+      if (isSetupIntentReuse(error)) {
+        logger().info({ reason: "already_used" }, "payment method refused");
+        throw new BookingCreationError(
+          "PAYMENT_METHOD_REQUIRED",
+          "payment_setup_already_used",
+          "This payment setup is already used by another booking",
+          {},
+          { cause: error },
+        );
+      }
       if (!isReferenceCollision(error)) throw error;
       logger().warn({ attempt }, "booking reference collision");
       if (attempt >= MAX_REFERENCE_ATTEMPTS) {

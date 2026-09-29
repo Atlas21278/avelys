@@ -5,6 +5,7 @@ import { z } from "zod";
 import { isValidReference } from "@/domain/booking/reference";
 import { BOOKING_STATUSES } from "@/domain/booking/status";
 import type { BookingActor } from "@/domain/booking/transitions";
+import { PAYMENT_STATUSES } from "@/domain/payment/status";
 import type { Prisma } from "@/generated/prisma/client";
 import { CURRENCIES } from "@/lib/money";
 
@@ -25,6 +26,19 @@ export const BookingAuditStateSchema = z.strictObject({
   pricingRuleVersion: z.int().positive(),
 });
 
+/**
+ * Payment state recorded in the trail: booking reference, status, version, amount and attempts.
+ * No Stripe id: the payment method id in particular identifies a card (BR-60).
+ */
+export const PaymentAuditStateSchema = z.strictObject({
+  bookingRef: z.string().refine(isValidReference, "Invalid booking reference"),
+  status: z.enum(PAYMENT_STATUSES),
+  version: z.int().positive(),
+  amountCents: z.int().nonnegative(),
+  currency: z.enum(CURRENCIES),
+  attempt: z.int().nonnegative(),
+});
+
 /** Whitelist: one entry per audited action, with its entity type and before/after schemas. */
 const AUDIT_ACTIONS = {
   /** `— → REQUESTED` (VTC-028). */
@@ -32,6 +46,12 @@ const AUDIT_ACTIONS = {
     entityType: "Booking",
     before: z.null(),
     after: BookingAuditStateSchema,
+  },
+  /** First Payment of a booking, `PENDING`, created with it (VTC-031). */
+  "payment.create": {
+    entityType: "Payment",
+    before: z.null(),
+    after: PaymentAuditStateSchema,
   },
 } as const satisfies Record<
   string,

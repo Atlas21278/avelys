@@ -78,4 +78,55 @@ describe("writeAuditLog", () => {
       writeAuditLog(client, { ...ENTRY, after: { ...AFTER, bookingRef: "guest@avelys.test" } }),
     ).rejects.toBeInstanceOf(AuditLogPayloadError);
   });
+
+  it("writes a payment creation under the Payment entity type", async () => {
+    const { client, create } = writer();
+    const after = {
+      bookingRef: "VTC-7K2M9QXB",
+      status: "PENDING",
+      version: 1,
+      amountCents: 6_188,
+      currency: "EUR",
+      attempt: 0,
+    } as const;
+    await writeAuditLog(client, {
+      ...ENTRY,
+      action: "payment.create",
+      entityId: "payment-id",
+      after,
+    });
+    expect(create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        entityType: "Payment",
+        entityId: "payment-id",
+        action: "payment.create",
+        after,
+      }) as unknown,
+    });
+  });
+
+  it.each([
+    ["a payment method id", { stripePaymentMethodId: "pm_Test123" }],
+    ["a customer id", { stripeCustomerId: "cus_Test123" }],
+    ["a card detail", { last4: "4242" }],
+  ])("refuses %s in a payment state (BR-40, BR-60)", async (_label, extra) => {
+    const { client, create } = writer();
+    await expect(
+      writeAuditLog(client, {
+        ...ENTRY,
+        action: "payment.create",
+        entityId: "payment-id",
+        after: {
+          bookingRef: "VTC-7K2M9QXB",
+          status: "PENDING",
+          version: 1,
+          amountCents: 6_188,
+          currency: "EUR",
+          attempt: 0,
+          ...extra,
+        },
+      }),
+    ).rejects.toBeInstanceOf(AuditLogPayloadError);
+    expect(create).not.toHaveBeenCalled();
+  });
 });

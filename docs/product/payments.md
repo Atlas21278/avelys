@@ -6,7 +6,7 @@ Source : Master Spec §11, §15, §21. Règles : BR-40 à BR-44. ADR-0006.
 
 Une autorisation carte expire après une durée limitée (à revérifier dans la doc Stripe à l'implémentation, **jamais codée en dur**). Pour les réservations lointaines :
 
-1. **Demande (`REQUESTED`)** — `SetupIntent` avec SCA client (`usage: 'off_session'`), Customer Stripe créé ou réutilisé. Aucun débit.
+1. **Demande (`REQUESTED`)** — `SetupIntent` avec SCA client (`usage: 'off_session'`), Customer Stripe **créé pour ce parcours** (la réutilisation d'un Customer, réservée à un compte authentifié, est hors périmètre de VTC-031). Aucun débit. Détail : « Étape 1 : enregistrement du moyen de paiement » ci-dessous.
 2. **Acceptation (`ACCEPTED`)** — `PaymentIntent` `off_session: true, confirm: true`, capture automatique, montant **recalculé côté serveur depuis le snapshot**.
    - Succès → Payment `PAID` → Booking `CONFIRMED`.
    - Authentification requise → Payment `REQUIRES_ACTION` ; email au client avec lien de paiement ; Booking reste `ACCEPTED`.
@@ -19,7 +19,55 @@ Une autorisation carte expire après une durée limitée (à revérifier dans la
 
 `PENDING` · `REQUIRES_ACTION` · `AUTHORIZED` · `PAID` · `FAILED` · `CANCELED` · `REFUNDED` · `PARTIALLY_REFUNDED`
 
-Les transitions Payment sont centralisées comme celles de Booking. Le Booking référence le Payment courant ; il ne duplique pas son statut.
+Les transitions Payment sont centralisées comme celles de Booking. Le Booking référence le Payment courant (`Booking.currentPaymentId`, VTC-031) ; il ne duplique pas son statut (BR-41). Modèle : `docs/architecture/database.md` (section `Payment`).
+
+### Transitions Payment (VTC-031)
+
+Table pure `PAYMENT_TRANSITIONS` (`src/domain/payment/transitions.ts`), testée sur toutes les paires état × état. Toute transition absente lève `InvalidPaymentTransitionError` (code `INVALID_PAYMENT_TRANSITION`). Le service appelant applique le changement et écrit l'`AuditLog` dans la même transaction.
+
+| De                     | Vers autorisés                                               |
+| ---------------------- | ------------------------------------------------------------ |
+| `PENDING`              | `REQUIRES_ACTION`, `PAID`, `FAILED`, `CANCELED`              |
+| `REQUIRES_ACTION`      | `PAID`, `FAILED`, `CANCELED`                                 |
+| `FAILED`               | `REQUIRES_ACTION`, `PAID`, `CANCELED`                        |
+| `PAID`                 | `PARTIALLY_REFUNDED`, `REFUNDED`                             |
+| `PARTIALLY_REFUNDED`   | `PARTIALLY_REFUNDED` (remboursement additionnel), `REFUNDED` |
+| `AUTHORIZED`           | aucune (réservé, ADR-0006)                                   |
+| `CANCELED`, `REFUNDED` | aucune                                                       |
+
+État initial : `PENDING` (moyen de paiement enregistré, rien débité). Aucun retour vers `PENDING`. Les transitions de remboursement existent dans la table, mais **aucun remboursement n'est implémenté** (DEC-05). Proposée par VTC-031, à valider en review : toute modification passe d'abord par ce tableau.
+
+## Étape 1 : enregistrement du moyen de paiement (VTC-031)
+
+1. **Création du SetupIntent** — `POST /api/v1/payment-setups` (`src/app/api/v1/payment-setups/route.ts` → `requestPaymentSetup`, `src/server/payments`). Entrée Zod stricte `{ "email": "…" }` (normalisé, seule donnée personnelle transmise : l'email du Customer). Le serveur génère un identifiant de parcours (`randomUUID`) dont dérivent les clés d'idempotence Stripe (`payment-setup:{journeyId}:customer`, `payment-setup:{journeyId}:setup-intent`), puis crée via l'adaptateur `src/integrations/stripe/setup-intents.ts` :
+   - un **Customer Stripe dédié** (email, métadonnée `flow: booking_request`) ; jamais de recherche de Customer par email (sinon une carte pourrait être rattachée au Customer d'un tiers sur simple saisie d'une adresse) ;
+   - un **SetupIntent** `usage: 'off_session'`, `payment_method_types: ['card']`, rattaché à ce Customer, même métadonnée. **Aucun montant, aucun débit.**
+   - Réponse 200 : `{ "paymentSetup": { "clientSecret": "…" } }`, rien d'autre (`cache-control: no-store`). Le `client_secret` n'est ni stocké ni journalisé.
+2. **Confirmation côté navigateur** — Stripe.js / Payment Element confirme le SetupIntent (SCA si la banque la demande). Le numéro de carte et le CVC ne transitent jamais par nos serveurs (BR-40). Formulaire public : ticket ultérieur.
+3. **Création de la réservation** — le formulaire envoie `paymentSetupId` (id `seti_…`) avec la demande. `createStripePaymentMethodGuard` relit le SetupIntent chez Stripe et exige : format `seti_…`, non déjà utilisé (base), connu de Stripe, `livemode: false`, métadonnée du parcours, `status = succeeded`, `usage = off_session`, Customer et moyen de paiement présents. Sinon `PAYMENT_METHOD_REQUIRED` (raison journalisée sans id). Puis, dans **la transaction de création** : `Payment` `PENDING` (montant TTC et devise du Booking, `stripeCustomerId`, `stripeSetupIntentId`, `stripePaymentMethodId`, `attempt = 0`), `Booking.currentPaymentId`, `AuditLog` `payment.create`. Aucun PaymentIntent (VTC-033).
+
+Métadonnées Stripe : uniquement `flow: booking_request` ; aucune donnée personnelle hormis l'email du Customer. Le `bookingRef` n'existe pas encore à la création du SetupIntent : il sera porté par le PaymentIntent (VTC-033).
+
+Erreurs de l'endpoint :
+
+| Code                  | HTTP | Cause                                                                                |
+| --------------------- | ---- | ------------------------------------------------------------------------------------ |
+| `INVALID_INPUT`       | 400  | JSON invalide, email invalide, clé inconnue (montant, Customer…)                     |
+| `PAYMENT_UNAVAILABLE` | 503  | Clé Stripe absente ou non test (garde VTC-030), erreur Stripe, réponse inexploitable |
+| `INTERNAL_ERROR`      | 500  | Erreur inattendue (nom d'erreur seul dans les logs)                                  |
+
+**Pas encore de limite de débit** sur cet endpoint public (comme `POST /api/v1/quotes`) : chaque appel crée un Customer Stripe. INFRA-005 (DEC-17) doit ajouter une limite par IP avant toute exposition en production.
+
+Logs : codes et raisons uniquement ; jamais l'email, le `client_secret`, ni un id Stripe (Customer, SetupIntent, moyen de paiement).
+
+### Vérification manuelle (test mode)
+
+Compte Stripe en test mode, clés de test dans le `.env` local du propriétaire (jamais ailleurs), `pnpm dev` :
+
+1. `curl -X POST localhost:3000/api/v1/payment-setups -H 'content-type: application/json' -d '{"email":"test@example.com"}'` → 200 avec un `clientSecret`.
+2. Confirmer ce SetupIntent avec la carte de test SCA de Stripe (`4000 0025 0000 3155`, authentification requise) via Stripe.js ou le Dashboard de test ; vérifier dans le Dashboard : SetupIntent `succeeded`, `usage: off_session`, Customer dédié, **aucun paiement**.
+3. Appeler `requestBooking()` avec `paymentSetupId` = id du SetupIntent : réservation `REQUESTED`, `Payment` `PENDING`. Un second appel avec le même id → `PAYMENT_METHOD_REQUIRED`.
+4. Avec une clé `sk_live_…` : l'endpoint répond 503 `PAYMENT_UNAVAILABLE`, aucun appel Stripe.
 
 ## Idempotence
 
@@ -61,7 +109,7 @@ Le statut Stripe reste séparé du statut Booking (BR-41) : un handler met à jo
 
 ## Moyens de paiement
 
-CB, Apple Pay, Google Pay lorsque disponibles (Payment Element). Jamais de PAN/CVC côté serveur.
+CB, Apple Pay, Google Pay lorsque disponibles (Payment Element). Jamais de PAN/CVC côté serveur. VTC-031 limite le SetupIntent au type `card` ; Apple Pay et Google Pay relèvent d'un ticket ultérieur.
 
 ## Environnements
 

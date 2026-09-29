@@ -111,7 +111,7 @@ model RateLimit {
 // ---------------------------------------------------------------------------
 // Booking (VTC-026, Master Spec §20.1, ADR-0007, ADR-0008, ADR-0009, ADR-0015).
 // Deferred, additive later: driverId/vehicleId/blockedFrom/blockedUntil and the exclusion
-// constraints (EPIC-11), the current Payment reference (EPIC-10). See database.md.
+// constraints (EPIC-11). See database.md.
 // ---------------------------------------------------------------------------
 
 /// Mirrors BOOKING_STATUSES (src/domain/booking/status.ts); a unit test fails if they diverge.
@@ -208,7 +208,7 @@ model Booking {
   totalHtCents       Int?
   vatCents           Int?
   /// ISO 4217.
-  currency           String @db.Char(3)
+  currency           String      @db.Char(3)
   /// Immutable pricing snapshot validated by a versioned Zod schema (BR-13, ADR-0009).
   pricingSnapshot    Json
   /// Rule version the quote was priced with (VTC-025). Composite key: the pair must exist as is.
@@ -217,6 +217,13 @@ model Booking {
   pricingRule        PricingRule @relation(fields: [pricingRuleId, pricingRuleVersion], references: [id, version], onDelete: Restrict, onUpdate: Restrict)
 
   status BookingStatus @default(REQUESTED)
+
+  /// Current Payment (VTC-031). Its status is read from Payment, never copied here (BR-41).
+  /// Null only on bookings created before the Payment model existed.
+  currentPaymentId String?   @unique
+  currentPayment   Payment?  @relation("BookingCurrentPayment", fields: [currentPaymentId], references: [id], onDelete: SetNull, onUpdate: Restrict)
+  /// Every Payment of the booking (the current one included).
+  payments         Payment[] @relation("BookingPayments")
 
   /// Airport or station arrival (BR-34): scheduled time distinct from pickupAt.
   transportKind        TransportKind?
@@ -289,9 +296,51 @@ model PricingRule {
 }
 
 // ---------------------------------------------------------------------------
-// Payments (VTC-030, Master Spec §11, ADR-0006). Webhook idempotence only: the Payment model
-// and every Stripe object reference come with later EPIC-10 tickets.
+// Payments (VTC-030, VTC-031, Master Spec §11, ADR-0006). Stripe test mode only (BR-44).
 // ---------------------------------------------------------------------------
+
+/// Mirrors PAYMENT_STATUSES (src/domain/payment/status.ts); a unit test fails if they diverge.
+/// Transitions: src/domain/payment/transitions.ts. AUTHORIZED is reserved (ADR-0006).
+enum PaymentStatus {
+  PENDING
+  REQUIRES_ACTION
+  AUTHORIZED
+  PAID
+  FAILED
+  CANCELED
+  REFUNDED
+  PARTIALLY_REFUNDED
+}
+
+/// PSP state and references of one payment of a booking (BR-41). Never a card number, CVC or
+/// card detail (BR-40): only Stripe object ids.
+model Payment {
+  id                    String        @id @default(cuid(2))
+  bookingId             String
+  booking               Booking       @relation("BookingPayments", fields: [bookingId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  status                PaymentStatus @default(PENDING)
+  /// Integer cents (BR-10): the booking's TTC total when the Payment is created.
+  amountCents           Int
+  /// ISO 4217.
+  currency              String        @db.Char(3)
+  /// Stripe Customer created for this booking request (`cus_…`).
+  stripeCustomerId      String        @db.VarChar(255)
+  /// SetupIntent that saved the payment method (`seti_…`): one booking per SetupIntent.
+  stripeSetupIntentId   String        @unique @db.VarChar(255)
+  /// Saved payment method (`pm_…`), charged off-session at acceptance (VTC-033).
+  stripePaymentMethodId String        @db.VarChar(255)
+  /// PaymentIntent of the charge (`pi_…`), set by VTC-033.
+  stripePaymentIntentId String?       @unique @db.VarChar(255)
+  /// Charge attempts made so far (idempotency key `booking:{id}:charge:{attempt}`).
+  attempt               Int           @default(0)
+  /// Optimistic lock, incremented by every write of the payment service.
+  version               Int           @default(1)
+  createdAt             DateTime      @default(now()) @db.Timestamptz(3)
+  updatedAt             DateTime      @updatedAt @db.Timestamptz(3)
+  currentFor            Booking?      @relation("BookingCurrentPayment")
+
+  @@index([bookingId])
+}
 
 enum WebhookProvider {
   STRIPE

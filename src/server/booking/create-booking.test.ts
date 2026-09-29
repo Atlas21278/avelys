@@ -12,6 +12,7 @@ import {
   CreateBookingRequestSchema,
   type CreateBookingDeps,
 } from "./create-booking";
+import type { ConfirmedPaymentMethod, PaymentMethodGuard } from "./payment-method-guard";
 
 const log = { info: vi.fn(), warn: vi.fn(), error: vi.fn() };
 vi.mock("@/lib/logger", () => ({ logger: () => log }));
@@ -59,17 +60,22 @@ const REQUEST = {
   customer: { name: "Guest Test", email: "  Guest@Avelys.TEST ", phone: "+33 1 00 00 00 00" },
   termsAccepted: true,
   displayedTotal: { amountCents: FARE.total.amountCents, currency: "EUR" },
-  paymentSetupId: "test-setup",
+  paymentSetupId: "seti_Test123",
 };
 
 const quote = vi.fn<(request: QuoteRequest) => Promise<Quote>>();
-const hasConfirmedPaymentMethod = vi.fn<() => Promise<boolean>>();
+const PAYMENT_METHOD: ConfirmedPaymentMethod = {
+  setupIntentId: "seti_Test123",
+  customerId: "cus_Test123",
+  paymentMethodId: "pm_Test123",
+};
+const confirmedPaymentMethod = vi.fn<PaymentMethodGuard["confirmedPaymentMethod"]>();
 const $transaction = vi.fn(() => Promise.reject(new Error("database must not be reached")));
 
 function deps(): CreateBookingDeps {
   return {
     quote,
-    paymentMethodGuard: { hasConfirmedPaymentMethod },
+    paymentMethodGuard: { confirmedPaymentMethod },
     generateReference: () => "VTC-7K2M9QXB",
     db: { $transaction } as unknown as PrismaClient,
   };
@@ -85,7 +91,7 @@ async function refusal(input: unknown): Promise<BookingCreationError> {
 beforeEach(() => {
   vi.clearAllMocks();
   quote.mockResolvedValue(sampleQuote());
-  hasConfirmedPaymentMethod.mockResolvedValue(true);
+  confirmedPaymentMethod.mockResolvedValue(PAYMENT_METHOD);
 });
 
 describe("CreateBookingRequestSchema", () => {
@@ -172,14 +178,14 @@ describe("createBooking refusals (nothing written)", () => {
     });
     expect(error.code).toBe("PRICE_CHANGED");
     expect(error.details.total).toEqual(FARE.total);
-    expect(hasConfirmedPaymentMethod).not.toHaveBeenCalled();
+    expect(confirmedPaymentMethod).not.toHaveBeenCalled();
   });
 
   it("refuses with PAYMENT_METHOD_REQUIRED when the guard finds no confirmed method", async () => {
-    hasConfirmedPaymentMethod.mockResolvedValue(false);
+    confirmedPaymentMethod.mockResolvedValue(null);
     const error = await refusal(REQUEST);
     expect(error.code).toBe("PAYMENT_METHOD_REQUIRED");
-    expect(hasConfirmedPaymentMethod).toHaveBeenCalledWith({ paymentSetupId: "test-setup" });
+    expect(confirmedPaymentMethod).toHaveBeenCalledWith({ paymentSetupId: "seti_Test123" });
   });
 
   it.each([

@@ -4,7 +4,15 @@
  * created before the copy existed carry no contact columns and fall back to their customer.
  */
 
+import { z } from "zod";
+
 import type { Locale } from "@/i18n/routing";
+
+/**
+ * Normalised contact email: trimmed and lower-cased. The matching key of guest customers, and the
+ * email given to the Stripe Customer of a booking request (VTC-031).
+ */
+export const ContactEmailSchema = z.string().trim().toLowerCase().max(254).pipe(z.email());
 
 /**
  * Language of a contact: the app's routed locales, a single source (VTC-038). The Prisma `Locale`
