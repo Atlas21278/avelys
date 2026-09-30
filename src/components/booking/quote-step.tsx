@@ -70,7 +70,9 @@ export function QuoteStep({ search, mapsBrowserKey, serviceArea, onQuoteChange }
   const locale = useLocale() as Locale;
   const [state, dispatch] = useReducer(quoteStepReducer, search, initialQuoteStepState);
   const [mapsUnavailable, setMapsUnavailable] = useState(false);
-  const inFlight = useRef(false);
+  // Revision of the request in flight: blocks a double click before React re-renders, while an
+  // edit (new revision) may submit again at once; the stale answer is then ignored.
+  const inFlight = useRef<number | null>(null);
   const source = useMemo(
     () => googlePlaceSuggestions(mapsBrowserKey, { language: locale, serviceArea }),
     [mapsBrowserKey, locale, serviceArea],
@@ -100,14 +102,14 @@ export function QuoteStep({ search, mapsBrowserKey, serviceArea, onQuoteChange }
 
   async function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (inFlight.current || submitting) return;
+    if (submitting || inFlight.current === state.revision) return;
     const built = buildQuoteRequest(draftOf(state));
     if (!built.ok) {
       dispatch({ type: "invalid", issues: built.issues });
       return;
     }
     const revision = state.revision;
-    inFlight.current = true;
+    inFlight.current = revision;
     dispatch({ type: "submitted", revision });
     try {
       let response: Response;
@@ -131,7 +133,7 @@ export function QuoteStep({ search, mapsBrowserKey, serviceArea, onQuoteChange }
         dispatch({ type: "failed", revision, failure });
       }
     } finally {
-      inFlight.current = false;
+      if (inFlight.current === revision) inFlight.current = null;
     }
   }
 

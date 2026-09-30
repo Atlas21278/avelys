@@ -36,6 +36,8 @@ Catalogue actuel (`src/lib/errors.ts`) : `INVALID_INPUT` (400), `BOOKING_LEAD_TI
 
 Calcule un prix côté serveur à partir d'une distance **routière** et de la `PricingRule` active à l'instant du devis, puis le fige dans un `PricingSnapshot` (ADR-0009). Le devis n'est **pas persisté** : la réservation (VTC-028) rappelle `computeQuote` et recalcule toujours (BR-12).
 
+Appelée par l'étape 1 du parcours public (`/reservation`, VTC-046, `docs/product/booking.md`) avec un `placeId` choisi dans l'autocomplete, jamais avec un montant.
+
 > **Pas encore de rate limiting / anti-spam.** Ticket dédié obligatoire avant toute exposition en production (INFRA-005, DEC-17) : chaque devis déclenche un appel Google Routes facturé.
 
 Requête (JSON, schéma strict : toute clé inconnue, en particulier un montant, est refusée) :
