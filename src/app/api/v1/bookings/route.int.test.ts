@@ -187,6 +187,33 @@ describe("POST /api/v1/bookings (integration)", () => {
     for (const audit of audits) expect(audit.correlationId).toBe(correlationId);
   });
 
+  it("accepts the booking form's places: place ids without coordinates (VTC-047)", async () => {
+    const response = await post(
+      body({
+        origin: { label: "Test origin", placeId: "test-place-origin" },
+        destination: { label: "Test destination", placeId: "test-place" },
+      }),
+    );
+    expect(response.status).toBe(201);
+    const { booking } = (await response.json()) as { booking: { reference: string } };
+    const stored = await db().booking.findUniqueOrThrow({
+      where: { reference: booking.reference },
+    });
+    // The stored points are the priced route's end points, never browser input (VTC-035).
+    expect(stored).toMatchObject({
+      pickupPlaceId: "test-place-origin",
+      pickupLat: RESOLVED.origin.lat,
+      pickupLng: RESOLVED.origin.lng,
+      dropoffPlaceId: "test-place",
+    });
+    expect(mocks.computeRoute).toHaveBeenCalledWith(
+      expect.objectContaining({
+        origin: { placeId: "test-place-origin" },
+        destination: { placeId: "test-place" },
+      }),
+    );
+  });
+
   it("replays a second submission: same reference, no write, no Stripe or Maps call", async () => {
     const first = await post(body());
     const firstJson: unknown = await first.json();
