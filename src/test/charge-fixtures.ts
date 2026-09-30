@@ -65,6 +65,7 @@ export async function resetChargeData(): Promise<void> {
   const client = db();
   await client.processedWebhookEvent.deleteMany();
   await client.auditLog.deleteMany();
+  await client.notification.deleteMany();
   await client.booking.updateMany({ data: { currentPaymentId: null } });
   await client.payment.deleteMany();
   await client.booking.deleteMany();
