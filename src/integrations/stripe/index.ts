@@ -12,6 +12,7 @@ export { STRIPE_API_VERSION, StripeConfigError, type StripeConfigErrorReason } f
 export {
   PaymentSetupError,
   SETUP_INTENT_ID,
+  stripeUnavailableReason,
   type CreatedSetupIntent,
   type PaymentSetupGateway,
   type SetupIntentSummary,

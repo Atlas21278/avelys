@@ -20,6 +20,13 @@ describe("correlationIdFrom", () => {
   it("generates a UUID when no header is present", () => {
     expect(correlationIdFrom(new Headers())).toMatch(/^[0-9a-f-]{36}$/);
   });
+
+  it("ignores even a well-formed client id when asked to (public routes, VTC-045)", () => {
+    const headers = new Headers({ "x-request-id": "abc123-def.456_ghi" });
+    const id = correlationIdFrom(headers, { ignoreIncoming: true });
+    expect(id).not.toBe("abc123-def.456_ghi");
+    expect(id).toMatch(/^[0-9a-f-]{36}$/);
+  });
 });
 
 describe("runWithRequestContext", () => {

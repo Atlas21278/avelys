@@ -130,6 +130,7 @@ describe("booking creation service (integration)", () => {
     const client = db();
     await client.auditLog.deleteMany();
     await client.payment.deleteMany();
+    await client.notification.deleteMany();
     await client.booking.deleteMany();
     await client.customer.deleteMany();
     await client.pricingRule.deleteMany();
@@ -146,6 +147,7 @@ describe("booking creation service (integration)", () => {
   afterAll(async () => {
     // Leave no booking behind: stale rows would break later foreign key validations.
     await db().payment.deleteMany();
+    await db().notification.deleteMany();
     await db().booking.deleteMany();
     await db().customer.deleteMany();
     await db().$disconnect();
@@ -546,6 +548,7 @@ describe("booking creation service (integration)", () => {
       expect(created.customerId).not.toBe(linked.id);
     } finally {
       await db().payment.deleteMany();
+      await db().notification.deleteMany();
       await db().booking.deleteMany();
       await db().customer.deleteMany();
       await db().user.delete({ where: { id: user.id } });
@@ -583,7 +586,10 @@ describe("booking creation service (integration)", () => {
     confirmedPaymentMethod.mockResolvedValue(null);
     const error = await refusal(createBooking(request(), deps()));
     expect(error.code).toBe("PAYMENT_METHOD_REQUIRED");
-    expect(confirmedPaymentMethod).toHaveBeenCalledWith({ paymentSetupId: "seti_TestRequest" });
+    expect(confirmedPaymentMethod).toHaveBeenCalledWith({
+      paymentSetupId: "seti_TestRequest",
+      email: "guest@avelys.test",
+    });
     await expectNothingWritten();
   });
 
@@ -621,6 +627,7 @@ describe("booking creation service (integration)", () => {
         livemode: false,
         fromBookingRequestFlow: true,
         customerId: "cus_GuardTest1",
+        customerEmail: "guest@avelys.test",
         paymentMethodId: "pm_GuardTest1",
       }),
     );

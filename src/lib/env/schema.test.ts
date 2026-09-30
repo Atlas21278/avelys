@@ -16,6 +16,7 @@ const defaults = {
   AUTH_SESSION_MAX_AGE_SECONDS: 604_800,
   BOOKING_MIN_LEAD_TIME_MINUTES: 720,
   ROUTING_SERVICE_AREA: { south: 41, west: -5.5, north: 51.5, east: 10 },
+  PUBLIC_BOOKING_ENABLED: false,
 };
 
 describe("parseServerEnv", () => {
@@ -204,6 +205,18 @@ describe("parseServerEnv", () => {
         /RESEND_API_KEY/,
       );
     });
+  });
+
+  it("keeps the public booking routes off unless explicitly enabled (VTC-045)", () => {
+    const read = (value: string | undefined) =>
+      parseServerEnv({ ...valid, PUBLIC_BOOKING_ENABLED: value }).PUBLIC_BOOKING_ENABLED;
+    expect(read(undefined)).toBe(false);
+    expect(read("")).toBe(false);
+    expect(read("false")).toBe(false);
+    expect(read("true")).toBe(true);
+    for (const value of ["1", "yes", "TRUE", "on"]) {
+      expect(() => read(value)).toThrowError(/PUBLIC_BOOKING_ENABLED/);
+    }
   });
 
   it("rejects a non-PostgreSQL database URL", () => {

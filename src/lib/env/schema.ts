@@ -82,6 +82,17 @@ export const serverEnvSchema = z.object({
     (value) => (value === "" ? undefined : value),
     ServiceAreaSchema.default({ ...PROVISIONAL_SERVICE_AREA }),
   ),
+  // Exposure switch of the public booking routes (VTC-045): `POST /api/v1/bookings` and
+  // `POST /api/v1/payment-setups` answer 404, with no Stripe call and no write, unless it is
+  // "true". OFF by default in every environment; enabled locally and in CI, and in production
+  // only by INFRA-006 once per-IP rate limiting (INFRA-005) is in place. Empty = default.
+  PUBLIC_BOOKING_ENABLED: z.preprocess(
+    (value) => (value === "" ? undefined : value),
+    z
+      .enum(["true", "false"])
+      .default("false")
+      .transform((value) => value === "true"),
+  ),
   LOG_LEVEL: z.enum(["fatal", "error", "warn", "info", "debug", "trace", "silent"]).default("info"),
 });
 

@@ -28,7 +28,9 @@ vi.mock("@/server/payments", async () => {
     PaymentSetupRequestError: actual.PaymentSetupRequestError,
   };
 });
+const publicBookingEnabled = vi.fn(() => true);
 vi.mock("@/lib/logger", () => ({ logger: () => log }));
+vi.mock("@/server/public-booking", () => ({ publicBookingEnabled: () => publicBookingEnabled() }));
 
 const { POST } = await import("./route");
 
@@ -44,6 +46,7 @@ function post(body: string, headers: Record<string, string> = {}): Promise<Respo
 
 beforeEach(() => {
   vi.clearAllMocks();
+  publicBookingEnabled.mockReturnValue(true);
 });
 
 describe("POST /api/v1/payment-setups", () => {
@@ -54,6 +57,65 @@ describe("POST /api/v1/payment-setups", () => {
     await expect(response.json()).resolves.toEqual({
       paymentSetup: { clientSecret: "seti_Test123_secret_fake" },
     });
+  });
+
+  it("answers 404 without any Stripe call when public booking is off (default)", async () => {
+    publicBookingEnabled.mockReturnValue(false);
+    const response = await post(JSON.stringify({ email: "guest@avelys.test" }));
+    expect(response.status).toBe(404);
+    const body = (await response.json()) as { error: { code: string } };
+    expect(body.error.code).toBe("NOT_FOUND");
+    expect(requestPaymentSetup).not.toHaveBeenCalled();
+    expect(createSetupIntent).not.toHaveBeenCalled();
+  });
+
+  it("fails closed with 500 when the environment cannot be read", async () => {
+    publicBookingEnabled.mockImplementation(() => {
+      throw new Error("Invalid or missing environment variables: DATABASE_URL (invalid_type)");
+    });
+    const response = await post(JSON.stringify({ email: "guest@avelys.test" }));
+    expect(response.status).toBe(500);
+    expect(createSetupIntent).not.toHaveBeenCalled();
+  });
+
+  it("draws its own correlation id, ignoring the client's x-request-id", async () => {
+    const response = await post("{not json", { "x-request-id": "client-chosen-id-123" });
+    const body = (await response.json()) as { error: { correlationId: string } };
+    expect(body.error.correlationId).not.toBe("client-chosen-id-123");
+    expect(body.error.correlationId).toMatch(/^[0-9a-f-]{36}$/);
+    expect(response.headers.get("x-request-id")).toBe(body.error.correlationId);
+  });
+
+  it("derives one journey from a submissionId sent twice (double click)", async () => {
+    const payload = JSON.stringify({
+      email: "guest@avelys.test",
+      submissionId: "3b241101-e2bb-4255-8caf-4136c566a962",
+    });
+    const [first, second] = await Promise.all([post(payload), post(payload)]);
+    expect(first.status).toBe(200);
+    expect(second.status).toBe(200);
+    const journeyIds = createSetupIntent.mock.calls.map(
+      (call) => (call as unknown as [{ journeyId: string }])[0].journeyId,
+    );
+    expect(journeyIds).toEqual([
+      "3b241101-e2bb-4255-8caf-4136c566a962",
+      "3b241101-e2bb-4255-8caf-4136c566a962",
+    ]);
+  });
+
+  it("answers 409 PAYMENT_SETUP_CONFLICT when a submissionId is reused with another email", async () => {
+    requestPaymentSetup.mockRejectedValueOnce(
+      new PaymentSetupRequestError("PAYMENT_SETUP_CONFLICT", "submission_id_reused"),
+    );
+    const response = await post(
+      JSON.stringify({
+        email: "other@avelys.test",
+        submissionId: "3b241101-e2bb-4255-8caf-4136c566a962",
+      }),
+    );
+    expect(response.status).toBe(409);
+    const body = (await response.json()) as { error: { code: string } };
+    expect(body.error.code).toBe("PAYMENT_SETUP_CONFLICT");
   });
 
   it("logs neither the email, the client secret nor a Stripe id", async () => {

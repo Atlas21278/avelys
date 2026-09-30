@@ -121,7 +121,7 @@ Migration `20260929143000_notification`, **additive** : deux enums (`Notificatio
 | `bookingId`          | Clé étrangère `ON DELETE RESTRICT ON UPDATE RESTRICT` : une réservation qui a des notifications ne se supprime pas (RGPD = anonymisation, DEC-11).                                                                                                        |
 | Rétention            | Aucune purge : DEC-11.                                                                                                                                                                                                                                    |
 
-Nettoyage des tests d'intégration : supprimer les `Notification` avant les `Booking`.
+Nettoyage des tests d'intégration : supprimer les `Notification` avant les `Booking` (`notification.deleteMany()` puis `booking.deleteMany()`, fait dans chaque fichier qui supprime des réservations).
 
 Rollback : revert de la PR ; la table vide reste en place. Suppression éventuelle par une migration de contraction revue, jamais automatique ; `DROP` manuel en dev local uniquement.
 
