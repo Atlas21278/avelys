@@ -85,6 +85,16 @@ describe("parseServerEnv", () => {
     );
   });
 
+  it("treats the Google Maps browser key as optional, empty meaning not configured (VTC-046)", () => {
+    const read = (value: string) =>
+      parseServerEnv({ ...valid, NEXT_PUBLIC_GOOGLE_MAPS_BROWSER_API_KEY: value })
+        .NEXT_PUBLIC_GOOGLE_MAPS_BROWSER_API_KEY;
+    expect(parseServerEnv(valid).NEXT_PUBLIC_GOOGLE_MAPS_BROWSER_API_KEY).toBeUndefined();
+    expect(read("")).toBeUndefined();
+    expect(read("unit-test-browser-placeholder")).toBe("unit-test-browser-placeholder");
+    expect(() => read("   ")).toThrowError(/NEXT_PUBLIC_GOOGLE_MAPS_BROWSER_API_KEY/);
+  });
+
   it("reads the routing service area, defaulting to the provisional metropolitan France box", () => {
     const read = (value: string) =>
       parseServerEnv({ ...valid, ROUTING_SERVICE_AREA: value }).ROUTING_SERVICE_AREA;
