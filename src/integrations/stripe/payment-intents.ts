@@ -29,6 +29,8 @@ export type PaymentIntentSummary = Readonly<{
   attempt: number | null;
   /** `last_payment_error.code` (e.g. `authentication_required`, `card_declined`). */
   lastPaymentErrorCode: string | null;
+  /** `last_payment_error.decline_code` (e.g. `authentication_required` on a soft decline). */
+  lastPaymentErrorDeclineCode: string | null;
 }>;
 
 export type OffSessionChargeInput = Readonly<{
@@ -49,6 +51,8 @@ export type OffSessionChargeInput = Readonly<{
 export type OffSessionChargeResult = Readonly<{
   intent: PaymentIntentSummary;
   errorCode: string | null;
+  /** Issuer `decline_code` of the card error, null without one. */
+  declineCode: string | null;
 }>;
 
 export interface PaymentIntentGateway {
@@ -98,6 +102,7 @@ export function summarizePaymentIntent(intent: Stripe.PaymentIntent): PaymentInt
     bookingRef: metadata.bookingRef ?? null,
     attempt: positiveInt(metadata.attempt),
     lastPaymentErrorCode: intent.last_payment_error?.code ?? null,
+    lastPaymentErrorDeclineCode: intent.last_payment_error?.decline_code ?? null,
   };
 }
 
@@ -128,14 +133,16 @@ export function createStripePaymentIntentGateway(
           },
           { idempotencyKey: input.idempotencyKey },
         );
-        return { intent: summarizePaymentIntent(intent), errorCode: null };
+        return { intent: summarizePaymentIntent(intent), errorCode: null, declineCode: null };
       } catch (error) {
         // Off-session, a refused confirmation raises a card error that carries the PaymentIntent
-        // (`authentication_required`, `card_declined`…): the outcome of the attempt.
+        // (`authentication_required`, or `card_declined` with a decline code…): the outcome.
         if (error instanceof Stripe.errors.StripeCardError && error.payment_intent) {
+          const lastError = error.payment_intent.last_payment_error;
           return {
             intent: summarizePaymentIntent(error.payment_intent),
-            errorCode: error.code ?? error.payment_intent.last_payment_error?.code ?? null,
+            errorCode: error.code ?? lastError?.code ?? null,
+            declineCode: error.decline_code ?? lastError?.decline_code ?? null,
           };
         }
         throw error;

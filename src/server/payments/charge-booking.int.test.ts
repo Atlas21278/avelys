@@ -106,6 +106,48 @@ describe("chargeBooking (integration)", () => {
     expect(onPaymentRequiresAction).toHaveBeenCalledExactlyOnceWith(fixture.paymentId);
   });
 
+  it("treats a soft decline (card_declined + decline code authentication_required) as REQUIRES_ACTION", async () => {
+    const fixture = await bookingWithPayment();
+    stripe.confirmWith({
+      status: "requires_payment_method",
+      errorCode: "card_declined",
+      declineCode: "authentication_required",
+    });
+
+    await chargeBooking(fixture.bookingId, deps());
+
+    const { booking, payment } = await chargeState(fixture);
+    expect(payment.status).toBe("REQUIRES_ACTION");
+    expect(booking.status).toBe("ACCEPTED");
+    expect(onPaymentRequiresAction).toHaveBeenCalledExactlyOnceWith(fixture.paymentId);
+  });
+
+  it("does not apply an existing PaymentIntent of another attempt", async () => {
+    const fixture = await bookingWithPayment();
+    stripe.put({
+      id: "pi_NoAttempt1",
+      status: "succeeded",
+      amountCents: TEST_TOTAL,
+      currency: "EUR",
+      livemode: false,
+      customerId: fixture.customerId,
+      bookingRef: fixture.reference,
+      attempt: null,
+      lastPaymentErrorCode: null,
+      lastPaymentErrorDeclineCode: null,
+    });
+
+    await expect(chargeBooking(fixture.bookingId, deps())).resolves.toEqual({
+      outcome: "ignored",
+      reason: "attempt_mismatch",
+    });
+    expect(stripe.createOffSessionCharge).not.toHaveBeenCalled();
+    expect((await chargeState(fixture)).payment).toMatchObject({
+      status: "PENDING",
+      stripePaymentIntentId: null,
+    });
+  });
+
   it("keeps REQUIRES_ACTION when the post-commit port fails", async () => {
     const fixture = await bookingWithPayment();
     stripe.confirmWith({ status: "requires_payment_method", errorCode: "authentication_required" });
@@ -222,6 +264,7 @@ describe("chargeBooking (integration)", () => {
       bookingRef: fixture.reference,
       attempt: 1,
       lastPaymentErrorCode: null,
+      lastPaymentErrorDeclineCode: null,
     });
 
     await chargeBooking(fixture.bookingId, deps());

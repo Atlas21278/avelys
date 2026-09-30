@@ -103,13 +103,16 @@ async function applyPaymentIntentEvent(
     paymentId,
     intent,
     errorCode: intent.lastPaymentErrorCode,
+    declineCode: intent.lastPaymentErrorDeclineCode,
   });
   if (applied.outcome === "ignored") {
     log.warn(
       { bookingRef: applied.bookingRef, reason: applied.reason },
       "payment intent event ignored",
     );
-    if (applied.reason === "other_payment_intent") orphanSuccess(intent, applied.bookingRef);
+    if (applied.reason === "other_payment_intent" || applied.reason === "attempt_mismatch") {
+      orphanSuccess(intent, applied.bookingRef);
+    }
     return;
   }
   log.info(

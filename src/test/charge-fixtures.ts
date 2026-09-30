@@ -178,7 +178,8 @@ export function auditActions(entityId: string) {
 
 /** Outcome the fake Stripe gives to the next confirmations. */
 export type FakeConfirmation =
-  Readonly<{ status: string; errorCode: string | null }> | Readonly<{ throws: Error }>;
+  | Readonly<{ status: string; errorCode: string | null; declineCode?: string | null }>
+  | Readonly<{ throws: Error }>;
 
 /**
  * In-memory PaymentIntent gateway honouring idempotency keys: the same key returns the same
@@ -205,9 +206,14 @@ export function fakePaymentIntents() {
         bookingRef: input.bookingRef,
         attempt: input.attempt,
         lastPaymentErrorCode: confirmation.errorCode,
+        lastPaymentErrorDeclineCode: confirmation.declineCode ?? null,
       };
       intents.set(intent.id, intent);
-      const result = { intent, errorCode: confirmation.errorCode };
+      const result = {
+        intent,
+        errorCode: confirmation.errorCode,
+        declineCode: confirmation.declineCode ?? null,
+      };
       byKey.set(input.idempotencyKey, result);
       if (beforeAnswer) await beforeAnswer(intent);
       return result;

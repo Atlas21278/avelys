@@ -175,7 +175,11 @@ export async function chargeBooking(
         { bookingRef, attempt: FIRST_ATTEMPT, stripeStatus: settled.status },
         "charge not sent: a PaymentIntent already exists for this booking",
       );
-      result = { intent: settled, errorCode: settled.lastPaymentErrorCode };
+      result = {
+        intent: settled,
+        errorCode: settled.lastPaymentErrorCode,
+        declineCode: settled.lastPaymentErrorDeclineCode,
+      };
     } else {
       result = await gateway.createOffSessionCharge({
         customerId: payment.stripeCustomerId,
@@ -203,6 +207,7 @@ export async function chargeBooking(
       paymentId: payment.id,
       intent: result.intent,
       errorCode: result.errorCode,
+      declineCode: result.declineCode,
     }),
   );
   if (applied.outcome === "ignored") {
@@ -217,6 +222,7 @@ export async function chargeBooking(
       paymentStatus: applied.paymentStatus,
       bookingStatus: applied.bookingStatus,
       errorCode: result.errorCode,
+      declineCode: result.declineCode,
     },
     "booking charge processed",
   );

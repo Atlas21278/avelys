@@ -88,8 +88,10 @@ describe("createOffSessionCharge", () => {
         bookingRef: "VTC-ABCD2345",
         attempt: 1,
         lastPaymentErrorCode: null,
+        lastPaymentErrorDeclineCode: null,
       },
       errorCode: null,
+      declineCode: null,
     });
   });
 
@@ -146,6 +148,31 @@ describe("createOffSessionCharge", () => {
     await expect(gateway.createOffSessionCharge(INPUT)).resolves.toMatchObject({
       errorCode: "card_declined",
       intent: { status: "requires_payment_method" },
+    });
+  });
+
+  it("returns the decline code of a soft decline asking for authentication", async () => {
+    create.mockRejectedValue(
+      new Stripe.errors.StripeCardError({
+        type: "card_error",
+        code: "card_declined",
+        decline_code: "authentication_required",
+        payment_intent: paymentIntent({
+          status: "requires_payment_method",
+          last_payment_error: { code: "card_declined", decline_code: "authentication_required" },
+        }) as unknown as Stripe.PaymentIntent,
+      }),
+    );
+
+    const result = await gateway.createOffSessionCharge(INPUT);
+
+    expect(result).toMatchObject({
+      errorCode: "card_declined",
+      declineCode: "authentication_required",
+      intent: {
+        lastPaymentErrorCode: "card_declined",
+        lastPaymentErrorDeclineCode: "authentication_required",
+      },
     });
   });
 

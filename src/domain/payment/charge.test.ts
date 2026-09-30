@@ -92,16 +92,33 @@ describe("paymentStatusForIntent", () => {
     ["requires_capture", null, null],
     ["an_unknown_status", null, null],
   ] as const)("%s with error %s -> %s", (status, errorCode, expected) => {
-    expect(paymentStatusForIntent({ status, errorCode })).toBe(expected);
+    expect(paymentStatusForIntent({ status, errorCode, declineCode: null })).toBe(expected);
   });
 
   it("uses the error code, not the status alone, to tell authentication from refusal", () => {
     const status = "requires_payment_method";
-    expect(paymentStatusForIntent({ status, errorCode: "authentication_required" })).toBe(
-      "REQUIRES_ACTION",
-    );
-    expect(paymentStatusForIntent({ status, errorCode: "insufficient_funds" })).toBe("FAILED");
+    expect(
+      paymentStatusForIntent({ status, errorCode: "authentication_required", declineCode: null }),
+    ).toBe("REQUIRES_ACTION");
+    expect(
+      paymentStatusForIntent({ status, errorCode: "insufficient_funds", declineCode: null }),
+    ).toBe("FAILED");
   });
+
+  it.each([
+    ["card_declined", "authentication_required", "REQUIRES_ACTION"],
+    ["authentication_required", "authentication_required", "REQUIRES_ACTION"],
+    ["card_declined", "authentication_not_handled", "FAILED"],
+    ["card_declined", "insufficient_funds", "FAILED"],
+    [null, "generic_decline", "FAILED"],
+  ] as const)(
+    "maps error %s with decline code %s (soft decline shape) to %s",
+    (errorCode, declineCode, expected) => {
+      expect(
+        paymentStatusForIntent({ status: "requires_payment_method", errorCode, declineCode }),
+      ).toBe(expected);
+    },
+  );
 });
 
 describe("checkChargeable", () => {

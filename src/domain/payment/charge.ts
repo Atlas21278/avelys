@@ -36,16 +36,29 @@ export type ChargeIntentState = Readonly<{
    * PaymentIntent's `last_payment_error.code` when it is read back. Null without an error.
    */
   errorCode: string | null;
+  /**
+   * Issuer decline code of the same error (`decline_code`), null without one. A soft decline
+   * asking for authentication comes as `card_declined` with `decline_code: authentication_required`.
+   */
+  declineCode: string | null;
 }>;
+
+/** Whether a failed confirmation asks the customer to authenticate (either Stripe shape). */
+export function requiresAuthentication(intent: ChargeIntentState): boolean {
+  return (
+    intent.errorCode === AUTHENTICATION_REQUIRED || intent.declineCode === AUTHENTICATION_REQUIRED
+  );
+}
 
 /**
  * Payment status a PaymentIntent state leads to, or null when it decides nothing (still
  * processing, canceled, or a state this flow never produces): the Payment is then left as is.
  *
  * Off-session, Stripe does not leave a PaymentIntent in `requires_action`: the confirmation fails
- * with the error code `authentication_required` and the PaymentIntent goes back to
- * `requires_payment_method`. That code, not the status alone, tells `REQUIRES_ACTION` from
- * `FAILED`.
+ * and the PaymentIntent goes back to `requires_payment_method`, with either the error code
+ * `authentication_required` or the error code `card_declined` and the decline code
+ * `authentication_required` (soft decline, docs.stripe.com/declines/codes). Those codes, not the
+ * status alone, tell `REQUIRES_ACTION` from `FAILED`.
  */
 export function paymentStatusForIntent(intent: ChargeIntentState): PaymentStatus | null {
   switch (intent.status) {
@@ -54,9 +67,9 @@ export function paymentStatusForIntent(intent: ChargeIntentState): PaymentStatus
     case "requires_action":
       return "REQUIRES_ACTION";
     case "requires_payment_method":
-      if (intent.errorCode === AUTHENTICATION_REQUIRED) return "REQUIRES_ACTION";
+      if (requiresAuthentication(intent)) return "REQUIRES_ACTION";
       // Without an error the PaymentIntent was never confirmed: nothing to decide.
-      return intent.errorCode === null ? null : "FAILED";
+      return intent.errorCode === null && intent.declineCode === null ? null : "FAILED";
     default:
       // processing (the webhook decides), canceled (VTC-041), requires_confirmation,
       // requires_capture (never produced: automatic capture, confirm: true).

@@ -34,6 +34,8 @@ export type ChargeApplicationInput = Readonly<{
   intent: PaymentIntentSummary;
   /** Error code of the attempt (card error or `last_payment_error.code`), null without one. */
   errorCode: string | null;
+  /** Issuer decline code of the same error (card error or `last_payment_error.decline_code`). */
+  declineCode: string | null;
 }>;
 
 export type ChargeApplication = Readonly<
@@ -52,6 +54,7 @@ export type ChargeApplication = Readonly<
         | "payment_not_found"
         | "payment_not_current"
         | "other_payment_intent"
+        | "attempt_mismatch"
         | "customer_mismatch"
         | "amount_mismatch"
         | "live_payment_intent"
@@ -66,7 +69,7 @@ export class ChargeApplicationConflictError extends Error {
 
 export async function applyChargeResult(
   tx: Prisma.TransactionClient,
-  { paymentId, intent, errorCode }: ChargeApplicationInput,
+  { paymentId, intent, errorCode, declineCode }: ChargeApplicationInput,
 ): Promise<ChargeApplication> {
   await tx.$queryRaw`SELECT 1 FROM "Payment" WHERE "id" = ${paymentId} FOR UPDATE`;
   const payment = await tx.payment.findUnique({
@@ -101,17 +104,20 @@ export async function applyChargeResult(
   if (payment.stripePaymentIntentId !== null && payment.stripePaymentIntentId !== intent.id) {
     return ignore("other_payment_intent");
   }
+  const bindsIntent = payment.stripePaymentIntentId === null;
+  // A PaymentIntent is bound only to the attempt that created it, re-checked under the lock: a
+  // concurrent retry (VTC-041) may have moved `attempt` since the caller matched it.
+  if (bindsIntent && intent.attempt !== payment.attempt) return ignore("attempt_mismatch");
   if (intent.customerId !== payment.stripeCustomerId) return ignore("customer_mismatch");
   if (intent.amountCents !== payment.amountCents || intent.currency !== payment.currency) {
     return ignore("amount_mismatch");
   }
 
   const from = payment.status;
-  const target = paymentStatusForIntent({ status: intent.status, errorCode });
+  const target = paymentStatusForIntent({ status: intent.status, errorCode, declineCode });
   const changesStatus = target !== null && target !== from;
   if (changesStatus && !canTransitionPayment(from, target)) return ignore("transition_not_allowed");
 
-  const bindsIntent = payment.stripePaymentIntentId === null;
   if (!changesStatus && !bindsIntent) {
     return {
       outcome: "unchanged",

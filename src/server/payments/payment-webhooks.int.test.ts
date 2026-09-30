@@ -16,6 +16,7 @@ import {
 } from "@/test/charge-fixtures";
 
 import type { OnPaymentRequiresAction } from "./after-charge";
+import { applyChargeResult } from "./apply-charge";
 import { chargeBooking } from "./charge-booking";
 import { processStripeWebhookEvent, receiveStripeWebhook } from "./process-webhook";
 import { createPaymentIntentWebhookHandlers } from "./webhook-handlers";
@@ -218,6 +219,79 @@ describe("PaymentIntent webhooks (integration)", () => {
     );
   });
 
+  it("reads a soft decline (decline code authentication_required) as REQUIRES_ACTION", async () => {
+    const fixture = await bookingWithPayment();
+    stripe.confirmWith({
+      status: "requires_payment_method",
+      errorCode: "card_declined",
+      declineCode: "authentication_required",
+    });
+    stripe.beforeAnswer(async () => {
+      throw new Stripe.errors.StripeConnectionError({ type: "api_error", message: "lost" });
+    });
+    await chargeBooking(fixture.bookingId, chargeDeps());
+    stripe.beforeAnswer(null);
+    const [intent] = [...stripe.intents.values()];
+    if (!intent) throw new Error("no PaymentIntent created");
+
+    await deliver(event("payment_intent.payment_failed", intent.id));
+
+    expect((await chargeState(fixture)).payment.status).toBe("REQUIRES_ACTION");
+    expect(onPaymentRequiresAction).toHaveBeenCalledExactlyOnceWith(fixture.paymentId);
+  });
+
+  it("re-checks the attempt under the lock before binding a PaymentIntent", async () => {
+    const fixture = await bookingWithPayment();
+    const intent = await chargeLostAfterCreation(fixture, "succeeded", null);
+    // A retry (VTC-041) moved to attempt 2 after the match, before the lock.
+    await db().payment.update({ where: { id: fixture.paymentId }, data: { attempt: 2 } });
+
+    const applied = await db().$transaction((tx) =>
+      applyChargeResult(tx, {
+        paymentId: fixture.paymentId,
+        intent,
+        errorCode: null,
+        declineCode: null,
+      }),
+    );
+
+    expect(applied).toEqual({
+      outcome: "ignored",
+      bookingRef: fixture.reference,
+      reason: "attempt_mismatch",
+    });
+    expect((await chargeState(fixture)).payment).toMatchObject({
+      status: "PENDING",
+      attempt: 2,
+      stripePaymentIntentId: null,
+    });
+    expect((await chargeState(fixture)).booking.status).toBe("ACCEPTED");
+  });
+
+  it("records a success on a booking no longer ACCEPTED without touching it, with an alert", async () => {
+    const fixture = await bookingWithPayment();
+    const intent = await chargeLostAfterCreation(fixture, "succeeded", null);
+    // Cancelled meanwhile (set directly: the cancellation service is a later ticket).
+    await db().booking.update({
+      where: { id: fixture.bookingId },
+      data: { status: "CANCELLED", version: { increment: 1 } },
+    });
+
+    await expect(deliver(event("payment_intent.succeeded", intent.id))).resolves.toEqual({
+      outcome: "processed",
+      handled: true,
+    });
+
+    const { booking, payment } = await chargeState(fixture);
+    expect(payment).toMatchObject({ status: "PAID", stripePaymentIntentId: intent.id });
+    expect(booking).toMatchObject({ status: "CANCELLED", version: 3 });
+    expect(await auditActions(fixture.bookingId)).toEqual([]);
+    expect(log.error).toHaveBeenCalledWith(
+      { bookingRef: fixture.reference, bookingStatus: "CANCELLED" },
+      "payment succeeded for a booking that is no longer ACCEPTED",
+    );
+  });
+
   it("records a declined card as FAILED from the webhook", async () => {
     const fixture = await bookingWithPayment();
     const intent = await chargeLostAfterCreation(
@@ -274,6 +348,7 @@ describe("PaymentIntent webhooks (integration)", () => {
       bookingRef: null,
       attempt: null,
       lastPaymentErrorCode: null,
+      lastPaymentErrorDeclineCode: null,
     });
     await expect(deliver(event("payment_intent.succeeded", "pi_FromElsewhere1"))).resolves.toEqual({
       outcome: "processed",
@@ -295,6 +370,7 @@ describe("PaymentIntent webhooks (integration)", () => {
       bookingRef: fixture.reference,
       attempt: 1,
       lastPaymentErrorCode: null,
+      lastPaymentErrorDeclineCode: null,
     });
 
     await deliver(event("payment_intent.succeeded", "pi_OtherCustomer1"));
