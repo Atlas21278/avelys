@@ -1,6 +1,24 @@
 import { describe, expect, it } from "vitest";
 
-import { CLOSED_COMBOBOX, comboboxKey } from "./combobox";
+import { CLOSED_COMBOBOX, comboboxKey, reachableOptionCount } from "./combobox";
+
+describe("reachableOptionCount", () => {
+  it("exposes the options only when the list answers the current text", () => {
+    expect(reachableOptionCount("ready", 3)).toBe(3);
+    expect(reachableOptionCount("loading", 3)).toBe(0);
+    expect(reachableOptionCount("failed", 3)).toBe(0);
+    expect(reachableOptionCount("idle", 3)).toBe(0);
+  });
+
+  it("never chooses an outdated option with ArrowDown + Enter while a new query loads", () => {
+    // Options of the previous text were highlighted; the visitor typed again.
+    const count = reachableOptionCount("loading", 3);
+    const down = comboboxKey({ open: true, activeIndex: 0 }, "ArrowDown", count);
+    const enter = comboboxKey(down.state, "Enter", count);
+    expect(enter.choose).toBeUndefined();
+    expect(enter.handled).toBe(false);
+  });
+});
 
 describe("comboboxKey", () => {
   it("opens on the first option with ArrowDown and wraps at the end", () => {

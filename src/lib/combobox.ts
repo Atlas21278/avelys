@@ -54,3 +54,15 @@ export function comboboxKey(state: ComboboxState, key: string, count: number): C
       return { state, handled: false };
   }
 }
+
+/** Where the suggestions of a place field stand relative to what is typed in it. */
+export type SuggestionStatus = "idle" | "loading" | "ready" | "failed";
+
+/**
+ * Number of options the keyboard may reach. Only a list that answers the current text counts:
+ * while a new query loads, or after a failure, an older (hidden) list must never be chosen with
+ * ArrowDown + Enter.
+ */
+export function reachableOptionCount(status: SuggestionStatus, count: number): number {
+  return status === "ready" ? count : 0;
+}

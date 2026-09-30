@@ -78,29 +78,20 @@ let loading: Promise<PlacesLibrary> | undefined;
 let authFailed = false;
 
 /**
- * Loads the Maps JavaScript API once per page and resolves the Places library. A failed load can
- * be retried; an invalid or unauthorised key (`gm_authFailure`) disables the autocomplete for
- * the page.
+ * Maximum wait for the Maps script and the Places library. Past it the load is abandoned
+ * (`load_failed`, retryable), so a field never stays on "searching" forever. UX setting.
+ */
+export const MAPS_LOAD_TIMEOUT_MS = 10_000;
+
+/**
+ * Loads the Maps JavaScript API once per page and resolves the Places library. A failed or
+ * timed-out load can be retried; an invalid or unauthorised key (`gm_authFailure`) disables the
+ * autocomplete for the page.
  */
 export function loadPlacesLibrary(apiKey: string): Promise<PlacesLibrary> {
   if (authFailed) return Promise.reject(new MapsBrowserError("auth_failed"));
   loading ??= new Promise<PlacesLibrary>((resolve, reject) => {
     const scope = window as unknown as MapsWindow;
-    scope.gm_authFailure = () => {
-      authFailed = true;
-      reject(new MapsBrowserError("auth_failed"));
-    };
-    scope[READY_CALLBACK] = () => {
-      const importLibrary = scope.google?.maps?.importLibrary;
-      if (!importLibrary) {
-        reject(new MapsBrowserError("load_failed"));
-        return;
-      }
-      importLibrary("places").then(
-        (library) => resolve(library as PlacesLibrary),
-        (error: unknown) => reject(new MapsBrowserError("load_failed", { cause: error })),
-      );
-    };
     const params = new URLSearchParams({
       key: apiKey,
       v: "weekly",
@@ -110,11 +101,42 @@ export function loadPlacesLibrary(apiKey: string): Promise<PlacesLibrary> {
     const script = document.createElement("script");
     script.src = `${MAPS_SCRIPT_URL}?${params.toString()}`;
     script.async = true;
-    script.onerror = () => {
-      script.remove();
-      loading = undefined;
-      reject(new MapsBrowserError("load_failed"));
+
+    let settled = false;
+    const settle = (action: () => void) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timeout);
+      action();
     };
+    /** A retryable failure: the next call injects the script again. */
+    const failRetryable = (error: MapsBrowserError) =>
+      settle(() => {
+        script.remove();
+        loading = undefined;
+        reject(error);
+      });
+    const timeout = setTimeout(
+      () => failRetryable(new MapsBrowserError("load_failed")),
+      MAPS_LOAD_TIMEOUT_MS,
+    );
+
+    scope.gm_authFailure = () => {
+      authFailed = true;
+      settle(() => reject(new MapsBrowserError("auth_failed")));
+    };
+    scope[READY_CALLBACK] = () => {
+      const importLibrary = scope.google?.maps?.importLibrary;
+      if (!importLibrary) {
+        failRetryable(new MapsBrowserError("load_failed"));
+        return;
+      }
+      importLibrary("places").then(
+        (library) => settle(() => resolve(library as PlacesLibrary)),
+        (error: unknown) => failRetryable(new MapsBrowserError("load_failed", { cause: error })),
+      );
+    };
+    script.onerror = () => failRetryable(new MapsBrowserError("load_failed"));
     document.head.append(script);
   });
   return loading;

@@ -73,10 +73,15 @@ export function QuoteStep({ search, mapsBrowserKey, serviceArea, onQuoteChange }
   // Revision of the request in flight: blocks a double click before React re-renders, while an
   // edit (new revision) may submit again at once; the stale answer is then ignored.
   const inFlight = useRef<number | null>(null);
-  const source = useMemo(
-    () => googlePlaceSuggestions(mapsBrowserKey, { language: locale, serviceArea }),
-    [mapsBrowserKey, locale, serviceArea],
-  );
+  // One suggestion source per field: each keeps its own Places session token, so choosing the
+  // pickup never ends or reuses the destination's session.
+  const sources = useMemo(() => {
+    const options = { language: locale, serviceArea };
+    return {
+      pickup: googlePlaceSuggestions(mapsBrowserKey, options),
+      dropoff: googlePlaceSuggestions(mapsBrowserKey, options),
+    };
+  }, [mapsBrowserKey, locale, serviceArea]);
 
   const retained = retainedQuote(state);
   useEffect(() => {
@@ -92,7 +97,7 @@ export function QuoteStep({ search, mapsBrowserKey, serviceArea, onQuoteChange }
     dispatch({ type: "field", field, value });
   const place = (field: PlaceField) => ({
     value: state[field],
-    source,
+    source: sources[field],
     error: issue(field),
     onTextChange: (text: string) => dispatch({ type: "placeText", field, text }),
     onChoose: (chosen: { placeId: string; label: string }) =>

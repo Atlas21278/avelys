@@ -197,6 +197,47 @@ describe("loadPlacesLibrary", () => {
     expect(scripts).toHaveLength(2);
   });
 
+  it("gives up after the load timeout, so a field never stays on searching, and allows a retry", async () => {
+    vi.useFakeTimers();
+    try {
+      const { loadPlacesLibrary, MAPS_LOAD_TIMEOUT_MS } = await freshModule();
+      const attempt = loadPlacesLibrary("k");
+      const outcome = attempt.catch((error: unknown) => error);
+      await vi.advanceTimersByTimeAsync(MAPS_LOAD_TIMEOUT_MS - 1);
+      expect(scripts[0]!.remove).not.toHaveBeenCalled();
+      await vi.advanceTimersByTimeAsync(1);
+      expect(await outcome).toMatchObject({ name: "MapsBrowserError", reason: "load_failed" });
+      expect(scripts[0]!.remove).toHaveBeenCalled();
+
+      // A late callback of the abandoned script changes nothing; the next call starts afresh.
+      const url = new URL(scripts[0]!.src);
+      scope.google = { maps: { importLibrary: () => Promise.resolve(fakeLibrary([]).library) } };
+      (scope[url.searchParams.get("callback")!] as () => void)();
+      void loadPlacesLibrary("k").catch(() => undefined);
+      expect(scripts).toHaveLength(2);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("does not time out once the library is loaded", async () => {
+    vi.useFakeTimers();
+    try {
+      const { loadPlacesLibrary, MAPS_LOAD_TIMEOUT_MS } = await freshModule();
+      const { library } = fakeLibrary([]);
+      const attempt = loadPlacesLibrary("k");
+      scope.google = { maps: { importLibrary: () => Promise.resolve(library) } };
+      const callback = new URL(scripts[0]!.src).searchParams.get("callback")!;
+      (scope[callback] as () => void)();
+      await expect(attempt).resolves.toBe(library);
+      await vi.advanceTimersByTimeAsync(MAPS_LOAD_TIMEOUT_MS * 2);
+      expect(loadPlacesLibrary("k")).toBe(attempt);
+      expect(scripts[0]!.remove).not.toHaveBeenCalled();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("disables the autocomplete for the page when Google refuses the key", async () => {
     const { loadPlacesLibrary } = await freshModule();
     const attempt = loadPlacesLibrary("k");

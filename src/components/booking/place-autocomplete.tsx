@@ -5,7 +5,13 @@ import { useEffect, useId, useRef, useState, type KeyboardEvent } from "react";
 
 import { Field, Input } from "@/components/ui/field";
 import type { ChosenPlace } from "@/lib/booking-quote";
-import { CLOSED_COMBOBOX, comboboxKey, type ComboboxState } from "@/lib/combobox";
+import {
+  CLOSED_COMBOBOX,
+  comboboxKey,
+  reachableOptionCount,
+  type ComboboxState,
+  type SuggestionStatus,
+} from "@/lib/combobox";
 import type { PlaceInput } from "@/lib/quote-step-state";
 import { cx } from "@/lib/cx";
 import {
@@ -17,8 +23,6 @@ import {
 /** Characters typed before the first (billed) suggestion request. UX setting, not a rule. */
 const MIN_QUERY_LENGTH = 3;
 const DEBOUNCE_MS = 250;
-
-type Status = "idle" | "loading" | "ready" | "failed";
 
 type PlaceAutocompleteProps = {
   label: string;
@@ -49,10 +53,12 @@ export function PlaceAutocomplete({
   const t = useTranslations("Pages.booking.quote");
   const listboxId = useId();
   const [suggestions, setSuggestions] = useState<readonly PlaceSuggestion[]>([]);
-  const [status, setStatus] = useState<Status>("idle");
+  const [status, setStatus] = useState<SuggestionStatus>("idle");
   const [combobox, setCombobox] = useState<ComboboxState>(CLOSED_COMBOBOX);
   const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const latest = useRef(0);
+  // Whether the text field has focus: a late answer opens the list only for a visitor still there.
+  const focused = useRef(false);
 
   useEffect(() => () => clearTimeout(timer.current), []);
 
@@ -65,14 +71,18 @@ export function PlaceAutocomplete({
       setCombobox(CLOSED_COMBOBOX);
       return;
     }
+    // The previous list no longer answers the text: drop it so it cannot be chosen meanwhile.
+    setSuggestions([]);
     setStatus("loading");
+    setCombobox(CLOSED_COMBOBOX);
     timer.current = setTimeout(() => {
       source.suggest(text).then(
         (found) => {
           if (request !== latest.current) return;
           setSuggestions(found);
           setStatus("ready");
-          setCombobox({ open: true, activeIndex: -1 });
+          // Open the list only if the visitor is still in this field.
+          setCombobox(focused.current ? { open: true, activeIndex: -1 } : CLOSED_COMBOBOX);
         },
         (failure: unknown) => {
           if (request !== latest.current) return;
@@ -98,7 +108,11 @@ export function PlaceAutocomplete({
   }
 
   function onKeyDown(event: KeyboardEvent<HTMLInputElement>) {
-    const result = comboboxKey(combobox, event.key, suggestions.length);
+    const result = comboboxKey(
+      combobox,
+      event.key,
+      reachableOptionCount(status, suggestions.length),
+    );
     if (result.handled) event.preventDefault();
     setCombobox(result.state);
     if (result.choose !== undefined) {
@@ -143,9 +157,13 @@ export function PlaceAutocomplete({
             query(event.target.value);
           }}
           onFocus={() => {
+            focused.current = true;
             if (value.chosen === null && suggestions.length === 0) query(value.text);
           }}
-          onBlur={() => setCombobox(CLOSED_COMBOBOX)}
+          onBlur={() => {
+            focused.current = false;
+            setCombobox(CLOSED_COMBOBOX);
+          }}
           onKeyDown={onKeyDown}
         />
         <ul
