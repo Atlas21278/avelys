@@ -267,14 +267,14 @@
       "contactPrompt": "Une question sur votre trajet ?",
       "contactLink": "Contactez-nous",
       "quote": {
-        "lead": "Choisissez votre départ, votre destination et l’heure de prise en charge : le prix fixe est calculé par nos serveurs, sur le trajet routier réel, avant toute demande.",
+        "lead": "Choisissez votre départ, votre destination et l’heure de prise en charge : le prix fixe est calculé par nos serveurs, sur le trajet routier réel, avant toute demande.",
         "formTitle": "Votre trajet",
         "pickup": "Départ",
         "dropoff": "Destination",
         "placePlaceholder": "Adresse, gare, aéroport ou hôtel",
         "placeChosen": "Lieu retenu.",
         "placeConfirm": "Choisissez ce lieu dans la liste des suggestions pour le confirmer.",
-        "suggestionsCount": "{count, plural, one {# suggestion} other {# suggestions}} : flèches haut et bas pour parcourir, Entrée pour choisir.",
+        "suggestionsCount": "{count, plural, one {# suggestion} other {# suggestions}} : flèches haut et bas pour parcourir, Entrée pour choisir.",
         "suggestionsEmpty": "Aucun lieu trouvé. Essayez une adresse, une gare, un aéroport ou un hôtel.",
         "suggestionsFailed": "La recherche de lieux n’a pas abouti. Réessayez dans un instant.",
         "suggestionsLoading": "Recherche des lieux…",
@@ -295,10 +295,10 @@
         "submit": "Voir le prix",
         "note": "Aucune demande n’est envoyée à cette étape.",
         "failures": {
-          "leadTime": "Cette prise en charge est trop proche pour une réservation en ligne. Contactez-nous directement : nous vous dirons si l’un de nous est disponible.",
+          "leadTime": "Cette prise en charge est trop proche pour une réservation en ligne. Contactez-nous directement : nous vous dirons si l’un de nous est disponible.",
           "timeNonexistent": "Cette heure n’existe pas ce jour-là à Paris (passage à l’heure d’été). Choisissez une autre heure.",
           "timeAmbiguous": "Cette heure existe deux fois ce jour-là à Paris (passage à l’heure d’hiver). Choisissez une autre heure.",
-          "noRoute": "Aucun itinéraire routier n’a été trouvé entre ces deux lieux : aucun prix ne peut être proposé. Vérifiez les lieux choisis ou contactez-nous.",
+          "noRoute": "Aucun itinéraire routier n’a été trouvé entre ces deux lieux : aucun prix ne peut être proposé. Vérifiez les lieux choisis ou contactez-nous.",
           "invalidRequest": "Votre demande n’a pas pu être lue. Vérifiez les lieux, la date et l’heure, puis réessayez.",
           "unavailable": "Le calcul du prix est momentanément indisponible. Réessayez dans un instant ou contactez-nous.",
           "network": "La connexion a échoué. Vérifiez votre accès à Internet, puis réessayez."
@@ -316,13 +316,13 @@
         "travellersValue": "{passengers, plural, one {# passager} other {# passagers}}, {luggage, plural, =0 {aucun bagage} one {# bagage} other {# bagages}}",
         "totalHt": "Total HT",
         "vat": "TVA",
-        "provisionalPrice": "Les tarifs sont encore provisoires : ce prix, calculé par nos serveurs, peut évoluer avant l’ouverture des réservations.",
+        "provisionalPrice": "Les tarifs sont encore provisoires : ce prix, calculé par nos serveurs, peut évoluer avant l’ouverture des réservations.",
         "nextStep": "La demande de réservation (coordonnées et moyen de paiement) sera proposée à l’étape suivante, qui n’est pas encore ouverte.",
-        "contactPhone": "Téléphone :",
-        "contactEmail": "Email :",
+        "contactPhone": "Téléphone :",
+        "contactEmail": "Email :",
         "contactLink": "Voir nos moyens de contact",
         "unavailableTitle": "Devis en ligne indisponible",
-        "unavailable": "Le devis en ligne est momentanément indisponible : aucun prix ne peut être calculé sur cette page. Contactez-nous pour préparer votre trajet."
+        "unavailable": "Le devis en ligne est momentanément indisponible : aucun prix ne peut être calculé sur cette page. Contactez-nous pour préparer votre trajet."
       }
     },
     "legalNotice": {
