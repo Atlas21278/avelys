@@ -7,6 +7,7 @@ import {
   type InputHTMLAttributes,
   type ReactNode,
   type SelectHTMLAttributes,
+  type TextareaHTMLAttributes,
 } from "react";
 
 import { cx } from "@/lib/cx";
@@ -22,7 +23,7 @@ const FieldContext = createContext<FieldContextValue | null>(null);
 
 function useField(): FieldContextValue {
   const context = useContext(FieldContext);
-  if (!context) throw new Error("Input and Select must be rendered inside <Field>.");
+  if (!context) throw new Error("Input, TextArea and Select must be rendered inside <Field>.");
   return context;
 }
 
@@ -100,6 +101,21 @@ export function Input({ className, ...props }: InputHTMLAttributes<HTMLInputElem
       aria-invalid={field.invalid || undefined}
       required={field.required}
       className={cx(controlBase, className)}
+      {...props}
+    />
+  );
+}
+
+/** Multi-line text on the same ledger line as `Input` (VTC-047: booking notes). */
+export function TextArea({ className, ...props }: TextareaHTMLAttributes<HTMLTextAreaElement>) {
+  const field = useField();
+  return (
+    <textarea
+      id={field.id}
+      aria-describedby={field.describedBy}
+      aria-invalid={field.invalid || undefined}
+      required={field.required}
+      className={cx(controlBase, "resize-y", className)}
       {...props}
     />
   );

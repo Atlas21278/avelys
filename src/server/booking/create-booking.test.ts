@@ -129,7 +129,10 @@ describe("CreateBookingRequestSchema", () => {
     ["an unknown currency", { displayedTotal: { amountCents: 100, currency: "USD" } }],
     ["a place with neither place id nor coordinates", { origin: { label: "x" } }],
     ["a place with a latitude only", { origin: { label: "x", lat: 48.8 } }],
-    ["a place id with out-of-range coordinates", { origin: { label: "x", placeId: "p", lat: 91, lng: 2 } }],
+    [
+      "a place id with out-of-range coordinates",
+      { origin: { label: "x", placeId: "p", lat: 91, lng: 2 } },
+    ],
     ["an unknown transport kind", { transport: { kind: "BUS" } }],
     [
       "a transport time without offset",
