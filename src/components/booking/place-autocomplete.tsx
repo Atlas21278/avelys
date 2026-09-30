@@ -116,7 +116,9 @@ export function PlaceAutocomplete({
   let announcement = "";
   if (status === "ready") {
     announcement =
-      suggestions.length === 0 ? t("suggestionsEmpty") : t("suggestionsCount", { count: suggestions.length });
+      suggestions.length === 0
+        ? t("suggestionsEmpty")
+        : t("suggestionsCount", { count: suggestions.length });
   } else if (status === "failed") {
     announcement = t("suggestionsFailed");
   }
@@ -124,61 +126,63 @@ export function PlaceAutocomplete({
   return (
     <Field label={label} error={error} hint={hint} required>
       <div className="relative">
-      <Input
-        type="text"
-        role="combobox"
-        aria-autocomplete="list"
-        aria-expanded={open}
-        aria-controls={listboxId}
-        aria-activedescendant={activeId}
-        autoComplete="off"
-        spellCheck={false}
-        maxLength={200}
-        placeholder={t("placePlaceholder")}
-        value={value.text}
-        onChange={(event) => {
-          onTextChange(event.target.value);
-          query(event.target.value);
-        }}
-        onFocus={() => {
-          if (value.chosen === null && suggestions.length === 0) query(value.text);
-        }}
-        onBlur={() => setCombobox(CLOSED_COMBOBOX)}
-        onKeyDown={onKeyDown}
-      />
-      <ul
-        id={listboxId}
-        role="listbox"
-        aria-label={label}
-        hidden={!open || suggestions.length === 0}
-        className="absolute inset-x-0 top-full z-20 -mt-px max-h-80 overflow-y-auto border border-ink bg-paper"
-      >
-        {suggestions.map((suggestion, index) => (
-          <li
-            key={suggestion.placeId}
-            id={`${listboxId}-${index}`}
-            role="option"
-            aria-selected={index === combobox.activeIndex}
-            // Keep focus in the field: the choice happens on click, the blur must not close first.
-            onMouseDown={(event) => event.preventDefault()}
-            onClick={() => choose(suggestion)}
-            className={cx(
-              "flex min-h-12 cursor-pointer flex-col justify-center border-b border-hairline px-3 py-2 last:border-b-0",
-              index === combobox.activeIndex ? "bg-paper-deep" : "hover:bg-paper-deep",
-            )}
-          >
-            <span>{suggestion.mainText}</span>
-            {suggestion.secondaryText ? (
-              <span className="text-sm text-graphite">{suggestion.secondaryText}</span>
-            ) : null}
-          </li>
-        ))}
-      </ul>
+        <Input
+          type="text"
+          role="combobox"
+          aria-autocomplete="list"
+          aria-expanded={open}
+          aria-controls={listboxId}
+          aria-activedescendant={activeId}
+          autoComplete="off"
+          spellCheck={false}
+          maxLength={200}
+          placeholder={t("placePlaceholder")}
+          value={value.text}
+          onChange={(event) => {
+            onTextChange(event.target.value);
+            query(event.target.value);
+          }}
+          onFocus={() => {
+            if (value.chosen === null && suggestions.length === 0) query(value.text);
+          }}
+          onBlur={() => setCombobox(CLOSED_COMBOBOX)}
+          onKeyDown={onKeyDown}
+        />
+        <ul
+          id={listboxId}
+          role="listbox"
+          aria-label={label}
+          hidden={!open || suggestions.length === 0}
+          className="absolute inset-x-0 top-full z-20 -mt-px max-h-80 overflow-y-auto border border-ink bg-paper"
+        >
+          {suggestions.map((suggestion, index) => (
+            <li
+              key={suggestion.placeId}
+              id={`${listboxId}-${index}`}
+              role="option"
+              aria-selected={index === combobox.activeIndex}
+              // Keep focus in the field: the choice happens on click, the blur must not close first.
+              onMouseDown={(event) => event.preventDefault()}
+              onClick={() => choose(suggestion)}
+              className={cx(
+                "flex min-h-12 cursor-pointer flex-col justify-center border-b border-hairline px-3 py-2 last:border-b-0",
+                index === combobox.activeIndex ? "bg-paper-deep" : "hover:bg-paper-deep",
+              )}
+            >
+              <span>{suggestion.mainText}</span>
+              {suggestion.secondaryText ? (
+                <span className="text-sm text-graphite">{suggestion.secondaryText}</span>
+              ) : null}
+            </li>
+          ))}
+        </ul>
       </div>
       {status === "ready" && suggestions.length === 0 ? (
         <p className="text-sm text-graphite">{t("suggestionsEmpty")}</p>
       ) : null}
-      {status === "failed" ? <p className="text-sm text-graphite">{t("suggestionsFailed")}</p> : null}
+      {status === "failed" ? (
+        <p className="text-sm text-graphite">{t("suggestionsFailed")}</p>
+      ) : null}
       <p className="sr-only" aria-live="polite">
         {status === "loading" ? t("suggestionsLoading") : announcement}
       </p>

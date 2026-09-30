@@ -67,10 +67,7 @@ describe("publicQuoteSettings (VTC-046)", () => {
       throw new EnvValidationError(["DATABASE_URL (invalid_format)"]);
     });
     expect(publicQuoteSettings()).toEqual({ enabled: false });
-    expect(log.error).toHaveBeenCalledWith(
-      { errorName: "EnvValidationError" },
-      expect.any(String),
-    );
+    expect(log.error).toHaveBeenCalledWith({ errorName: "EnvValidationError" }, expect.any(String));
   });
 
   it("does not hide an unexpected error", () => {

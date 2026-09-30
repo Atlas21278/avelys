@@ -141,7 +141,9 @@ export type PlaceSuggestionOptions = Readonly<{
   loadPlaces: () => Promise<PlacesLibrary>;
 }>;
 
-export function createPlaceSuggestionSource(options: PlaceSuggestionOptions): PlaceSuggestionSource {
+export function createPlaceSuggestionSource(
+  options: PlaceSuggestionOptions,
+): PlaceSuggestionSource {
   let sessionToken: object | undefined;
 
   return {

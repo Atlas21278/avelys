@@ -139,7 +139,12 @@ export function QuoteStep({ search, mapsBrowserKey, serviceArea, onQuoteChange }
 
   return (
     <div className="grid items-start gap-10 md:grid-cols-[minmax(0,1fr)_minmax(0,24rem)] lg:gap-16">
-      <form noValidate onSubmit={(event) => void onSubmit(event)} aria-labelledby="quote-title" className="flex flex-col gap-6">
+      <form
+        noValidate
+        onSubmit={(event) => void onSubmit(event)}
+        aria-labelledby="quote-title"
+        className="flex flex-col gap-6"
+      >
         <h2 id="quote-title" className="font-display-figure text-2xl">
           {t("formTitle")}
         </h2>
@@ -195,7 +200,12 @@ export function QuoteStep({ search, mapsBrowserKey, serviceArea, onQuoteChange }
         ) : null}
 
         <div className="flex flex-col gap-3">
-          <Button type="submit" size="lg" loading={submitting} className="w-full sm:w-auto sm:self-start">
+          <Button
+            type="submit"
+            size="lg"
+            loading={submitting}
+            className="w-full sm:w-auto sm:self-start"
+          >
             {t("submit")}
           </Button>
           <p className="text-sm text-graphite">{t("note")}</p>

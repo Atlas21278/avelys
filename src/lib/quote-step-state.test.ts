@@ -71,7 +71,12 @@ describe("initial state", () => {
     });
     expect(state.pickup).toEqual({ text: "Gare de Lyon", chosen: null });
     expect(state.dropoff).toEqual({ text: "CDG T2", chosen: null });
-    expect(state).toMatchObject({ date: "2026-10-25", time: "14:30", passengers: "3", luggage: "2" });
+    expect(state).toMatchObject({
+      date: "2026-10-25",
+      time: "14:30",
+      passengers: "3",
+      luggage: "2",
+    });
     expect(buildQuoteRequest(draftOf(state))).toEqual({ ok: false, issues: ["pickup", "dropoff"] });
   });
 

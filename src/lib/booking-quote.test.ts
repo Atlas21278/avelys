@@ -197,7 +197,9 @@ describe("quoteFingerprint", () => {
   if (!request.ok || !quote) throw new Error("fixture");
 
   it("does not change when the same trip is re-quoted at the same price", () => {
-    const again = readQuoteResponse({ quote: { ...serverQuote.quote, snapshotId: "b".repeat(64) } });
+    const again = readQuoteResponse({
+      quote: { ...serverQuote.quote, snapshotId: "b".repeat(64) },
+    });
     expect(again && quoteFingerprint(request.request, again)).toBe(
       quoteFingerprint(request.request, quote),
     );
