@@ -7,8 +7,11 @@ import "server-only";
  * must be idempotent, since a retry may call them again for the same booking.
  */
 
-/** Called once a booking is `ACCEPTED`. The off-session charge will plug in here (VTC-033). */
+/**
+ * Called once a booking is `ACCEPTED`. The back-office server action wires the off-session charge
+ * here (`chargeAcceptedBooking`, VTC-033).
+ */
 export type OnBookingAccepted = (bookingId: string) => Promise<void>;
 
-/** Default until VTC-033: accepting a booking triggers nothing (no charge, no email). */
+/** Default of the service (tests, callers without payment): accepting triggers nothing. */
 export const onBookingAcceptedNoop: OnBookingAccepted = async () => {};

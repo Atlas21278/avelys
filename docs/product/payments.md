@@ -7,10 +7,11 @@ Source : Master Spec §11, §15, §21. Règles : BR-40 à BR-44. ADR-0006.
 Une autorisation carte expire après une durée limitée (à revérifier dans la doc Stripe à l'implémentation, **jamais codée en dur**). Pour les réservations lointaines :
 
 1. **Demande (`REQUESTED`)** — `SetupIntent` avec SCA client (`usage: 'off_session'`), Customer Stripe **créé pour ce parcours** (la réutilisation d'un Customer, réservée à un compte authentifié, est hors périmètre de VTC-031). Aucun débit. Détail : « Étape 1 : enregistrement du moyen de paiement » ci-dessous.
-2. **Acceptation (`ACCEPTED`)** — `PaymentIntent` `off_session: true, confirm: true`, capture automatique, montant **recalculé côté serveur depuis le snapshot**.
+2. **Acceptation (`ACCEPTED`)** — `PaymentIntent` `off_session: true, confirm: true`, capture automatique, montant **figé côté serveur, contrôlé contre le snapshot** (jamais recalculé avec une règle plus récente, BR-13). Détail : « Étape 2 : débit off-session à l'acceptation » ci-dessous.
    - Succès → Payment `PAID` → Booking `CONFIRMED`.
-   - Authentification requise → Payment `REQUIRES_ACTION` ; email au client avec lien de paiement ; Booking reste `ACCEPTED`.
-   - Échec → Payment `FAILED` ; admin notifié ; Booking reste `ACCEPTED` jusqu'à résolution ou annulation (délai DEC-13).
+   - Authentification requise → Payment `REQUIRES_ACTION` ; email au client avec lien de paiement (VTC-042, VTC-044) ; Booking reste `ACCEPTED`.
+   - Échec → Payment `FAILED` ; statut visible sur le détail back-office (notification admin par email : EPIC-13) ; Booking reste `ACCEPTED` jusqu'à résolution ou annulation (délai DEC-13).
+   - **Pas de relance automatique** (DEC-27) : un associé relance manuellement depuis le back-office (VTC-041), après vérification du statut Stripe.
 3. **Annulation** — remboursement total ou partiel selon la politique d'annulation (**DEC-05, À VALIDER**). Tant qu'elle n'est pas validée, le remboursement est une action admin manuelle avec montant saisi et journalisé.
 
 `AUTHORIZED` existe dans l'enum pour un usage futur (réservations proches) mais n'est pas utilisé par ce flux.
@@ -46,7 +47,7 @@ Table pure `PAYMENT_TRANSITIONS` (`src/domain/payment/transitions.ts`), testée 
 2. **Confirmation côté navigateur** — Stripe.js / Payment Element confirme le SetupIntent (SCA si la banque la demande). Le numéro de carte et le CVC ne transitent jamais par nos serveurs (BR-40). Formulaire public : ticket ultérieur.
 3. **Création de la réservation** — le formulaire envoie `paymentSetupId` (id `seti_…`) avec la demande. `createStripePaymentMethodGuard` relit le SetupIntent chez Stripe et exige : format `seti_…`, non déjà utilisé (base), connu de Stripe, `livemode: false`, métadonnée du parcours, `status = succeeded`, `usage = off_session`, Customer et moyen de paiement présents. Sinon `PAYMENT_METHOD_REQUIRED` (raison journalisée sans id). Puis, dans **la transaction de création** : `Payment` `PENDING` (montant TTC et devise du Booking, `stripeCustomerId`, `stripeSetupIntentId`, `stripePaymentMethodId`, `attempt = 0`), `Booking.currentPaymentId`, `AuditLog` `payment.create`. Aucun PaymentIntent (VTC-033).
 
-Métadonnées Stripe : uniquement `flow: booking_request` ; aucune donnée personnelle hormis l'email du Customer. Le `bookingRef` n'existe pas encore à la création du SetupIntent : il sera porté par le PaymentIntent (VTC-033).
+Métadonnées Stripe : uniquement `flow: booking_request` ; aucune donnée personnelle hormis l'email du Customer. Le `bookingRef` n'existe pas encore à la création du SetupIntent : il est porté par le PaymentIntent (VTC-033).
 
 Erreurs de l'endpoint :
 
@@ -69,6 +70,73 @@ Compte Stripe en test mode, clés de test dans le `.env` local du propriétaire 
 3. Appeler `requestBooking()` avec `paymentSetupId` = id du SetupIntent : réservation `REQUESTED`, `Payment` `PENDING`. Un second appel avec le même id → `PAYMENT_METHOD_REQUIRED`.
 4. Avec une clé `sk_live_…` : l'endpoint répond 503 `PAYMENT_UNAVAILABLE`, aucun appel Stripe.
 
+## Étape 2 : débit off-session à l'acceptation (VTC-033)
+
+Décision des associés : DEC-27 (relance manuelle, vérification Stripe avant toute nouvelle tentative, réservation `ACCEPTED` jusqu'au paiement réussi, lien de régularisation si SCA).
+
+### Modèle de tentatives
+
+- **Un seul `Payment` par réservation en V1** (celui créé à la demande, VTC-031). Toutes les tentatives de débit se font sur cette ligne : `attempt` = numéro de la tentative courante, `stripePaymentIntentId` = PaymentIntent de la tentative courante (remplacé à chaque tentative par la relance manuelle, VTC-041).
+- `Booking.currentPaymentId` **ne change jamais** : la garantie « le Payment courant appartient à cette réservation » est conservée par construction. Contrôle défensif avant tout appel Stripe (`payment.bookingId = booking.id` et `booking.currentPaymentId = payment.id`), sinon aucun débit et `PAYMENT_STATE_INCONSISTENT` journalisé.
+- Historique des tentatives : `AuditLog` (`payment.charge_attempt`, `payment.charge` avec l'id `pi_…`) et Stripe (métadonnées `bookingRef` + `attempt`, Customer dédié à la réservation).
+
+### Débit (`chargeBooking`, `src/server/payments/charge-booking.ts`)
+
+Branché sur le port après commit `onBookingAccepted(bookingId)` par la server action d'acceptation (`chargeAcceptedBooking`, `src/server/payments/index.ts`). Règles pures : `src/domain/payment/charge.ts` ; adaptateur : `src/integrations/stripe/payment-intents.ts`.
+
+1. **Préconditions** : Booking `ACCEPTED`, Payment courant `PENDING`, `attempt = 0`, aucun PaymentIntent. Sinon **no-op idempotent** (raison journalisée avec le `bookingRef`) : un double appel ne débite jamais deux fois.
+2. **Montant** = `Payment.amountCents`/`currency`, qui doivent être égaux à `Booking.totalTtcCents`/`currency` **et** au total du `pricingSnapshot` validé (`parsePricingSnapshot`), et strictement positifs. Sinon aucun débit, `PAYMENT_AMOUNT_MISMATCH` journalisé. Jamais de montant venant du navigateur (BR-12).
+3. **Réservation de la tentative** (transaction courte) : `attempt` 0 → 1 et `version + 1`, conditionnés à `id`, `version`, `attempt = 0`, `PENDING`, et à la réservation toujours `ACCEPTED` ; `AuditLog` `payment.charge_attempt`. Aucune ligne modifiée → une autre exécution est en cours : no-op.
+4. **Vérification Stripe préalable** : liste des PaymentIntents du Customer dédié (lecture fortement cohérente, contrairement à la Search API ; au-delà de 100, erreur technique). Un PaymentIntent `succeeded` (ou à défaut `processing`) est appliqué au lieu d'un nouveau débit.
+5. **PaymentIntent** (hors transaction) : Customer et moyen de paiement du Payment, `amount`, `currency`, `payment_method_types: ['card']`, `off_session: true`, `confirm: true`, `capture_method: 'automatic'`, clé d'idempotence `booking:{bookingId}:charge:{attempt}`, métadonnées `{ bookingRef, attempt }` **uniquement** (ni description ni donnée personnelle).
+6. **Application du résultat** (`applyChargeResult`, `src/server/payments/apply-charge.ts`, partagé avec les webhooks) : verrou `FOR UPDATE` sur le Payment puis la réservation, contrôle d'appartenance, de Customer et de montant, statut cible vérifié par la table des transitions Payment, écriture sous verrou optimiste (`version`), `AuditLog`. Puis, après commit, `onPaymentRequiresAction(paymentId)` si le Payment vient d'entrer en `REQUIRES_ACTION`.
+
+| Résultat Stripe                                                                           | Payment                                  | Booking                               | Audit                               |
+| ----------------------------------------------------------------------------------------- | ---------------------------------------- | ------------------------------------- | ----------------------------------- |
+| `succeeded`                                                                               | `PENDING → PAID`                         | `ACCEPTED → CONFIRMED` (`SYSTEM`)     | `payment.charge`, `booking.confirm` |
+| Erreur carte `authentication_required` (PaymentIntent revenu à `requires_payment_method`) | `→ REQUIRES_ACTION` + port après commit  | reste `ACCEPTED`                      | `payment.charge`                    |
+| Autre refus (`card_declined`, `expired_card`…)                                            | `→ FAILED`                               | reste `ACCEPTED`                      | `payment.charge`                    |
+| `processing`                                                                              | reste `PENDING` (id `pi_…` enregistré)   | reste `ACCEPTED` ; le webhook tranche | `payment.charge`                    |
+| Erreur technique (réseau, 5xx Stripe, clé absente ou live)                                | reste `PENDING`, `attempt = 1`, aucun id | reste `ACCEPTED`                      | `payment.charge_attempt` seul       |
+
+- En off-session, Stripe signale une authentification requise par une **erreur carte** `authentication_required` qui porte le PaymentIntent (statut `requires_payment_method`) — vérifié dans la doc Stripe (« charge saved payment method », 2026-09) : c'est ce code, pas le seul statut, qui distingue `REQUIRES_ACTION` de `FAILED`. Une erreur carte portant un PaymentIntent est un **résultat** ; sans PaymentIntent, c'est une erreur technique.
+- Erreur technique : aucune transition, aucune relance automatique (DEC-27). La reprise est la relance manuelle (VTC-041), qui vérifie Stripe avant toute nouvelle tentative ; si le PaymentIntent avait été créé, son webhook le rattache (ci-dessous).
+- Un succès sur une réservation qui n'est plus `ACCEPTED` (annulée entre-temps) enregistre le Payment `PAID` (état du PSP, BR-41) sans toucher la réservation, et journalise une erreur : remboursement manuel (DEC-05).
+- Un même statut deux fois (ex. `FAILED` → `FAILED`) n'est pas une transition et ne passe pas par la table ; la table des transitions Payment de VTC-031 est **inchangée**.
+
+### Webhooks PaymentIntent
+
+Handlers (`createPaymentIntentWebhookHandlers`, `src/server/payments/webhook-handlers.ts`) pour `payment_intent.succeeded`, `payment_intent.payment_failed` et `payment_intent.requires_action`. `payment_intent.canceled` n'a pas de handler : enregistré sans effet (annulations : VTC-041).
+
+- **Tolérance au désordre** : le PaymentIntent est **relu chez Stripe avant d'ouvrir la transaction** (`prepare`, jamais d'appel réseau dans la transaction) et c'est son état courant qui est appliqué, pas l'instantané de l'événement. Stripe indisponible → 500, rien d'enregistré, Stripe renvoie l'événement. Un événement déjà enregistré est reconnu avant la relecture (pas d'appel Stripe inutile).
+- **Rattachement** : par `Payment.stripePaymentIntentId` ; à défaut (crash entre la création du PaymentIntent et l'étape 6), par `metadata.bookingRef` + `metadata.attempt` égal à `Payment.attempt` + même Customer, puis enregistrement de l'id. PaymentIntent d'une tentative antérieure → ignoré ; **un succès sur une tentative antérieure** est journalisé en erreur (`alert: orphan_succeeded_payment_intent`, `bookingRef`) pour remboursement manuel (DEC-05), sans changement d'état. Aucun rattachement (PaymentIntent inconnu, autre Customer, autre flux) → ignoré, 200.
+- Mêmes effets que l'étape 6. Transition absente de la table (ex. échec relu après `PAID`) → ignorée, journalisée, 200 : jamais de 500 pour un no-op métier. Un succès déjà appliqué n'est pas rejoué (même statut = aucune écriture).
+- **Effets après commit** : un handler peut renvoyer un effet exécuté après le commit de la transaction de l'événement (ici `onPaymentRequiresAction`) ; son échec est journalisé et ne fait ni échouer le webhook ni changer d'état (BR-50).
+
+### Port `onPaymentRequiresAction`
+
+`src/server/payments/after-charge.ts` : `onPaymentRequiresAction(paymentId)`, no-op par défaut, appelé **une fois**, après commit de toute entrée en `REQUIRES_ACTION` (chemin synchrone et webhook). L'email avec lien de régularisation s'y branchera (VTC-044, page VTC-042).
+
+### Audit, logs, affichage
+
+- `AuditLog` (acteur `SYSTEM`) : `payment.charge_attempt` (état Payment avant/après, sans id Stripe), `payment.charge` (`bookingRef`, `attempt`, statut, version, montant, devise avant/après + `paymentIntentId` après), `booking.confirm` (`bookingRef`, statut, version).
+- **Exception documentée** à la règle « aucun id Stripe dans l'`AuditLog` » : l'id `pi_…` est autorisé dans `payment.charge` pour tracer chaque tentative (ni donnée carte, ni donnée personnelle, ni secret ; format `pi_…` validé). Les autres ids Stripe (Customer, SetupIntent, moyen de paiement) restent refusés.
+- **Logs** : `bookingRef`, tentative, statuts, code d'erreur Stripe (`card_declined`…) et nom d'erreur uniquement ; **jamais d'id Stripe**, de donnée carte ni de donnée personnelle.
+- **Back-office** : le détail d'une réservation affiche le statut du Payment courant, le numéro de tentative et le montant (lus depuis `Payment`, BR-41), sans id Stripe. Le passage `ACCEPTED → CONFIRMED` apparaît dans l'historique (acteur « Système »).
+
+### Vérification manuelle (test mode)
+
+Pour le propriétaire, compte Stripe en **test mode**, clés de test dans le `.env` local uniquement, `stripe listen --forward-to localhost:3000/api/webhooks/stripe` actif (voir « Webhooks en local »), `pnpm dev` :
+
+1. Créer une demande (étape 1) en confirmant le SetupIntent avec une carte de test, puis l'accepter depuis `/admin/reservations/[référence]`.
+2. Cartes de test (numéros de la page « Testing » de la doc Stripe, à revérifier sur `docs.stripe.com/testing`) :
+   - `4242 4242 4242 4242` (succès) → Payment « Payé », réservation « Confirmée », historique « Acceptée → Confirmée » par Système ;
+   - `4000 0027 6000 3184` (authentification toujours requise) → Payment « Authentification client requise », réservation « Acceptée » ;
+   - `4000 0000 0000 0341` (enregistrement accepté, débits refusés) → Payment « Échec », réservation « Acceptée ».
+3. Dans le Dashboard de test : un PaymentIntent par acceptation, métadonnées `bookingRef` et `attempt` seules, montant = total de la réservation. Accepter deux fois (double clic) ne crée pas de second PaymentIntent.
+4. `stripe events resend <evt_id>` sur un `payment_intent.succeeded` déjà traité : 200, aucun nouvel effet.
+5. Logs : aucun id `pi_`, `cus_`, `pm_`, `seti_`.
+
 ## Idempotence
 
 - Chaque appel Stripe créateur (`PaymentIntent`, `Refund`) porte une `idempotencyKey` dérivée de l'identité métier (ex. `booking:{id}:charge:{attempt}`).
@@ -80,8 +148,8 @@ Compte Stripe en test mode, clés de test dans le `.env` local du propriétaire 
 `POST /api/webhooks/stripe` (`src/app/api/webhooks/stripe/route.ts`, runtime Node, jamais mis en cache). Hors authentification et hors CSRF : seule la signature Stripe fait foi.
 
 1. Corps brut (`request.text()`) et en-tête `stripe-signature` vérifiés par `verifyWebhookEvent` (`src/integrations/stripe/webhooks.ts`) avec `STRIPE_WEBHOOK_SECRET` (tolérance par défaut du SDK, 5 minutes), puis enveloppe de l'événement validée par Zod (`id` `evt_…`, `object: "event"`, `type`, `livemode: false`, `created`, `data.object`).
-2. Service `receiveStripeWebhook` / `processStripeWebhookEvent` (`src/server/payments/process-webhook.ts`) : **une transaction** qui insère `(STRIPE, event.id, event.type)` dans `ProcessedWebhookEvent` avec `ON CONFLICT DO NOTHING`, puis exécute le handler éventuel du registre `src/server/payments/webhook-handlers.ts` (vide pour l'instant) avec le client transactionnel.
-3. Effets externes d'un futur handler (email, appel Stripe) : **après commit** (BR-50), jamais dans la transaction.
+2. Service `receiveStripeWebhook` / `processStripeWebhookEvent` (`src/server/payments/process-webhook.ts`) : **une transaction** qui insère `(STRIPE, event.id, event.type)` dans `ProcessedWebhookEvent` avec `ON CONFLICT DO NOTHING`, puis exécute le handler éventuel du registre `src/server/payments/webhook-handlers.ts` (événements PaymentIntent depuis VTC-033) avec le client transactionnel. Un handler qui doit lire Stripe le fait **avant** la transaction (`prepare`, VTC-033).
+3. Effets externes d'un handler (email) : **après commit** (BR-50), jamais dans la transaction ; leur échec est journalisé sans faire échouer le webhook.
 
 | Cas                                          | Réponse                                  | Écrit                                    |
 | -------------------------------------------- | ---------------------------------------- | ---------------------------------------- |
@@ -93,6 +161,8 @@ Compte Stripe en test mode, clés de test dans le `.env` local du propriétaire 
 | Corps signé mais enveloppe invalide          | 400 `INVALID_INPUT`                      | rien                                     |
 | Événement live (`livemode: true`), signé     | 400 `INVALID_INPUT`                      | rien                                     |
 | Handler (ou base) en échec                   | 500 `INTERNAL_ERROR` : Stripe réessaie   | rien (rollback) ; le renvoi est retraité |
+| Relecture Stripe impossible (`prepare`)      | 500 `INTERNAL_ERROR` : Stripe réessaie   | rien                                     |
+| No-op métier (PaymentIntent inconnu…)        | 200                                      | une ligne, aucun autre effet             |
 | `STRIPE_WEBHOOK_SECRET` absent               | 500 `WEBHOOK_NOT_CONFIGURED`, journalisé | rien                                     |
 
 **Événements live refusés** (BR-44) : un secret de signature test et un secret live sont indiscernables, donc tout événement `livemode: true` est refusé (400, rien écrit) tant que le ticket d'activation live (`CRITICAL`) n'est pas livré.
@@ -101,11 +171,11 @@ Compte Stripe en test mode, clés de test dans le `.env` local du propriétaire 
 
 Concurrence : le second `INSERT` attend la transaction du premier sur l'index unique ; commit → il n'insère rien (doublon) ; rollback → il traite l'événement. Logs : `eventId`, `eventType`, `correlationId`, résultat, nom d'erreur uniquement ; jamais le payload, l'en-tête de signature ni un secret.
 
-Le statut Stripe reste séparé du statut Booking (BR-41) : un handler met à jour `Payment` (ticket ultérieur) et ne change un Booking que par la table de transitions centrale.
+Le statut Stripe reste séparé du statut Booking (BR-41) : un handler met à jour `Payment` (VTC-033) et ne change un Booking que par la table de transitions centrale.
 
 ### Adaptateur Stripe (VTC-030)
 
-`src/integrations/stripe/` : `stripeClient()` (fabrique lazy : l'environnement est lu au premier usage, `pnpm build` passe sans variable Stripe), `stripeWebhooks()` (vérificateur, interface `StripeWebhookVerifier` mockable). Version d'API **épinglée** dans `STRIPE_API_VERSION` (`client.ts`), égale à celle du SDK installé : une montée de SDK change cette constante délibérément. Les tests unitaires ne touchent jamais le réseau Stripe.
+`src/integrations/stripe/` : `stripeClient()` (fabrique lazy : l'environnement est lu au premier usage, `pnpm build` passe sans variable Stripe), `stripeWebhooks()` (vérificateur, interface `StripeWebhookVerifier` mockable), `stripePaymentSetup()` (SetupIntent, VTC-031) et `stripePaymentIntents()` (PaymentIntent, VTC-033 : création off-session, liste par Customer, relecture ; interface `PaymentIntentGateway` mockable), soumis à la même garde test mode. Version d'API **épinglée** dans `STRIPE_API_VERSION` (`client.ts`), égale à celle du SDK installé : une montée de SDK change cette constante délibérément. Les tests unitaires ne touchent jamais le réseau Stripe.
 
 ## Moyens de paiement
 

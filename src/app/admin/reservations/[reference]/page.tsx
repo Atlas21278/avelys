@@ -19,6 +19,7 @@ import {
   formatDuration,
   LOCALE_LABELS,
   MISSING,
+  PAYMENT_STATUS_LABELS,
   STATUS_LABELS,
   TRANSPORT_LABELS,
 } from "../_components/format";
@@ -130,6 +131,37 @@ export default async function BookingDetailPage({
             Montants enregistrés au devis, jamais recalculés ici. HT et TVA : « — » tant que le taux
             n’est pas fixé.
           </p>
+        </Section>
+
+        <Section title="Paiement">
+          {booking.currentPayment ? (
+            <>
+              <Facts>
+                <Fact label="Statut">
+                  <span className="font-semibold">
+                    {PAYMENT_STATUS_LABELS[booking.currentPayment.status]}
+                  </span>
+                </Fact>
+                <Fact label="Tentative de débit">
+                  {booking.currentPayment.attempt > 0
+                    ? `n° ${booking.currentPayment.attempt}`
+                    : "aucune"}
+                </Fact>
+                <Fact label="Montant">
+                  {formatAmount(
+                    booking.currentPayment.amountCents,
+                    booking.currentPayment.currency,
+                  )}
+                </Fact>
+              </Facts>
+              <p className="text-sm text-graphite">
+                Carte débitée hors session à l’acceptation. La réservation reste « Acceptée » tant
+                que le paiement n’a pas réussi.
+              </p>
+            </>
+          ) : (
+            <p className="text-graphite">Aucun paiement enregistré pour cette réservation.</p>
+          )}
         </Section>
 
         <Section title="Client">
