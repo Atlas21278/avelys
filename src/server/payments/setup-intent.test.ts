@@ -98,6 +98,40 @@ describe("createPaymentSetup", () => {
     expect((error as PaymentSetupRequestError).reason).toBe("stripe_live_key");
   });
 
+  it("derives the Stripe idempotency keys from the browser's submissionId (double click)", async () => {
+    const submissionId = "3b241101-e2bb-4255-8caf-4136c566a962";
+    await createPaymentSetup({ email: "guest@avelys.test", submissionId }, deps);
+    await createPaymentSetup({ email: "guest@avelys.test", submissionId }, deps);
+    const journeyIds = createSetupIntent.mock.calls.map(([input]) => input.journeyId);
+    expect(journeyIds).toEqual([submissionId, submissionId]);
+  });
+
+  it.each([
+    ["not a UUID", "double-click-1"],
+    ["a UUID of another version", "3b241101-e2bb-1255-8caf-4136c566a962"],
+    ["a non-string", 42],
+  ])("refuses a submissionId that is %s with INVALID_INPUT", async (_label, submissionId) => {
+    const error = await refusal({ email: "guest@avelys.test", submissionId });
+    expect(error.code).toBe("INVALID_INPUT");
+    expect(gateway).not.toHaveBeenCalled();
+  });
+
+  it("maps a reused submissionId with another email to PAYMENT_SETUP_CONFLICT", async () => {
+    createSetupIntent.mockRejectedValue(
+      new Stripe.errors.StripeIdempotencyError({
+        type: "idempotency_error",
+        message: "Keys for idempotent requests can only be used with the same parameters",
+      }),
+    );
+    const error = await refusal({
+      email: "other@avelys.test",
+      submissionId: "3b241101-e2bb-4255-8caf-4136c566a962",
+    });
+    expect(error.code).toBe("PAYMENT_SETUP_CONFLICT");
+    expect(error.reason).toBe("submission_id_reused");
+    expect(error.cause).toBeUndefined();
+  });
+
   it("lets an unexpected error through", async () => {
     createSetupIntent.mockRejectedValue(new TypeError("bug"));
     await expect(createPaymentSetup({ email: "guest@avelys.test" }, deps)).rejects.toBeInstanceOf(

@@ -34,14 +34,17 @@ L'IP client est lue dans `X-Forwarded-For`. Ce header est fourni par le client e
 
 ## Protection
 
-| Menace  | Mesure                                                                                                 |
-| ------- | ------------------------------------------------------------------------------------------------------ |
-| XSS     | Échappement React, CSP stricte (nonces), pas de `dangerouslySetInnerHTML` non assaini                  |
-| CSRF    | Server actions Next.js (vérif. Origin) + SameSite ; webhooks exclus mais signés                        |
-| SQLi    | Prisma paramétré ; `$queryRaw` uniquement en template taggé                                            |
-| SSRF    | Aucune URL fournie par l'utilisateur n'est appelée côté serveur ; intégrations sur hôtes fixes         |
-| Abus    | Rate limiting sur auth, devis et endpoints coûteux (Maps) ; anti-spam (honeypot + limite)              |
-| Headers | HSTS, CSP, `X-Content-Type-Options`, `Referrer-Policy`, `Permissions-Policy`, `frame-ancestors 'none'` |
+| Menace                    | Mesure                                                                                                                                                         |
+| ------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| XSS                       | Échappement React, CSP stricte (nonces), pas de `dangerouslySetInnerHTML` non assaini                                                                          |
+| CSRF                      | Server actions Next.js (vérif. Origin) + SameSite ; webhooks exclus mais signés                                                                                |
+| SQLi                      | Prisma paramétré ; `$queryRaw` uniquement en template taggé                                                                                                    |
+| SSRF                      | Aucune URL fournie par l'utilisateur n'est appelée côté serveur ; intégrations sur hôtes fixes                                                                 |
+| Abus                      | Rate limiting sur auth, devis et endpoints coûteux (Maps) ; anti-spam (honeypot + limite)                                                                      |
+| Exposition publique       | Routes de réservation anonymes (`bookings`, `payment-setups`) derrière `PUBLIC_BOOKING_ENABLED` (défaut `false`, 404) jusqu'à INFRA-005/INFRA-006 (VTC-045)    |
+| Rejeu / double soumission | Demande idempotente par SetupIntent + email ; SetupIntent lié à l'email de la demande ; `submissionId` navigateur pour les clés d'idempotence Stripe (VTC-045) |
+| Audit falsifié            | `correlationId` tiré par le serveur sur les routes publiques anonymes (`x-request-id` client ignoré, VTC-045)                                                  |
+| Headers                   | HSTS, CSP, `X-Content-Type-Options`, `Referrer-Policy`, `Permissions-Policy`, `frame-ancestors 'none'`                                                         |
 
 ## Secrets
 

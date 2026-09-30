@@ -583,7 +583,10 @@ describe("booking creation service (integration)", () => {
     confirmedPaymentMethod.mockResolvedValue(null);
     const error = await refusal(createBooking(request(), deps()));
     expect(error.code).toBe("PAYMENT_METHOD_REQUIRED");
-    expect(confirmedPaymentMethod).toHaveBeenCalledWith({ paymentSetupId: "seti_TestRequest" });
+    expect(confirmedPaymentMethod).toHaveBeenCalledWith({
+      paymentSetupId: "seti_TestRequest",
+      email: "guest@avelys.test",
+    });
     await expectNothingWritten();
   });
 
@@ -621,6 +624,7 @@ describe("booking creation service (integration)", () => {
         livemode: false,
         fromBookingRequestFlow: true,
         customerId: "cus_GuardTest1",
+        customerEmail: "guest@avelys.test",
         paymentMethodId: "pm_GuardTest1",
       }),
     );
