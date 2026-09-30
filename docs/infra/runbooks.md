@@ -25,6 +25,8 @@ Interdit : `kubectl set image` / édition manuelle dans le cluster.
 
 Les réservations restent valides (BR-50). Vérifier le statut Resend, puis relancer les `Notification` en échec via l'action admin.
 
+Logs `notification.failed` (`bookingRef`, `kind`, `notificationId`, `attempts`, `code`) ; le `code` est aussi dans `Notification.lastErrorCode`. `EMAIL_NOT_CONFIGURED` → `RESEND_API_KEY` ou `EMAIL_FROM` absent ; `EMAIL_AUTH_FAILED` → clé refusée ; `EMAIL_REJECTED` → expéditeur (domaine non vérifié, DEC-01b) ou destinataire refusé ; `EMAIL_RATE_LIMITED` → quota ; `EMAIL_TIMEOUT` / `EMAIL_NETWORK_ERROR` / `EMAIL_PROVIDER_ERROR` → incident Resend ou réseau. Une relance avec la même `dedupeKey` n'envoie jamais deux fois (`docs/architecture/email.md`).
+
 ## RB-05 — Routing (Maps) indisponible
 
 Aucun prix n'est inventé (BR-51). Le site affiche une invitation à contacter l'équipe. Vérifier quotas/clé/restrictions.

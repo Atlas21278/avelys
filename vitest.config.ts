@@ -47,6 +47,9 @@ export default defineConfig({
             // Documentation range standing in for the ingress hops (RFC 5737 TEST-NET-2).
             TRUSTED_PROXIES: "198.51.100.0/24",
             LOG_LEVEL: "silent",
+            // Never a real email from tests (VTC-043): the default sender is "not configured".
+            RESEND_API_KEY: "",
+            EMAIL_FROM: "",
           },
           fileParallelism: false,
           testTimeout: 15_000,

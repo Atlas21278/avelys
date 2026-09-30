@@ -1,6 +1,7 @@
 import * as z from "zod";
 
 import { PROVISIONAL_SERVICE_AREA, ServiceAreaSchema } from "@/domain/geo/service-area";
+import { isEmailSender } from "@/integrations/email/address";
 import {
   isTestModePublishableKey,
   isTestModeSecretKey,
@@ -12,7 +13,7 @@ const optionalString = (schema: z.ZodType<string>) =>
   z.preprocess((value) => (value === "" ? undefined : value), schema.optional());
 
 /**
- * Server-side environment. Stripe, Maps and Resend variables are added by their own tickets.
+ * Server-side environment. Stripe, Maps and Resend variables come from their own tickets.
  * Public (NEXT_PUBLIC_*) variables will get a separate schema when the first one is needed:
  * Next.js only inlines them when referenced literally, so they cannot share this parser.
  */
@@ -58,6 +59,14 @@ export const serverEnvSchema = z.object({
     (value) => (value === "" ? undefined : value),
     z.string().trim().min(1).optional(),
   ),
+  // Resend (VTC-043, ADR-0011). All optional so that `next build` and every page work without
+  // them: an email sent without the key or the sender is traced FAILED with EMAIL_NOT_CONFIGURED
+  // and never affects the booking (BR-50). Empty = not configured.
+  RESEND_API_KEY: optionalString(z.string().trim().min(1)),
+  // Sender, `address` or `Name <address>`. PROVISIONAL: the final sending domain depends on
+  // DEC-01b (SPF/DKIM to verify before production).
+  EMAIL_FROM: optionalString(z.string().refine(isEmailSender)),
+  EMAIL_REPLY_TO: optionalString(z.email()),
   // Minimum booking lead time in minutes (BR-31). PROVISIONAL: 12 h (720) by default, pending
   // the owners' confirmation; below it the quote is refused (BOOKING_LEAD_TIME_TOO_SHORT).
   // Must be > 0: zero would disable the lead time check (BR-31).
