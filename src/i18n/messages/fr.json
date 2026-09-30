@@ -308,5 +308,10 @@
     "title": "Page introuvable",
     "description": "La page demandée n’existe pas ou a été déplacée.",
     "home": "Retour à l’accueil"
+  },
+  "Email": {
+    "layout": {
+      "notice": "Vous recevez cet email au sujet de votre réservation Avelys."
+    }
   }
 }

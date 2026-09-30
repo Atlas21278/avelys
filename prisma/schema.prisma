@@ -220,10 +220,12 @@ model Booking {
 
   /// Current Payment (VTC-031). Its status is read from Payment, never copied here (BR-41).
   /// Null only on bookings created before the Payment model existed.
-  currentPaymentId String?   @unique
-  currentPayment   Payment?  @relation("BookingCurrentPayment", fields: [currentPaymentId], references: [id], onDelete: SetNull, onUpdate: Restrict)
+  currentPaymentId String?        @unique
+  currentPayment   Payment?       @relation("BookingCurrentPayment", fields: [currentPaymentId], references: [id], onDelete: SetNull, onUpdate: Restrict)
   /// Every Payment of the booking (the current one included).
-  payments         Payment[] @relation("BookingPayments")
+  payments         Payment[]      @relation("BookingPayments")
+  /// Transactional emails sent about this booking (VTC-043).
+  notifications    Notification[]
 
   /// Airport or station arrival (BR-34): scheduled time distinct from pickupAt.
   transportKind        TransportKind?
@@ -358,4 +360,51 @@ model ProcessedWebhookEvent {
   receivedAt DateTime        @default(now()) @db.Timestamptz(3)
 
   @@unique([provider, eventId])
+}
+
+// ---------------------------------------------------------------------------
+// Notifications (VTC-043, Master Spec §15, ADR-0011). Sent after commit; a failure never touches
+// the booking (BR-50). No email address and no content is stored (BR-60): the recipient is read
+// from the booking when the email is sent.
+// ---------------------------------------------------------------------------
+
+/// Transactional email templates. One value per business email; the templates come with their
+/// own tickets (VTC-044 and later).
+enum NotificationKind {
+  PAYMENT_ACTION_REQUIRED
+}
+
+/// PENDING = created or being sent; SENT = accepted by the provider; FAILED = last attempt failed.
+enum NotificationStatus {
+  PENDING
+  SENT
+  FAILED
+}
+
+/// One transactional email about a booking, identified by its deduplication key: sent at most
+/// once, every attempt counted, the outcome traced with a technical code only.
+model Notification {
+  id                String             @id @default(cuid(2))
+  bookingId         String
+  booking           Booking            @relation(fields: [bookingId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  kind              NotificationKind
+  /// Language the email is rendered in.
+  locale            Locale
+  /// Caller-chosen key (e.g. `booking:{id}:payment-action-required:{paymentId}`): one email per
+  /// key, ever. Also the source of the provider idempotency key.
+  dedupeKey         String             @unique @db.VarChar(255)
+  status            NotificationStatus @default(PENDING)
+  /// Attempts claimed so far (0 until the first one starts).
+  attempts          Int                @default(0)
+  /// Start of the latest attempt: a PENDING row younger than the lease is being sent.
+  lastAttemptAt     DateTime?          @db.Timestamptz(3)
+  /// Technical code of the latest failure (e.g. EMAIL_TIMEOUT). Never a provider message or an
+  /// address.
+  lastErrorCode     String?            @db.VarChar(64)
+  /// Provider message id (Resend) once SENT.
+  providerMessageId String?            @db.VarChar(255)
+  createdAt         DateTime           @default(now()) @db.Timestamptz(3)
+  sentAt            DateTime?          @db.Timestamptz(3)
+
+  @@index([bookingId])
 }

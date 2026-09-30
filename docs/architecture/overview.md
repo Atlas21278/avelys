@@ -32,7 +32,9 @@ Une application Next.js monolithique modulaire (UI publique, espace client, back
 
 Internationalisation FR/EN (next-intl, `src/i18n/`, proxy `src/proxy.ts`) : `docs/architecture/i18n.md`.
 
-Flux type (demande de réservation) : server action → validation Zod → `server/booking.requestBooking()` → `domain/pricing` recalcule → transaction (Booking `REQUESTED` + snapshot + AuditLog) → après commit : email via `integrations/resend` (échec toléré, BR-50).
+Flux type (demande de réservation) : server action → validation Zod → `server/booking.requestBooking()` → `domain/pricing` recalcule → transaction (Booking `REQUESTED` + snapshot + AuditLog) → après commit : `server/notifications.sendNotification()` → `Notification` persistée → email via `integrations/email` (Resend ; échec tracé, sans effet sur la réservation, BR-50).
+
+Emails transactionnels (Resend + React Email, `Notification`, déduplication, codes d'échec) : `docs/architecture/email.md`.
 
 ## Décisions figées (ADR)
 

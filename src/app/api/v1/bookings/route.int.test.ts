@@ -136,6 +136,7 @@ describe("POST /api/v1/bookings (integration)", () => {
     const client = db();
     await client.auditLog.deleteMany();
     await client.payment.deleteMany();
+    await client.notification.deleteMany();
     await client.booking.deleteMany();
     await client.customer.deleteMany();
     await client.pricingRule.deleteMany();
@@ -155,6 +156,7 @@ describe("POST /api/v1/bookings (integration)", () => {
   afterAll(async () => {
     await db().auditLog.deleteMany({ where: { entityType: { in: ["Booking", "Payment"] } } });
     await db().payment.deleteMany();
+    await db().notification.deleteMany();
     await db().booking.deleteMany();
     await db().customer.deleteMany();
     await db().$disconnect();

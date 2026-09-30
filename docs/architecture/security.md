@@ -59,6 +59,8 @@ Clé Google Maps serveur (`GOOGLE_MAPS_SERVER_API_KEY`, VTC-024) : distincte de 
 
 Stripe (VTC-030, BR-44) : **test mode uniquement** dans tous les environnements. `STRIPE_SECRET_KEY` (`sk_test_`/`rk_test_`) et `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY` (`pk_test_`) sont refusées si live ou de format inconnu, par le schéma d'environnement et par l'adaptateur `src/integrations/stripe` (lu au premier usage, jamais au build) ; `STRIPE_WEBHOOK_SECRET` (`whsec_…`) signe l'endpoint webhook. Valeurs et en-tête `stripe-signature` masqués par le logger ; les erreurs ne reprennent jamais une valeur. Tests : secrets jetables générés à l'exécution, aucun littéral de clé dans le dépôt.
 
+Resend (VTC-043) : `RESEND_API_KEY` lue uniquement par `src/integrations/email` au premier envoi (jamais au build), masquée par le logger ; absente → `EMAIL_NOT_CONFIGURED`, sans effet sur la réservation. Les messages d'erreur du fournisseur (qui peuvent citer une adresse) ne sont ni journalisés ni stockés : seul un code technique l'est. Aucune adresse ni contenu d'email sur `Notification` (`docs/architecture/email.md`).
+
 gitleaks en CI et en pre-commit recommandé. Claude ne lit ni n'affiche jamais une valeur de secret.
 
 ## RGPD

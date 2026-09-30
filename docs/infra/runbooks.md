@@ -23,7 +23,16 @@ Interdit : `kubectl set image` / édition manuelle dans le cluster.
 
 ## RB-04 — Email indisponible
 
-Les réservations restent valides (BR-50). Vérifier le statut Resend, puis relancer les `Notification` en échec via l'action admin.
+Les réservations restent valides (BR-50). Vérifier le statut Resend, puis relancer les `Notification` en échec (voir ci-dessous).
+
+Logs `notification.failed` (`bookingRef`, `kind`, `notificationId`, `attempts`, `code`, et selon le cas `providerError` + `statusCode` du fournisseur ou `errorName` d'une exception ; jamais de message) ; le `code` est aussi dans `Notification.lastErrorCode`. `EMAIL_NOT_CONFIGURED` → `RESEND_API_KEY` ou `EMAIL_FROM` absent ; `EMAIL_AUTH_FAILED` → clé refusée ; `EMAIL_REJECTED` → expéditeur (domaine non vérifié, DEC-01b) ou destinataire refusé ; `EMAIL_RATE_LIMITED` → quota ; `EMAIL_TIMEOUT` / `EMAIL_NETWORK_ERROR` / `EMAIL_PROVIDER_ERROR` → incident Resend ou réseau ; `EMAIL_RENDER_FAILED` → template en erreur (`errorName`).
+
+Relance :
+
+- **Pas encore d'action admin** : elle viendra avec son ticket. Aujourd'hui, relancer = rappeler `sendNotification` avec la même `dedupeKey` et la fonction de rendu du `kind` concerné (aucun contenu n'est stocké, le rendu est refait à chaque tentative).
+- Sont relançables les `FAILED` et les `PENDING` dont `lastAttemptAt` a plus de 60 s (bail dépassé : tentative interrompue). Un `PENDING` plus récent est en cours d'envoi : ne pas y toucher.
+- **Avant toute relance, vérifier dans le dashboard Resend** (par destinataire et horodatage) que l'email n'est pas déjà parti, en particulier après `EMAIL_TIMEOUT`, `EMAIL_NETWORK_ERROR` ou `EMAIL_IDEMPOTENCY_CONFLICT`.
+- « Jamais deux envois » ne vaut que **dans la fenêtre d'idempotence de Resend (24 h) et pour un contenu identique** : une tentative expirée côté application mais délivrée, relancée après 24 h, produit un second email ; une relance dont le rendu diffère (template modifié entre-temps) est refusée par Resend et reste `FAILED` (`EMAIL_IDEMPOTENCY_CONFLICT`) alors que le premier email a pu être délivré. Détails : `docs/architecture/email.md`.
 
 ## RB-05 — Routing (Maps) indisponible
 

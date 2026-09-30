@@ -49,6 +49,9 @@ export default defineConfig({
             // Public booking routes are enabled in CI (VTC-045); off by default elsewhere.
             PUBLIC_BOOKING_ENABLED: "true",
             LOG_LEVEL: "silent",
+            // Never a real email from tests (VTC-043): the default sender is "not configured".
+            RESEND_API_KEY: "",
+            EMAIL_FROM: "",
           },
           fileParallelism: false,
           testTimeout: 15_000,
