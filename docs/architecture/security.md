@@ -34,14 +34,17 @@ L'IP client est lue dans `X-Forwarded-For`. Ce header est fourni par le client e
 
 ## Protection
 
-| Menace  | Mesure                                                                                                 |
-| ------- | ------------------------------------------------------------------------------------------------------ |
-| XSS     | Échappement React, CSP stricte (nonces), pas de `dangerouslySetInnerHTML` non assaini                  |
-| CSRF    | Server actions Next.js (vérif. Origin) + SameSite ; webhooks exclus mais signés                        |
-| SQLi    | Prisma paramétré ; `$queryRaw` uniquement en template taggé                                            |
-| SSRF    | Aucune URL fournie par l'utilisateur n'est appelée côté serveur ; intégrations sur hôtes fixes         |
-| Abus    | Rate limiting sur auth, devis et endpoints coûteux (Maps) ; anti-spam (honeypot + limite)              |
-| Headers | HSTS, CSP, `X-Content-Type-Options`, `Referrer-Policy`, `Permissions-Policy`, `frame-ancestors 'none'` |
+| Menace                    | Mesure                                                                                                                                                         |
+| ------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| XSS                       | Échappement React, CSP stricte (nonces), pas de `dangerouslySetInnerHTML` non assaini                                                                          |
+| CSRF                      | Server actions Next.js (vérif. Origin) + SameSite ; webhooks exclus mais signés                                                                                |
+| SQLi                      | Prisma paramétré ; `$queryRaw` uniquement en template taggé                                                                                                    |
+| SSRF                      | Aucune URL fournie par l'utilisateur n'est appelée côté serveur ; intégrations sur hôtes fixes                                                                 |
+| Abus                      | Rate limiting sur auth, devis et endpoints coûteux (Maps) ; anti-spam (honeypot + limite)                                                                      |
+| Exposition publique       | Routes de réservation anonymes (`bookings`, `payment-setups`) derrière `PUBLIC_BOOKING_ENABLED` (défaut `false`, 404) jusqu'à INFRA-005/INFRA-006 (VTC-045)    |
+| Rejeu / double soumission | Demande idempotente par SetupIntent + email ; SetupIntent lié à l'email de la demande ; `submissionId` navigateur pour les clés d'idempotence Stripe (VTC-045) |
+| Audit falsifié            | `correlationId` tiré par le serveur sur les routes publiques anonymes (`x-request-id` client ignoré, VTC-045)                                                  |
+| Headers                   | HSTS, CSP, `X-Content-Type-Options`, `Referrer-Policy`, `Permissions-Policy`, `frame-ancestors 'none'`                                                         |
 
 ## Secrets
 
@@ -55,6 +58,8 @@ L'IP client est lue dans `X-Forwarded-For`. Ce header est fourni par le client e
 Clé Google Maps serveur (`GOOGLE_MAPS_SERVER_API_KEY`, VTC-024) : distincte de la clé navigateur, restreinte à la Routes API et aux IP de sortie, lue uniquement par `src/integrations/maps` au premier appel (jamais au build), envoyée en en-tête `X-Goog-Api-Key` (jamais en query string), masquée par le logger. Les logs de routing ne contiennent ni adresse, ni coordonnée, ni `placeId` (BR-60).
 
 Stripe (VTC-030, BR-44) : **test mode uniquement** dans tous les environnements. `STRIPE_SECRET_KEY` (`sk_test_`/`rk_test_`) et `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY` (`pk_test_`) sont refusées si live ou de format inconnu, par le schéma d'environnement et par l'adaptateur `src/integrations/stripe` (lu au premier usage, jamais au build) ; `STRIPE_WEBHOOK_SECRET` (`whsec_…`) signe l'endpoint webhook. Valeurs et en-tête `stripe-signature` masqués par le logger ; les erreurs ne reprennent jamais une valeur. Tests : secrets jetables générés à l'exécution, aucun littéral de clé dans le dépôt.
+
+Resend (VTC-043) : `RESEND_API_KEY` lue uniquement par `src/integrations/email` au premier envoi (jamais au build), masquée par le logger ; absente → `EMAIL_NOT_CONFIGURED`, sans effet sur la réservation. Les messages d'erreur du fournisseur (qui peuvent citer une adresse) ne sont ni journalisés ni stockés : seul un code technique l'est. Aucune adresse ni contenu d'email sur `Notification` (`docs/architecture/email.md`).
 
 gitleaks en CI et en pre-commit recommandé. Claude ne lit ni n'affiche jamais une valeur de secret.
 

@@ -80,6 +80,14 @@ export const API_ERRORS = {
       en: "Saving a payment method is temporarily unavailable. Nothing has been charged.",
     },
   },
+  // Same browser `submissionId` sent with another email (VTC-045): the form draws a new one.
+  PAYMENT_SETUP_CONFLICT: {
+    status: 409,
+    message: {
+      fr: "Votre saisie a changé pendant l'enregistrement du moyen de paiement. Rechargez le formulaire et réessayez.",
+      en: "Your details changed while the payment method was being saved. Please reload the form and try again.",
+    },
+  },
   BOOKING_REFERENCE_UNAVAILABLE: {
     status: 503,
     message: {
@@ -107,6 +115,14 @@ export const API_ERRORS = {
     message: {
       fr: "La réception des webhooks n'est pas configurée.",
       en: "Webhook reception is not configured.",
+    },
+  },
+  // A public route that is switched off (VTC-045, PUBLIC_BOOKING_ENABLED=false).
+  NOT_FOUND: {
+    status: 404,
+    message: {
+      fr: "Ressource introuvable.",
+      en: "Not found.",
     },
   },
   INTERNAL_ERROR: {

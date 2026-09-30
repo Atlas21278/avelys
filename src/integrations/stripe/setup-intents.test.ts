@@ -1,10 +1,12 @@
 import Stripe from "stripe";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+import { StripeConfigError } from "./client";
 import {
   BOOKING_REQUEST_FLOW,
   createStripePaymentSetupGateway,
   PaymentSetupError,
+  stripeUnavailableReason,
   type SetupIntentStripeClient,
 } from "./setup-intents";
 
@@ -87,8 +89,10 @@ describe("retrieveSetupIntent", () => {
       livemode: false,
       fromBookingRequestFlow: true,
       customerId: "cus_Test123",
+      customerEmail: null,
       paymentMethodId: "pm_Test123",
     });
+    expect(setupIntentsRetrieve).toHaveBeenCalledWith("seti_Test123", { expand: ["customer"] });
   });
 
   it("reads expanded customer and payment method objects by id", async () => {
@@ -100,8 +104,24 @@ describe("retrieveSetupIntent", () => {
     );
     const summary = await gateway.retrieveSetupIntent("seti_Test123");
     expect(summary?.customerId).toBe("cus_Expanded1");
+    expect(summary?.customerEmail).toBe("guest@avelys.test");
     expect(summary?.paymentMethodId).toBe("pm_Expanded1");
-    expect(JSON.stringify(summary)).not.toMatch(/4242|guest/);
+    expect(JSON.stringify(summary)).not.toMatch(/4242/);
+  });
+
+  it("reads no email from a deleted Customer or a Customer without one", async () => {
+    setupIntentsRetrieve.mockResolvedValue(
+      setupIntent({ customer: { id: "cus_Deleted1", deleted: true } }),
+    );
+    await expect(gateway.retrieveSetupIntent("seti_Test123")).resolves.toMatchObject({
+      customerEmail: null,
+    });
+    setupIntentsRetrieve.mockResolvedValue(
+      setupIntent({ customer: { id: "cus_NoEmail1", email: null } }),
+    );
+    await expect(gateway.retrieveSetupIntent("seti_Test123")).resolves.toMatchObject({
+      customerEmail: null,
+    });
   });
 
   it("flags a SetupIntent from another flow and missing references", async () => {
@@ -134,5 +154,34 @@ describe("retrieveSetupIntent", () => {
     await expect(gateway.retrieveSetupIntent("seti_Test123")).rejects.toBeInstanceOf(
       Stripe.errors.StripeAPIError,
     );
+  });
+});
+
+describe("stripeUnavailableReason", () => {
+  it.each([
+    ["a missing key", new StripeConfigError("not_configured"), "stripe_not_configured"],
+    ["a live key", new StripeConfigError("live_key"), "stripe_live_key"],
+    [
+      "a missing client secret",
+      new PaymentSetupError("missing_client_secret"),
+      "missing_client_secret",
+    ],
+    [
+      "a Stripe API failure",
+      new Stripe.errors.StripeAPIError({ type: "api_error", message: "guest@avelys.test" }),
+      "stripe_error",
+    ],
+    [
+      "a network failure",
+      new Stripe.errors.StripeConnectionError({ type: "api_error", message: "down" }),
+      "stripe_error",
+    ],
+  ])("tags %s without its message", (_label, error, reason) => {
+    expect(stripeUnavailableReason(error)).toBe(reason);
+  });
+
+  it("returns null for any other error", () => {
+    expect(stripeUnavailableReason(new TypeError("bug"))).toBeNull();
+    expect(stripeUnavailableReason("oops")).toBeNull();
   });
 });

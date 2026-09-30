@@ -20,7 +20,11 @@ import {
   type QuoteRequest,
 } from "@/server/quotes/quote";
 
-import type { ConfirmedPaymentMethod, PaymentMethodGuard } from "./payment-method-guard";
+import {
+  PaymentMethodUnavailableError,
+  type ConfirmedPaymentMethod,
+  type PaymentMethodGuard,
+} from "./payment-method-guard";
 
 /**
  * Creation of a `REQUESTED` booking (VTC-028, Master Spec §6.2, §54.4, ADR-0008, ADR-0009).
@@ -92,7 +96,8 @@ export const CreateBookingRequestSchema = z.strictObject({
 });
 
 export type CreateBookingRequest = z.input<typeof CreateBookingRequestSchema>;
-type ParsedRequest = z.output<typeof CreateBookingRequestSchema>;
+export type ParsedBookingRequest = z.output<typeof CreateBookingRequestSchema>;
+type ParsedRequest = ParsedBookingRequest;
 
 export interface CreateBookingDeps {
   /** Server quote (`computeQuote` with its routing, rule store, clock and lead time). */
@@ -111,7 +116,10 @@ export type BookingCreationErrorCode =
   | QuoteErrorCode
   | Extract<
       ApiErrorCode,
-      "PRICE_CHANGED" | "PAYMENT_METHOD_REQUIRED" | "BOOKING_REFERENCE_UNAVAILABLE"
+      | "PRICE_CHANGED"
+      | "PAYMENT_METHOD_REQUIRED"
+      | "PAYMENT_UNAVAILABLE"
+      | "BOOKING_REFERENCE_UNAVAILABLE"
     >;
 
 /** Nothing is written when this is raised. Message and reason carry no personal data. */
@@ -145,7 +153,8 @@ export type CreatedBooking = Readonly<{
  */
 export const MAX_REFERENCE_ATTEMPTS = 5;
 
-function parseRequest(input: unknown): ParsedRequest {
+/** Strict parse of a booking request; `INVALID_INPUT` (issue paths and codes only) otherwise. */
+export function parseBookingRequest(input: unknown): ParsedRequest {
   const parsed = CreateBookingRequestSchema.safeParse(input);
   if (!parsed.success) {
     const issues = parsed.error.issues
@@ -183,6 +192,30 @@ async function recompute(request: ParsedRequest, deps: CreateBookingDeps): Promi
       error.message,
       { temporary: error.temporary },
       { cause: error },
+    );
+  }
+}
+
+/**
+ * The confirmed payment method of the request, or null. Stripe being unusable is not a refusal:
+ * `PAYMENT_UNAVAILABLE`, temporary, with the reason tag only (VTC-045).
+ */
+async function checkPaymentMethod(
+  request: ParsedRequest,
+  deps: CreateBookingDeps,
+): Promise<ConfirmedPaymentMethod | null> {
+  try {
+    return await deps.paymentMethodGuard.confirmedPaymentMethod({
+      paymentSetupId: request.paymentSetupId,
+      email: request.customer.email,
+    });
+  } catch (error) {
+    if (!(error instanceof PaymentMethodUnavailableError)) throw error;
+    throw new BookingCreationError(
+      "PAYMENT_UNAVAILABLE",
+      error.reason,
+      "The payment method cannot be checked right now",
+      { temporary: true },
     );
   }
 }
@@ -368,7 +401,7 @@ export async function createBooking(
   input: unknown,
   deps: CreateBookingDeps,
 ): Promise<CreatedBooking> {
-  const request = parseRequest(input);
+  const request = parseBookingRequest(input);
   assertCanCreateBooking("CUSTOMER");
 
   const quote = await recompute(request, deps);
@@ -386,9 +419,7 @@ export async function createBooking(
     );
   }
 
-  const paymentMethod = await deps.paymentMethodGuard.confirmedPaymentMethod({
-    paymentSetupId: request.paymentSetupId,
-  });
+  const paymentMethod = await checkPaymentMethod(request, deps);
   if (!paymentMethod) {
     throw new BookingCreationError(
       "PAYMENT_METHOD_REQUIRED",

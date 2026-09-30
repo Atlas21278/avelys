@@ -16,6 +16,7 @@ const defaults = {
   AUTH_SESSION_MAX_AGE_SECONDS: 604_800,
   BOOKING_MIN_LEAD_TIME_MINUTES: 720,
   ROUTING_SERVICE_AREA: { south: 41, west: -5.5, north: 51.5, east: 10 },
+  PUBLIC_BOOKING_ENABLED: false,
 };
 
 describe("parseServerEnv", () => {
@@ -154,6 +155,68 @@ describe("parseServerEnv", () => {
         );
       }
     });
+  });
+
+  describe("Resend (email)", () => {
+    it("treats the three email variables as optional, empty meaning not configured", () => {
+      const env = parseServerEnv({
+        ...valid,
+        RESEND_API_KEY: "",
+        EMAIL_FROM: "",
+        EMAIL_REPLY_TO: "",
+      });
+      expect(env.RESEND_API_KEY).toBeUndefined();
+      expect(env.EMAIL_FROM).toBeUndefined();
+      expect(env.EMAIL_REPLY_TO).toBeUndefined();
+      expect(parseServerEnv(valid).RESEND_API_KEY).toBeUndefined();
+    });
+
+    it("reads the key, the sender and the reply-to address", () => {
+      const key = ["re", "unitTestPlaceholder"].join("_");
+      const env = parseServerEnv({
+        ...valid,
+        RESEND_API_KEY: key,
+        EMAIL_FROM: "Avelys <bookings@example.com>",
+        EMAIL_REPLY_TO: "contact@example.com",
+      });
+      expect(env.RESEND_API_KEY).toBe(key);
+      expect(env.EMAIL_FROM).toBe("Avelys <bookings@example.com>");
+      expect(env.EMAIL_REPLY_TO).toBe("contact@example.com");
+      expect(parseServerEnv({ ...valid, EMAIL_FROM: "bookings@example.com" }).EMAIL_FROM).toBe(
+        "bookings@example.com",
+      );
+    });
+
+    it("rejects an invalid sender or reply-to address, naming the variable only", () => {
+      for (const value of ["Avelys", "Avelys <bookings>", "bookings@"]) {
+        let message = "";
+        try {
+          parseServerEnv({ ...valid, EMAIL_FROM: value });
+        } catch (error) {
+          message = (error as Error).message;
+        }
+        expect(message).toMatch(/EMAIL_FROM/);
+        expect(message).not.toContain(value);
+      }
+      expect(() => parseServerEnv({ ...valid, EMAIL_REPLY_TO: "contact" })).toThrowError(
+        /EMAIL_REPLY_TO/,
+      );
+      expect(() => parseServerEnv({ ...valid, RESEND_API_KEY: "   " })).toThrowError(
+        /RESEND_API_KEY/,
+      );
+    });
+  });
+
+  it("keeps the public booking routes off unless explicitly enabled (VTC-045)", () => {
+    const read = (value: string | undefined) =>
+      parseServerEnv({ ...valid, PUBLIC_BOOKING_ENABLED: value }).PUBLIC_BOOKING_ENABLED;
+    expect(read(undefined)).toBe(false);
+    expect(read("")).toBe(false);
+    expect(read("false")).toBe(false);
+    expect(read("true")).toBe(true);
+    for (const value of ["1", "yes", "TRUE", "on"]) {
+      expect(() => read(value)).toThrowError(/PUBLIC_BOOKING_ENABLED/);
+    }
   });
 
   it("rejects a non-PostgreSQL database URL", () => {

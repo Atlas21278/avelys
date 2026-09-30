@@ -107,6 +107,25 @@ Nettoyage des tests d'intégration : supprimer les `Payment` avant les `Booking`
 
 Rollback : revert de la PR ; la colonne et la table restent en place, ignorées par l'ancienne version. Suppression manuelle en dev local uniquement (`ALTER TABLE "Booking" DROP COLUMN "currentPaymentId"`, puis la table et l'enum), jamais de `DROP` ailleurs.
 
+### Emails : `Notification` (VTC-043)
+
+Migration `20260929143000_notification`, **additive** : deux enums (`NotificationKind`, `NotificationStatus`) et une table, aucune ligne ni colonne existante touchée. Service : `src/server/notifications/send-notification.ts` ; tests d'intégration : `send-notification.int.test.ts`. Fonctionnement : `docs/architecture/email.md`.
+
+| Élément              | Choix                                                                                                                                                                                                                                                     |
+| -------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `NotificationKind`   | Une valeur par email métier ; première valeur `PAYMENT_ACTION_REQUIRED` (VTC-044). Ajouter une valeur = migration additive (`ALTER TYPE … ADD VALUE`).                                                                                                    |
+| `NotificationStatus` | `PENDING` (créée ou en cours d'envoi), `SENT`, `FAILED`.                                                                                                                                                                                                  |
+| Colonnes             | `id` (cuid2), `bookingId`, `kind`, `locale` (`Locale` existant), `dedupeKey VARCHAR(255)`, `status` (défaut `PENDING`), `attempts INT` (défaut 0), `lastAttemptAt`, `lastErrorCode VARCHAR(64)`, `providerMessageId VARCHAR(255)`, `createdAt`, `sentAt`. |
+| `lastAttemptAt`      | Début de la dernière tentative (ajout technique au modèle du ticket) : un `PENDING` plus récent que le bail (60 s) est en cours d'envoi, un plus ancien est repris.                                                                                       |
+| Données personnelles | **Aucune adresse ni contenu** (BR-60) : le destinataire est lu sur la réservation au moment de l'envoi ; `lastErrorCode` est un code technique, jamais un message du fournisseur. Test de schéma unitaire.                                                |
+| Index                | `dedupeKey` **unique** (un email par clé, même sous concurrence) ; `bookingId` (index simple).                                                                                                                                                            |
+| `bookingId`          | Clé étrangère `ON DELETE RESTRICT ON UPDATE RESTRICT` : une réservation qui a des notifications ne se supprime pas (RGPD = anonymisation, DEC-11).                                                                                                        |
+| Rétention            | Aucune purge : DEC-11.                                                                                                                                                                                                                                    |
+
+Nettoyage des tests d'intégration : supprimer les `Notification` avant les `Booking` (`notification.deleteMany()` puis `booking.deleteMany()`, fait dans chaque fichier qui supprime des réservations).
+
+Rollback : revert de la PR ; la table vide reste en place. Suppression éventuelle par une migration de contraction revue, jamais automatique ; `DROP` manuel en dev local uniquement.
+
 ### Contact par réservation (VTC-037)
 
 Migration `20260928224334_booking_contact`, **additive** (expand) : trois colonnes **nullables** sur `Booking`, sans valeur par défaut, sans backfill ni modification de l'existant. Décision : DEC-25 (option 1). Tests : `src/server/booking/create-booking.int.test.ts`, `src/server/admin/bookings.int.test.ts`, `src/domain/booking/contact.test.ts`.
@@ -138,7 +157,7 @@ Rollback : revert du code ; les colonnes restent en place, ignorées par l'ancie
 | `PromoCode` (+ `PromoRedemption`)           | Promotions                         | compteur d'utilisations transactionnel                                        |
 | `PricingRule`                               | Configuration tarifaire versionnée | jamais modifiée en place : nouvelle version                                   |
 | `Address`                                   | Adresse normalisée                 | libellé, lat/lng, placeId                                                     |
-| `Notification`                              | Envoi/état                         | canal, template, statut, erreurs                                              |
+| `Notification`                              | Envoi/état                         | Livré (VTC-043) : voir la section `Notification` ci-dessus                    |
 | `AuditLog`                                  | Traçabilité                        | acteur, entité, avant, après, horodatage, correlationId                       |
 | `ProcessedWebhookEvent`                     | Idempotence webhooks               | `provider` + `eventId` unique                                                 |
 | `RecurringBooking`                          | Récurrence future                  | structure seulement                                                           |

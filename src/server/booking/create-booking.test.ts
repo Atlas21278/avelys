@@ -12,7 +12,11 @@ import {
   CreateBookingRequestSchema,
   type CreateBookingDeps,
 } from "./create-booking";
-import type { ConfirmedPaymentMethod, PaymentMethodGuard } from "./payment-method-guard";
+import {
+  PaymentMethodUnavailableError,
+  type ConfirmedPaymentMethod,
+  type PaymentMethodGuard,
+} from "./payment-method-guard";
 
 const log = { info: vi.fn(), warn: vi.fn(), error: vi.fn() };
 vi.mock("@/lib/logger", () => ({ logger: () => log }));
@@ -185,7 +189,24 @@ describe("createBooking refusals (nothing written)", () => {
     confirmedPaymentMethod.mockResolvedValue(null);
     const error = await refusal(REQUEST);
     expect(error.code).toBe("PAYMENT_METHOD_REQUIRED");
-    expect(confirmedPaymentMethod).toHaveBeenCalledWith({ paymentSetupId: "seti_Test123" });
+    expect(confirmedPaymentMethod).toHaveBeenCalledWith({
+      paymentSetupId: "seti_Test123",
+      email: "guest@avelys.test",
+    });
+  });
+
+  it("maps an unusable Stripe to a temporary PAYMENT_UNAVAILABLE, without the cause", async () => {
+    confirmedPaymentMethod.mockRejectedValue(new PaymentMethodUnavailableError("stripe_error"));
+    const error = await refusal(REQUEST);
+    expect(error.code).toBe("PAYMENT_UNAVAILABLE");
+    expect(error.reason).toBe("stripe_error");
+    expect(error.details.temporary).toBe(true);
+    expect(error.cause).toBeUndefined();
+  });
+
+  it("lets an unexpected guard failure through", async () => {
+    confirmedPaymentMethod.mockRejectedValue(new TypeError("bug"));
+    await expect(createBooking(REQUEST, deps())).rejects.toBeInstanceOf(TypeError);
   });
 
   it.each([

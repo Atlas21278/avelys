@@ -40,35 +40,41 @@ Table pure `PAYMENT_TRANSITIONS` (`src/domain/payment/transitions.ts`), testée 
 
 ## Étape 1 : enregistrement du moyen de paiement (VTC-031)
 
-1. **Création du SetupIntent** — `POST /api/v1/payment-setups` (`src/app/api/v1/payment-setups/route.ts` → `requestPaymentSetup`, `src/server/payments`). Entrée Zod stricte `{ "email": "…" }` (normalisé, seule donnée personnelle transmise : l'email du Customer). Le serveur génère un identifiant de parcours (`randomUUID`) dont dérivent les clés d'idempotence Stripe (`payment-setup:{journeyId}:customer`, `payment-setup:{journeyId}:setup-intent`), puis crée via l'adaptateur `src/integrations/stripe/setup-intents.ts` :
+1. **Création du SetupIntent** — `POST /api/v1/payment-setups` (`src/app/api/v1/payment-setups/route.ts` → `requestPaymentSetup`, `src/server/payments`). Entrée Zod stricte `{ "email": "…", "submissionId"?: "…" }` (email normalisé, seule donnée personnelle transmise : l'email du Customer). Les clés d'idempotence Stripe (`payment-setup:{journeyId}:customer`, `payment-setup:{journeyId}:setup-intent`) dérivent d'un identifiant de parcours : le `submissionId` du navigateur s'il est fourni (VTC-045, ci-dessous), sinon un `randomUUID` tiré par le serveur. Le serveur crée ensuite via l'adaptateur `src/integrations/stripe/setup-intents.ts` :
    - un **Customer Stripe dédié** (email, métadonnée `flow: booking_request`) ; jamais de recherche de Customer par email (sinon une carte pourrait être rattachée au Customer d'un tiers sur simple saisie d'une adresse) ;
    - un **SetupIntent** `usage: 'off_session'`, `payment_method_types: ['card']`, rattaché à ce Customer, même métadonnée. **Aucun montant, aucun débit.**
    - Réponse 200 : `{ "paymentSetup": { "clientSecret": "…" } }`, rien d'autre (`cache-control: no-store`). Le `client_secret` n'est ni stocké ni journalisé.
+   - **Anti double clic (VTC-045)** : `submissionId` facultatif, UUID v4 tiré par le navigateur, un par formulaire. Deux appels avec le même `submissionId` et le même email réutilisent les mêmes clés d'idempotence : Stripe renvoie le même Customer et le même SetupIntent (un seul de chaque ; Stripe conserve une clé 24 h). Même `submissionId` avec un autre email : Stripe refuse la clé (`StripeIdempotencyError`) → 409 `PAYMENT_SETUP_CONFLICT` ; le navigateur tire un nouveau `submissionId` quand l'email change. Sans `submissionId` : un parcours neuf par appel (comportement VTC-031).
 2. **Confirmation côté navigateur** — Stripe.js / Payment Element confirme le SetupIntent (SCA si la banque la demande). Le numéro de carte et le CVC ne transitent jamais par nos serveurs (BR-40). Formulaire public : ticket ultérieur.
-3. **Création de la réservation** — le formulaire envoie `paymentSetupId` (id `seti_…`) avec la demande. `createStripePaymentMethodGuard` relit le SetupIntent chez Stripe et exige : format `seti_…`, non déjà utilisé (base), connu de Stripe, `livemode: false`, métadonnée du parcours, `status = succeeded`, `usage = off_session`, Customer et moyen de paiement présents. Sinon `PAYMENT_METHOD_REQUIRED` (raison journalisée sans id). Puis, dans **la transaction de création** : `Payment` `PENDING` (montant TTC et devise du Booking, `stripeCustomerId`, `stripeSetupIntentId`, `stripePaymentMethodId`, `attempt = 0`), `Booking.currentPaymentId`, `AuditLog` `payment.create`. Aucun PaymentIntent (VTC-033).
+3. **Création de la réservation** — le formulaire envoie `paymentSetupId` (id `seti_…`) avec la demande (`POST /api/v1/bookings`, VTC-045, `docs/architecture/api.md`). `createStripePaymentMethodGuard` relit le SetupIntent chez Stripe, **Customer développé** (`expand: ['customer']`, un seul appel), et exige : format `seti_…`, non déjà utilisé (base), connu de Stripe, `livemode: false`, métadonnée du parcours, `status = succeeded`, `usage = off_session`, Customer et moyen de paiement présents, et **email du Customer = email de la demande** (normalisés trim + minuscules ; VTC-045 : un SetupIntent obtenu pour une adresse ne sert pas une demande faite sous une autre). Sinon `PAYMENT_METHOD_REQUIRED` (raison journalisée sans id ni email ; `payment_setup_email_mismatch` pour l'email). Stripe indisponible, erreur réseau, clé absente ou non test : `PaymentMethodUnavailableError` (raison seule, sans l'erreur Stripe) → 503 `PAYMENT_UNAVAILABLE`, rien n'est écrit, **aucun message ni cause Stripe** dans la réponse ou les logs. Une seconde soumission du même formulaire (même SetupIntent, même email) renvoie la réservation déjà créée : voir `docs/product/booking.md` (soumission idempotente). Puis, dans **la transaction de création** : `Payment` `PENDING` (montant TTC et devise du Booking, `stripeCustomerId`, `stripeSetupIntentId`, `stripePaymentMethodId`, `attempt = 0`), `Booking.currentPaymentId`, `AuditLog` `payment.create`. Aucun PaymentIntent (VTC-033).
 
 Métadonnées Stripe : uniquement `flow: booking_request` ; aucune donnée personnelle hormis l'email du Customer. Le `bookingRef` n'existe pas encore à la création du SetupIntent : il est porté par le PaymentIntent (VTC-033).
 
 Erreurs de l'endpoint :
 
-| Code                  | HTTP | Cause                                                                                |
-| --------------------- | ---- | ------------------------------------------------------------------------------------ |
-| `INVALID_INPUT`       | 400  | JSON invalide, email invalide, clé inconnue (montant, Customer…)                     |
-| `PAYMENT_UNAVAILABLE` | 503  | Clé Stripe absente ou non test (garde VTC-030), erreur Stripe, réponse inexploitable |
-| `INTERNAL_ERROR`      | 500  | Erreur inattendue (nom d'erreur seul dans les logs)                                  |
+| Code                     | HTTP | Cause                                                                                        |
+| ------------------------ | ---- | -------------------------------------------------------------------------------------------- |
+| `NOT_FOUND`              | 404  | `PUBLIC_BOOKING_ENABLED` désactivé (défaut) : aucun appel Stripe                             |
+| `INVALID_INPUT`          | 400  | JSON invalide, email invalide, `submissionId` non UUID v4, clé inconnue (montant, Customer…) |
+| `PAYMENT_SETUP_CONFLICT` | 409  | Même `submissionId` envoyé avec un autre email (VTC-045)                                     |
+| `PAYMENT_UNAVAILABLE`    | 503  | Clé Stripe absente ou non test (garde VTC-030), erreur Stripe, réponse inexploitable         |
+| `INTERNAL_ERROR`         | 500  | Erreur inattendue (nom d'erreur seul dans les logs)                                          |
 
-**Pas encore de limite de débit** sur cet endpoint public (comme `POST /api/v1/quotes`) : chaque appel crée un Customer Stripe. INFRA-005 (DEC-17) doit ajouter une limite par IP avant toute exposition en production.
+**Interrupteur d'exposition (VTC-045)** : `PUBLIC_BOOKING_ENABLED` (défaut `false` dans tous les environnements) ; désactivé, cet endpoint et `POST /api/v1/bookings` répondent 404 sans appel Stripe ni écriture. Le `correlationId` est toujours tiré par le serveur (l'`x-request-id` du client est ignoré).
+
+**Pas encore de limite de débit** sur cet endpoint public (comme `POST /api/v1/quotes`) : sans `submissionId` rejoué, chaque appel crée un Customer Stripe. INFRA-005 (DEC-17) doit ajouter une limite par IP avant l'activation en production (INFRA-006).
 
 Logs : codes et raisons uniquement ; jamais l'email, le `client_secret`, ni un id Stripe (Customer, SetupIntent, moyen de paiement).
 
 ### Vérification manuelle (test mode)
 
-Compte Stripe en test mode, clés de test dans le `.env` local du propriétaire (jamais ailleurs), `pnpm dev` :
+Compte Stripe en test mode, clés de test dans le `.env` local du propriétaire (jamais ailleurs), `PUBLIC_BOOKING_ENABLED=true` dans ce `.env`, `pnpm dev` :
 
-1. `curl -X POST localhost:3000/api/v1/payment-setups -H 'content-type: application/json' -d '{"email":"test@example.com"}'` → 200 avec un `clientSecret`.
+0. Avec `PUBLIC_BOOKING_ENABLED` vide ou `false` : les deux endpoints répondent 404, rien n'apparaît dans le Dashboard Stripe.
+1. `curl -X POST localhost:3000/api/v1/payment-setups -H 'content-type: application/json' -d '{"email":"test@example.com","submissionId":"<uuid v4>"}'` → 200 avec un `clientSecret`. Le même appel une seconde fois → même `clientSecret`, un seul Customer et un seul SetupIntent dans le Dashboard. Même `submissionId` avec un autre email → 409 `PAYMENT_SETUP_CONFLICT`.
 2. Confirmer ce SetupIntent avec la carte de test SCA de Stripe (`4000 0025 0000 3155`, authentification requise) via Stripe.js ou le Dashboard de test ; vérifier dans le Dashboard : SetupIntent `succeeded`, `usage: off_session`, Customer dédié, **aucun paiement**.
-3. Appeler `requestBooking()` avec `paymentSetupId` = id du SetupIntent : réservation `REQUESTED`, `Payment` `PENDING`. Un second appel avec le même id → `PAYMENT_METHOD_REQUIRED`.
-4. Avec une clé `sk_live_…` : l'endpoint répond 503 `PAYMENT_UNAVAILABLE`, aucun appel Stripe.
+3. `POST /api/v1/bookings` (corps : `docs/architecture/api.md`) avec l'email du point 1, `paymentSetupId` = id du SetupIntent et le `displayedTotal` d'un devis : 201, réservation `REQUESTED`, `Payment` `PENDING`. Le même corps une seconde fois → 200, même référence, rien de nouveau en base. Même `paymentSetupId` avec un autre email → 422 `PAYMENT_METHOD_REQUIRED`.
+4. Avec une clé `sk_live_…` : les deux endpoints répondent 503 `PAYMENT_UNAVAILABLE`, aucun appel Stripe.
 
 ## Étape 2 : débit off-session à l'acceptation (VTC-033)
 

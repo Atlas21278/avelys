@@ -23,6 +23,11 @@ export const REDACTED_PATHS = [
   "*.GOOGLE_MAPS_SERVER_API_KEY",
   "*.STRIPE_SECRET_KEY",
   "*.STRIPE_WEBHOOK_SECRET",
+  "*.RESEND_API_KEY",
+  // Email recipients (VTC-043): the notification service logs a bookingRef, never an address.
+  "*.to",
+  "*.replyTo",
+  "*.recipient",
   "*.stripe-signature",
   "*.apiKey",
   "*.backupCodes",
