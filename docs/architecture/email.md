@@ -31,28 +31,40 @@ transaction métier (commit) ──► sendNotification({ kind, bookingId, dedup
 - `PENDING` dont la tentative a commencé il y a moins de `leaseMs` (60 s par défaut, supérieur au délai d'expiration de l'adaptateur) : un autre appel est en cours (`skipped` / `IN_PROGRESS`).
 - `FAILED`, ou `PENDING` abandonné (processus interrompu) : nouvelle tentative, `attempts + 1`. La prise de la tentative est un compare-and-set sur `attempts` : entre appels concurrents, un seul envoie (test d'intégration).
 - En-tête `Idempotency-Key` Resend = `avelys-notification-` + SHA-256 de `dedupeKey` : stable d'une tentative à l'autre, sans contenu lisible. Couvre le cas d'un envoi accepté après expiration du délai côté application (Resend conserve la clé 24 h).
-- Relancer = rappeler `sendNotification` avec la même clé. Pas de file d'attente ni de tâche planifiée ici (hors périmètre).
+- Relancer = rappeler `sendNotification` avec la même clé **et la fonction de rendu du `kind`** (aucun contenu n'est stocké). Pas de file d'attente, de tâche planifiée ni d'action admin ici (hors périmètre, à venir avec leurs tickets). Procédure opérateur : `docs/infra/runbooks.md` (RB-04).
+
+### Limites de la garantie « un seul envoi »
+
+La base garantit une seule tentative à la fois par clé ; l'absence de doublon côté destinataire repose ensuite sur l'idempotence Resend, qui ne vaut que **pendant 24 h et pour un contenu identique** :
+
+- une tentative expirée côté application (`EMAIL_TIMEOUT`, `EMAIL_NETWORK_ERROR`) mais délivrée, relancée **après 24 h**, produit un **second email** ;
+- une relance dont le rendu **diffère** de la tentative initiale est refusée par Resend (`EMAIL_IDEMPOTENCY_CONFLICT`) : la notification reste `FAILED` alors que le premier email a pu être délivré.
+
+En conséquence :
+
+- **les templates doivent produire un rendu déterministe pour une `dedupeKey` donnée** (sujet, HTML et texte ne dépendent que de la réservation et de la clé, jamais de l'heure courante ni d'une valeur aléatoire) ; toute évolution d'un template en production se fait avec de nouvelles clés ;
+- avant une relance manuelle, l'opérateur vérifie dans le dashboard Resend que l'email n'est pas déjà parti.
 
 ## Codes d'échec (`lastErrorCode`)
 
-| Code                         | Cause                                                                                       |
-| ---------------------------- | ------------------------------------------------------------------------------------------- |
-| `EMAIL_NOT_CONFIGURED`       | `RESEND_API_KEY` ou `EMAIL_FROM` absent                                                     |
-| `EMAIL_TIMEOUT`              | Pas de réponse dans le délai (l'email a pu partir : la clé d'idempotence protège le renvoi) |
-| `EMAIL_NETWORK_ERROR`        | API injoignable                                                                             |
-| `EMAIL_AUTH_FAILED`          | Clé absente, invalide ou restreinte côté Resend                                             |
-| `EMAIL_REJECTED`             | Champ, expéditeur ou destinataire refusé                                                    |
-| `EMAIL_RATE_LIMITED`         | Limite de débit ou quota                                                                    |
-| `EMAIL_IDEMPOTENCY_CONFLICT` | Même clé d'idempotence avec un autre contenu, ou requête concurrente                        |
-| `EMAIL_PROVIDER_ERROR`       | Autre erreur fournisseur ou réponse inattendue                                              |
-| `EMAIL_RENDER_FAILED`        | Le template a levé une erreur ; rien n'est envoyé                                           |
+| Code                         | Cause                                                                                                           |
+| ---------------------------- | --------------------------------------------------------------------------------------------------------------- |
+| `EMAIL_NOT_CONFIGURED`       | `RESEND_API_KEY` ou `EMAIL_FROM` absent                                                                         |
+| `EMAIL_TIMEOUT`              | Pas de réponse dans le délai (l'email a pu partir : la clé d'idempotence protège un renvoi identique sous 24 h) |
+| `EMAIL_NETWORK_ERROR`        | API injoignable                                                                                                 |
+| `EMAIL_AUTH_FAILED`          | Clé absente, invalide ou restreinte côté Resend                                                                 |
+| `EMAIL_REJECTED`             | Champ, expéditeur ou destinataire refusé                                                                        |
+| `EMAIL_RATE_LIMITED`         | Limite de débit ou quota                                                                                        |
+| `EMAIL_IDEMPOTENCY_CONFLICT` | Même clé d'idempotence avec un autre contenu, ou requête concurrente                                            |
+| `EMAIL_PROVIDER_ERROR`       | Autre erreur fournisseur ou réponse inattendue                                                                  |
+| `EMAIL_RENDER_FAILED`        | Le template a levé une erreur ; rien n'est envoyé                                                               |
 
 Sans ligne écrite : `INVALID_NOTIFICATION` (entrée invalide), `BOOKING_NOT_FOUND`, `INTERNAL_ERROR` (base indisponible…).
 
 ## Données personnelles et secrets
 
 - **Ni adresse ni contenu stockés** (BR-60) : le destinataire (`Customer.email` de la réservation) est lu au moment de l'envoi. Test de schéma : aucune colonne d'adresse ou de contenu sur `Notification`.
-- Logs `notification.sent` / `notification.failed` : `bookingRef`, `kind`, `notificationId`, `attempts`, `code` ; jamais d'adresse, de sujet ni de corps. Le logger masque aussi `RESEND_API_KEY`, `to`, `replyTo`, `recipient`.
+- Logs `notification.sent` / `notification.failed` : `bookingRef`, `kind`, `notificationId`, `attempts`, `code`, et pour diagnostic le nom d'erreur et le statut HTTP du fournisseur (`providerError`, `statusCode`) ou le nom d'une exception (`errorName`) ; jamais de message d'erreur, d'adresse, de sujet ni de corps. Le logger masque aussi `RESEND_API_KEY`, `to`, `replyTo`, `recipient`.
 - Le SDK Resend écrit ses erreurs sur `console.error` hors production (le message peut citer l'adresse) : l'adaptateur neutralise cette sortie.
 - Rétention et purge des notifications : DEC-11 (hors périmètre).
 

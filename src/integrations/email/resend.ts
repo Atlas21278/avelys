@@ -147,15 +147,26 @@ export function createResendEmailSender(options: ResendSenderOptions): EmailSend
           timeoutMs,
         );
         if (response === TIMED_OUT) return { ok: false, code: "EMAIL_TIMEOUT" };
-        if (response.error) return { ok: false, code: mapResendError(response.error) };
+        if (response.error) {
+          // Name and status only, for diagnosis: the provider message is dropped (BR-60).
+          return {
+            ok: false,
+            code: mapResendError(response.error),
+            detail: {
+              providerError: String(response.error.name),
+              statusCode: response.error.statusCode,
+            },
+          };
+        }
         const messageId = response.data?.id;
         if (typeof messageId !== "string" || messageId === "") {
-          return { ok: false, code: "EMAIL_PROVIDER_ERROR" };
+          return { ok: false, code: "EMAIL_PROVIDER_ERROR", detail: { providerError: "no_id" } };
         }
         return { ok: true, messageId };
-      } catch {
+      } catch (error) {
         // The SDK catches its own errors; anything thrown here is unexpected, never propagated.
-        return { ok: false, code: "EMAIL_PROVIDER_ERROR" };
+        const errorName = error instanceof Error ? error.name : typeof error;
+        return { ok: false, code: "EMAIL_PROVIDER_ERROR", detail: { errorName } };
       }
     },
   };

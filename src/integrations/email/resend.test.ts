@@ -103,7 +103,11 @@ describe("Resend email sender", () => {
   it("maps a provider error to a code, without the provider message", async () => {
     const { sender: s } = sender(async () => failure("validation_error", 422));
     const result = await s.send(message);
-    expect(result).toEqual({ ok: false, code: "EMAIL_REJECTED" });
+    expect(result).toEqual({
+      ok: false,
+      code: "EMAIL_REJECTED",
+      detail: { providerError: "validation_error", statusCode: 422 },
+    });
     expect(JSON.stringify(result)).not.toContain(RECIPIENT);
   });
 
@@ -116,16 +120,26 @@ describe("Resend email sender", () => {
 
   it("never throws, even if the client does", async () => {
     const { sender: s } = sender(async () => {
-      throw new Error(`boom ${RECIPIENT}`);
+      throw new TypeError(`boom ${RECIPIENT}`);
     });
-    await expect(s.send(message)).resolves.toEqual({ ok: false, code: "EMAIL_PROVIDER_ERROR" });
+    const result = await s.send(message);
+    expect(result).toEqual({
+      ok: false,
+      code: "EMAIL_PROVIDER_ERROR",
+      detail: { errorName: "TypeError" },
+    });
+    expect(JSON.stringify(result)).not.toContain(RECIPIENT);
   });
 
   it("treats an answer without message id as a provider error", async () => {
     const { sender: s } = sender(
       async () => ({ data: null, error: null, headers: null }) as unknown as CreateEmailResponse,
     );
-    await expect(s.send(message)).resolves.toEqual({ ok: false, code: "EMAIL_PROVIDER_ERROR" });
+    await expect(s.send(message)).resolves.toEqual({
+      ok: false,
+      code: "EMAIL_PROVIDER_ERROR",
+      detail: { providerError: "no_id" },
+    });
   });
 
   it("reuses the client while the key is unchanged", async () => {
@@ -205,10 +219,13 @@ describe("real Resend client (fetch stubbed, no network)", () => {
       ),
     );
 
-    await expect(realSender().send(message)).resolves.toEqual({
+    const result = await realSender().send(message);
+    expect(result).toEqual({
       ok: false,
       code: "EMAIL_REJECTED",
+      detail: { providerError: "validation_error", statusCode: 422 },
     });
+    expect(JSON.stringify(result)).not.toContain(RECIPIENT);
     expect(consoleError).not.toHaveBeenCalled();
   });
 
@@ -220,6 +237,7 @@ describe("real Resend client (fetch stubbed, no network)", () => {
     await expect(realSender().send(message)).resolves.toEqual({
       ok: false,
       code: "EMAIL_NETWORK_ERROR",
+      detail: { providerError: "application_error", statusCode: null },
     });
   });
 });

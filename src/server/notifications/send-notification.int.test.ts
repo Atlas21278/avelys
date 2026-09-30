@@ -291,19 +291,134 @@ describe("sendNotification (integration)", () => {
   it("records a template failure without sending", async () => {
     const { id } = await booking();
     const { sender } = fakeSender();
+    const { log, calls } = spyLog();
     const result = await sendNotification(
       input(id, `booking:${id}:render`, {
         render: () => {
-          throw new Error(`template failed for ${CUSTOMER_EMAIL}`);
+          throw new RangeError(`template failed for ${CUSTOMER_EMAIL}`);
         },
       }),
-      { sender, log: spyLog().log },
+      { sender, log },
     );
     expect(result).toMatchObject({ outcome: "failed", code: "EMAIL_RENDER_FAILED" });
     expect(sender.send).not.toHaveBeenCalled();
     expect(await row(`booking:${id}:render`)).toMatchObject({
       status: "FAILED",
       lastErrorCode: "EMAIL_RENDER_FAILED",
+    });
+    // The error name is logged for diagnosis, never its message.
+    expect(calls).toContainEqual([
+      expect.objectContaining({ code: "EMAIL_RENDER_FAILED", errorName: "RangeError" }),
+      "notification.failed",
+    ]);
+    expect(JSON.stringify(calls)).not.toContain(CUSTOMER_EMAIL);
+  });
+
+  it("logs the provider error name and status of a failure, never its message", async () => {
+    const { id } = await booking();
+    const { log, calls } = spyLog();
+    await sendNotification(input(id, `booking:${id}:provider-detail`), {
+      sender: fakeSender({
+        ok: false,
+        code: "EMAIL_PROVIDER_ERROR",
+        detail: { providerError: "internal_server_error", statusCode: 500 },
+      }).sender,
+      log,
+    });
+    expect(calls).toContainEqual([
+      expect.objectContaining({
+        code: "EMAIL_PROVIDER_ERROR",
+        providerError: "internal_server_error",
+        statusCode: 500,
+      }),
+      "notification.failed",
+    ]);
+  });
+
+  it("sends once when two retries of the same FAILED notification run concurrently", async () => {
+    const { id } = await booking();
+    const key = `booking:${id}:concurrent-retry`;
+    await db().notification.create({
+      data: {
+        bookingId: id,
+        kind: "PAYMENT_ACTION_REQUIRED",
+        locale: "fr",
+        dedupeKey: key,
+        status: "FAILED",
+        attempts: 1,
+        lastAttemptAt: new Date("2026-09-29T10:00:00.000Z"),
+        lastErrorCode: "EMAIL_TIMEOUT",
+      },
+    });
+    const { sender } = fakeSender({ ok: true, messageId: "msg_retry_once" }, 100);
+
+    const results = await Promise.all(
+      Array.from({ length: 2 }, () =>
+        sendNotification(input(id, key), { sender, log: spyLog().log }),
+      ),
+    );
+
+    expect(sender.send).toHaveBeenCalledOnce();
+    expect(results.map((result) => result.outcome).sort()).toEqual(["sent", "skipped"]);
+    expect(await row(key)).toMatchObject({
+      status: "SENT",
+      attempts: 2,
+      providerMessageId: "msg_retry_once",
+      lastErrorCode: null,
+    });
+  });
+
+  it("never lets a stale attempt overwrite the newer one", async () => {
+    const { id } = await booking();
+    const key = `booking:${id}:stale`;
+    const startedAt = new Date("2026-09-29T10:00:00.000Z");
+    const at = (ms: number) => () => new Date(startedAt.getTime() + ms);
+
+    /** A sender held in the provider until the test releases it. */
+    function heldSender() {
+      let release: (result: EmailSendResult) => void = () => {};
+      let reached: () => void = () => {};
+      const inProvider = new Promise<void>((resolve) => {
+        reached = resolve;
+      });
+      const sender: EmailSender = {
+        send: () =>
+          new Promise<EmailSendResult>((resolve) => {
+            release = resolve;
+            reached();
+          }),
+      };
+      return { sender, inProvider, release: (result: EmailSendResult) => release(result) };
+    }
+    const deps = (sender: EmailSender, ms: number) => ({
+      sender,
+      now: at(ms),
+      leaseMs: 60_000,
+      log: spyLog().log,
+    });
+
+    // Attempt 1 hangs in the provider past the lease.
+    const first = heldSender();
+    const stale = sendNotification(input(id, key), deps(first.sender, 0));
+    await first.inProvider;
+
+    // Attempt 2 takes over once the lease has expired, and is in flight in turn.
+    const second = heldSender();
+    const fresh = sendNotification(input(id, key), deps(second.sender, 61_000));
+    await second.inProvider;
+
+    // The stale attempt fails now: it must not mark attempt 2 FAILED.
+    first.release({ ok: false, code: "EMAIL_TIMEOUT" });
+    await stale;
+    expect(await row(key)).toMatchObject({ status: "PENDING", attempts: 2, lastErrorCode: null });
+
+    second.release({ ok: true, messageId: "msg_fresh" });
+    expect(await fresh).toMatchObject({ outcome: "sent", attempts: 2 });
+    expect(await row(key)).toMatchObject({
+      status: "SENT",
+      attempts: 2,
+      providerMessageId: "msg_fresh",
+      lastErrorCode: null,
     });
   });
 

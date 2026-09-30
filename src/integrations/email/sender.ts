@@ -39,9 +39,20 @@ export const EMAIL_ERROR_CODES = [
 
 export type EmailErrorCode = (typeof EMAIL_ERROR_CODES)[number];
 
+/**
+ * Diagnostic of a failure, for logs only: the provider's error name (a fixed identifier such as
+ * `validation_error`), its HTTP status, or the name of an unexpected exception. Never a message,
+ * which may quote an address (BR-60).
+ */
+export interface EmailFailureDetail {
+  readonly providerError?: string;
+  readonly statusCode?: number | null;
+  readonly errorName?: string;
+}
+
 export type EmailSendResult =
   | { readonly ok: true; readonly messageId: string }
-  | { readonly ok: false; readonly code: EmailErrorCode };
+  | { readonly ok: false; readonly code: EmailErrorCode; readonly detail?: EmailFailureDetail };
 
 export interface EmailSender {
   send(message: EmailMessage): Promise<EmailSendResult>;

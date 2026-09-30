@@ -7,7 +7,7 @@ import { renderEmail } from "@/emails/render";
 import { NotificationKind, type NotificationStatus } from "@/generated/prisma/client";
 import { routing, type Locale } from "@/i18n/routing";
 import { emailSender, providerIdempotencyKey, type EmailErrorCode } from "@/integrations/email";
-import type { EmailSender } from "@/integrations/email/sender";
+import type { EmailFailureDetail, EmailSender, EmailSendResult } from "@/integrations/email/sender";
 import { logger } from "@/lib/logger";
 import { db } from "@/server/db";
 
@@ -22,8 +22,9 @@ import { db } from "@/server/db";
  * - a `PENDING` one whose attempt started less than `leaseMs` ago is being sent by another call;
  * - otherwise (`FAILED`, or `PENDING` left by an interrupted attempt) a new attempt is claimed
  *   with a compare-and-set on `attempts`, so that concurrent calls send at most once. The
- *   provider idempotency key, derived from `dedupeKey`, covers the remaining window (an
- *   attempt that timed out but was accepted).
+ *   provider idempotency key, derived from `dedupeKey`, covers the remaining window (an attempt
+ *   that timed out but was accepted) for 24 h and an identical payload only: templates must
+ *   render deterministically for a given key (docs/architecture/email.md).
  *
  * No automatic retry here: calling again with the same key is the retry.
  */
@@ -109,9 +110,11 @@ export async function sendNotification(
     return await send(input, deps, log);
   } catch (error) {
     // Error name only: a driver or template message may quote data.
-    const errorName = error instanceof Error ? error.name : typeof error;
     try {
-      log?.error({ kind: input.kind, code: "INTERNAL_ERROR", errorName }, "notification.error");
+      log?.error(
+        { kind: input.kind, code: "INTERNAL_ERROR", errorName: errorNameOf(error) },
+        "notification.error",
+      );
     } catch {
       // Logging must not turn a handled failure into an exception.
     }
@@ -185,13 +188,17 @@ async function send(
   }
   const attempts = row.attempts + 1;
 
-  const fail = async (code: NotificationFailureCode): Promise<SendNotificationResult> => {
+  const fail = async (
+    code: NotificationFailureCode,
+    detail: EmailFailureDetail = {},
+  ): Promise<SendNotificationResult> => {
     // Only this attempt's own claim is closed: a later attempt is never overwritten.
     await client.notification.updateMany({
       where: { id: notificationId, attempts, status: "PENDING" },
       data: { status: "FAILED", lastErrorCode: code },
     });
-    log.warn({ ...context, notificationId, attempts, code }, "notification.failed");
+    // `detail` holds identifiers only (error names, HTTP status), never a message.
+    log.warn({ ...context, notificationId, attempts, code, ...detail }, "notification.failed");
     return { outcome: "failed", code, notificationId };
   };
 
@@ -199,19 +206,23 @@ async function send(
   try {
     const rendered = await input.render({ bookingReference: booking.reference, locale });
     message = { subject: rendered.subject, ...(await renderEmail(rendered.element)) };
-  } catch {
-    return fail("EMAIL_RENDER_FAILED");
+  } catch (error) {
+    return fail("EMAIL_RENDER_FAILED", { errorName: errorNameOf(error) });
   }
 
   const sender = deps.sender ?? emailSender();
-  const result = await sender
+  const result: EmailSendResult = await sender
     .send({
       to: booking.customer.email,
       ...message,
       idempotencyKey: providerIdempotencyKey(dedupeKey),
     })
-    .catch(() => ({ ok: false as const, code: "EMAIL_PROVIDER_ERROR" as const }));
-  if (!result.ok) return fail(result.code);
+    .catch((error: unknown) => ({
+      ok: false as const,
+      code: "EMAIL_PROVIDER_ERROR" as const,
+      detail: { errorName: errorNameOf(error) },
+    }));
+  if (!result.ok) return fail(result.code, result.detail);
 
   // Sent is a fact: recorded whatever attempt currently holds the row.
   await client.notification.updateMany({
@@ -237,4 +248,9 @@ function isInFlight(
     row.lastAttemptAt !== null &&
     at.getTime() - row.lastAttemptAt.getTime() < leaseMs
   );
+}
+
+/** Name of an error, never its message: a driver, template or SDK message may quote data. */
+function errorNameOf(error: unknown): string {
+  return error instanceof Error ? error.name : typeof error;
 }
