@@ -376,7 +376,6 @@
         "note": "Rien n’est débité à l’envoi : votre demande attend notre validation.",
         "priceChangedTitle": "Le prix a changé",
         "priceChanged": "Nos serveurs ont recalculé le prix de ce trajet : {price} TTC. Confirmez ce nouveau prix pour envoyer votre demande.",
-        "retry": "Réessayer",
         "failures": {
           "invalidRequest": "Votre demande n’a pas pu être lue. Vérifiez vos coordonnées et votre trajet, puis réessayez.",
           "invalidEmail": "Cette adresse email n’a pas été acceptée. Vérifiez-la, puis réessayez.",
@@ -390,7 +389,7 @@
           "paymentRequired": "Votre carte n’a pas pu être associée à cette demande. Saisissez-la de nouveau ; aucun montant n’a été débité.",
           "paymentUnavailable": "L’enregistrement de la carte est momentanément indisponible. Aucun montant n’a été débité. Réessayez dans un instant.",
           "setupConflict": "Votre adresse email a changé pendant la préparation du paiement. Saisissez de nouveau votre carte.",
-          "cardUnexpected": "Votre carte n’a pas pu être vérifiée. Aucun montant n’a été débité. Réessayez ou utilisez une autre carte.",
+          "cardUnexpected": "Votre carte n’a pas pu être vérifiée. Aucun montant n’a été débité. Réessayez ou utilisez une autre carte. Si le problème persiste, « Modifier l’email » relance l’étape de la carte.",
           "closed": "La réservation en ligne n’est pas ouverte pour le moment. Contactez-nous pour préparer votre trajet.",
           "unavailable": "Votre demande n’a pas pu être envoyée pour le moment. Réessayez dans un instant ou contactez-nous.",
           "network": "La connexion a échoué. Vérifiez votre accès à Internet, puis réessayez : votre demande ne sera pas envoyée deux fois."

@@ -5,8 +5,9 @@ import { useTranslations } from "next-intl";
 import { useEffect, useMemo, useState } from "react";
 
 import {
-  confirmationOf,
+  confirmCardSetup,
   paymentElementsOptions,
+  returnUrlOf,
   stripeBrowser,
 } from "@/integrations/stripe/browser";
 import type { CardConfirmation } from "@/lib/request-step-flow";
@@ -65,15 +66,20 @@ export function CardField({
   return (
     // A new SetupIntent mounts a new Elements group (its client secret is fixed at creation).
     <Elements key={clientSecret} stripe={stripe} options={options}>
-      <CardElement onConfirmReady={onConfirmReady} onUnavailable={onUnavailable} />
+      <CardElement
+        clientSecret={clientSecret}
+        onConfirmReady={onConfirmReady}
+        onUnavailable={onUnavailable}
+      />
     </Elements>
   );
 }
 
 function CardElement({
+  clientSecret,
   onConfirmReady,
   onUnavailable,
-}: Pick<CardFieldProps, "onConfirmReady" | "onUnavailable">) {
+}: Pick<CardFieldProps, "clientSecret" | "onConfirmReady" | "onUnavailable">) {
   const t = useTranslations("Pages.booking.request");
   const stripe = useStripe();
   const elements = useElements();
@@ -84,17 +90,16 @@ function CardElement({
       onConfirmReady(null);
       return;
     }
-    onConfirmReady(async () => {
-      const result = await stripe.confirmSetup({
+    onConfirmReady(() =>
+      confirmCardSetup(stripe, {
         elements,
-        redirect: "if_required",
-        // Never used for a card; required by Stripe.js for redirect-based methods.
-        confirmParams: { return_url: window.location.href },
-      });
-      return confirmationOf(result);
-    });
+        clientSecret,
+        // Without the query string: it may hold free-text addresses from the home search.
+        returnUrl: returnUrlOf(window.location),
+      }),
+    );
     return () => onConfirmReady(null);
-  }, [stripe, elements, ready, onConfirmReady]);
+  }, [stripe, elements, ready, clientSecret, onConfirmReady]);
 
   return (
     <div className="flex flex-col gap-2">

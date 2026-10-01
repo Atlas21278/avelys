@@ -247,13 +247,6 @@ export const REQUEST_FAILURES = [
 ] as const;
 export type RequestFailure = (typeof REQUEST_FAILURES)[number];
 
-/** Failures that offer a new attempt of the same request (nothing was refused on the merits). */
-export const RETRYABLE_FAILURES: ReadonlySet<RequestFailure> = new Set<RequestFailure>([
-  "paymentUnavailable",
-  "unavailable",
-  "network",
-]);
-
 /** Failures that point the visitor to direct contact (DEC-20). */
 export const CONTACT_FAILURES: ReadonlySet<RequestFailure> = new Set<RequestFailure>([
   "leadTime",

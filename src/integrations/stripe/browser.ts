@@ -1,4 +1,9 @@
-import type { SetupIntentResult, Stripe, StripeElementsOptions } from "@stripe/stripe-js";
+import type {
+  SetupIntentResult,
+  Stripe,
+  StripeElements,
+  StripeElementsOptions,
+} from "@stripe/stripe-js";
 import { loadStripe } from "@stripe/stripe-js/pure";
 
 import type { CardConfirmation } from "@/lib/request-step-flow";
@@ -88,4 +93,57 @@ export function confirmationOf(result: SetupIntentResult): CardConfirmation {
   return setupIntent.status === "succeeded"
     ? { ok: true, paymentSetupId: setupIntent.id }
     : { ok: false, message: null };
+}
+
+/**
+ * `return_url` of `stripe.confirmSetup`: the booking page without its query string. The home page
+ * search puts free-text addresses in the query (`?pickup=…&dropoff=…`); they must not travel to
+ * Stripe. Never used for a card (no redirection), but required by Stripe.js.
+ */
+export function returnUrlOf(location: Pick<Location, "origin" | "pathname">): string {
+  return `${location.origin}${location.pathname}`;
+}
+
+/** The two Stripe.js calls the card confirmation uses (mockable). */
+export interface SetupIntentClient {
+  confirmSetup(options: {
+    elements: StripeElements;
+    redirect: "if_required";
+    confirmParams: { return_url: string };
+  }): Promise<SetupIntentResult>;
+  retrieveSetupIntent(clientSecret: string): Promise<SetupIntentResult>;
+}
+
+/**
+ * Confirms the SetupIntent of the Payment Element. A card refusal keeps Stripe's localised
+ * message. Any other outcome (Stripe.js throwing, a lost answer, a retry refused because the
+ * SetupIntent already succeeded: `setup_intent_unexpected_state`) reads the SetupIntent back:
+ * if it succeeded, its id is used; otherwise a generic failure, whose message suggests
+ * restarting the card step with « Modifier l'email ».
+ */
+export async function confirmCardSetup(
+  stripe: SetupIntentClient,
+  input: { elements: StripeElements; clientSecret: string; returnUrl: string },
+): Promise<CardConfirmation> {
+  try {
+    const confirmation = confirmationOf(
+      await stripe.confirmSetup({
+        elements: input.elements,
+        redirect: "if_required",
+        confirmParams: { return_url: input.returnUrl },
+      }),
+    );
+    if (confirmation.ok || confirmation.message !== null) return confirmation;
+  } catch {
+    // Read the SetupIntent back below.
+  }
+  try {
+    const retrieved = await stripe.retrieveSetupIntent(input.clientSecret);
+    if (!retrieved.error && retrieved.setupIntent.status === "succeeded") {
+      return { ok: true, paymentSetupId: retrieved.setupIntent.id };
+    }
+  } catch {
+    // Generic failure below.
+  }
+  return { ok: false, message: null };
 }

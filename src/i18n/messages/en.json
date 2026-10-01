@@ -376,7 +376,6 @@
         "note": "Nothing is charged when you send it: your request awaits our approval.",
         "priceChangedTitle": "The price has changed",
         "priceChanged": "Our servers recalculated the price of this trip: {price} incl. VAT. Confirm this new price to send your request.",
-        "retry": "Try again",
         "failures": {
           "invalidRequest": "Your request could not be read. Check your details and your trip, then try again.",
           "invalidEmail": "This email address was not accepted. Check it, then try again.",
@@ -390,7 +389,7 @@
           "paymentRequired": "Your card could not be linked to this request. Enter it again; nothing has been charged.",
           "paymentUnavailable": "Saving the card is temporarily unavailable. Nothing has been charged. Try again in a moment.",
           "setupConflict": "Your email address changed while the payment was being prepared. Enter your card again.",
-          "cardUnexpected": "Your card could not be verified. Nothing has been charged. Try again or use another card.",
+          "cardUnexpected": "Your card could not be verified. Nothing has been charged. Try again or use another card. If the problem persists, “Change email” restarts the card step.",
           "closed": "Online booking is not open yet. Contact us to plan your trip.",
           "unavailable": "Your request could not be sent right now. Try again in a moment or contact us.",
           "network": "The connection failed. Check your Internet access, then try again: your request will not be sent twice."

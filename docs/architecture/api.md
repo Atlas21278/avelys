@@ -129,7 +129,7 @@ Requête (JSON, schéma strict de `createBooking` : toute clé inconnue, un mont
 }
 ```
 
-- Lieu : `placeId` (lat/lng alors facultatives et ignorées) **ou** `lat`/`lng`, toujours avec un `label`, comme le devis. Le formulaire public (VTC-047) envoie le `placeId` choisi dans l'autocomplete, sans coordonnées ; la réservation stocke toujours les points de l'itinéraire tarifé (VTC-035).
+- Lieu : `placeId` (lat/lng alors facultatives et ignorées) **ou** `lat`/`lng`, toujours avec un `label`. Contrairement au devis, un `placeId` peut être accompagné de lat/lng (ignorées). Le formulaire public (VTC-047) envoie le `placeId` choisi dans l'autocomplete, sans coordonnées ; la réservation stocke toujours les points de l'itinéraire tarifé (VTC-035).
 - `displayedTotal` n'est qu'une comparaison avec le prix recalculé, jamais un prix.
 - Appelée par l'étape 2 du parcours public (`/reservation`, VTC-047, `docs/product/booking.md`).
 
