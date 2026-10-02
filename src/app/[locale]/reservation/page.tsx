@@ -1,6 +1,8 @@
 import { useFormatter, useTranslations } from "next-intl";
 import { setRequestLocale } from "next-intl/server";
 
+import { BookingFlow } from "@/components/booking/booking-flow";
+import { QuoteUnavailable } from "@/components/booking/quote-step";
 import { ProvisionalNotice } from "@/components/site/provisional-notice";
 import { PageSection, SitePage } from "@/components/site/site-page";
 import { textLinkClasses } from "@/components/ui/text-link";
@@ -8,12 +10,15 @@ import { localeFromParams } from "@/i18n/locale";
 import { Link } from "@/i18n/navigation";
 import { pageMetadata } from "@/i18n/page-metadata";
 import { readBookingSearch, type BookingSearch } from "@/lib/booking-search";
+import { publicQuoteSettings, type PublicQuoteSettings } from "@/server/public-booking";
 
 export const generateMetadata = pageMetadata("booking", "/reservation");
 
 /**
- * Placeholder for the booking flow (EPIC-08/09): it reads back the trip search of the home
- * page (VTC-014) and shows it, never a price. Invalid parameters are ignored, never a 500.
+ * Booking page. Behind `PUBLIC_BOOKING_ENABLED` (VTC-045) it offers the booking flow: the server
+ * quote (VTC-046), then the request with the card saved through Stripe (VTC-047); switched off, it stays the placeholder that reads back the home
+ * page search (VTC-014) and never shows a price. Invalid parameters are ignored, never a 500.
+ * The settings are read per request (the page is dynamic: it reads its search parameters).
  */
 export default async function BookingPage({
   params,
@@ -21,7 +26,34 @@ export default async function BookingPage({
 }: PageProps<"/[locale]/reservation">) {
   setRequestLocale(await localeFromParams(params));
   const search = readBookingSearch(await searchParams);
-  return <Booking search={search} />;
+  const settings = publicQuoteSettings();
+  if (!settings.enabled) return <Booking search={search} />;
+  return <OnlineBooking search={search} settings={settings} />;
+}
+
+function OnlineBooking({
+  search,
+  settings,
+}: {
+  search: BookingSearch;
+  settings: Extract<PublicQuoteSettings, { enabled: true }>;
+}) {
+  const t = useTranslations("Pages.booking");
+
+  return (
+    <SitePage title={t("title")} lead={t("quote.lead")}>
+      {settings.mapsBrowserKey ? (
+        <BookingFlow
+          search={search}
+          mapsBrowserKey={settings.mapsBrowserKey}
+          serviceArea={settings.serviceArea}
+          stripePublishableKey={settings.stripePublishableKey}
+        />
+      ) : (
+        <QuoteUnavailable />
+      )}
+    </SitePage>
+  );
 }
 
 function Booking({ search }: { search: BookingSearch }) {

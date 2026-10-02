@@ -36,6 +36,8 @@ Catalogue actuel (`src/lib/errors.ts`) : `INVALID_INPUT` (400), `BOOKING_LEAD_TI
 
 Calcule un prix côté serveur à partir d'une distance **routière** et de la `PricingRule` active à l'instant du devis, puis le fige dans un `PricingSnapshot` (ADR-0009). Le devis n'est **pas persisté** : la réservation (VTC-028) rappelle `computeQuote` et recalcule toujours (BR-12).
 
+Appelée par l'étape 1 du parcours public (`/reservation`, VTC-046, `docs/product/booking.md`) avec un `placeId` choisi dans l'autocomplete, jamais avec un montant.
+
 > **Pas encore de rate limiting / anti-spam.** Ticket dédié obligatoire avant toute exposition en production (INFRA-005, DEC-17) : chaque devis déclenche un appel Google Routes facturé.
 
 Requête (JSON, schéma strict : toute clé inconnue, en particulier un montant, est refusée) :
@@ -113,7 +115,7 @@ Requête (JSON, schéma strict de `createBooking` : toute clé inconnue, un mont
 
 ```json
 {
-  "origin": { "label": "Gare de Lyon", "lat": 48.8443, "lng": 2.3743, "placeId": "ChIJ…" },
+  "origin": { "label": "Gare de Lyon", "placeId": "ChIJ…" },
   "destination": { "label": "CDG T2", "lat": 49.0097, "lng": 2.5479 },
   "pickupLocalDateTime": "2026-10-25T14:30",
   "passengers": 2,
@@ -127,7 +129,9 @@ Requête (JSON, schéma strict de `createBooking` : toute clé inconnue, un mont
 }
 ```
 
-`displayedTotal` n'est qu'une comparaison avec le prix recalculé, jamais un prix.
+- Lieu : `placeId` (lat/lng alors facultatives et ignorées) **ou** `lat`/`lng`, toujours avec un `label`. Contrairement au devis, un `placeId` peut être accompagné de lat/lng (ignorées). Le formulaire public (VTC-047) envoie le `placeId` choisi dans l'autocomplete, sans coordonnées ; la réservation stocke toujours les points de l'itinéraire tarifé (VTC-035).
+- `displayedTotal` n'est qu'une comparaison avec le prix recalculé, jamais un prix.
+- Appelée par l'étape 2 du parcours public (`/reservation`, VTC-047, `docs/product/booking.md`).
 
 Réponse (`cache-control: no-store`), rien d'autre (ni prix, ni id interne, ni id Stripe) :
 

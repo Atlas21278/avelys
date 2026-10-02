@@ -59,6 +59,14 @@ export const serverEnvSchema = z.object({
     (value) => (value === "" ? undefined : value),
     z.string().trim().min(1).optional(),
   ),
+  // Google Maps Platform **browser** key (VTC-046, ADR-0010): Places API (New) autocomplete
+  // only, restricted to the site's HTTP referrers and to Places API (New), with quotas and
+  // budget alerts (DEC-17). Public by nature (it reaches the browser) but never used by the
+  // server to call Google: the booking page reads it at request time and hands it to the
+  // browser, so one image serves every environment (ADR-0013; a literal
+  // `process.env.NEXT_PUBLIC_*` would be frozen at build time). Optional: without it the
+  // booking page offers no online quote. Empty = not configured.
+  NEXT_PUBLIC_GOOGLE_MAPS_BROWSER_API_KEY: optionalString(z.string().trim().min(1)),
   // Resend (VTC-043, ADR-0011). All optional so that `next build` and every page work without
   // them: an email sent without the key or the sender is traced FAILED with EMAIL_NOT_CONFIGURED
   // and never affects the booking (BR-50). Empty = not configured.

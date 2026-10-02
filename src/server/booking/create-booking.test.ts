@@ -127,7 +127,12 @@ describe("CreateBookingRequestSchema", () => {
     ["no passenger", { passengers: 0 }],
     ["a fractional amount", { displayedTotal: { amountCents: 10.5, currency: "EUR" } }],
     ["an unknown currency", { displayedTotal: { amountCents: 100, currency: "USD" } }],
-    ["a place without coordinates", { origin: { label: "x", placeId: "p" } }],
+    ["a place with neither place id nor coordinates", { origin: { label: "x" } }],
+    ["a place with a latitude only", { origin: { label: "x", lat: 48.8 } }],
+    [
+      "a place id with out-of-range coordinates",
+      { origin: { label: "x", placeId: "p", lat: 91, lng: 2 } },
+    ],
     ["an unknown transport kind", { transport: { kind: "BUS" } }],
     [
       "a transport time without offset",
@@ -135,6 +140,14 @@ describe("CreateBookingRequestSchema", () => {
     ],
   ])("refuses %s", (_label, override) => {
     expect(CreateBookingRequestSchema.safeParse({ ...REQUEST, ...override }).success).toBe(false);
+  });
+
+  it("accepts a place id without coordinates, as the booking form sends it (VTC-047)", () => {
+    const parsed = CreateBookingRequestSchema.parse({
+      ...REQUEST,
+      origin: { label: "Test origin", placeId: "test-place-origin" },
+    });
+    expect(parsed.origin).toEqual({ label: "Test origin", placeId: "test-place-origin" });
   });
 
   it("accepts a flight arrival and customer notes", () => {
