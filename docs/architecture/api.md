@@ -115,7 +115,7 @@ Requête (JSON, schéma strict de `createBooking` : toute clé inconnue, un mont
 
 ```json
 {
-  "origin": { "label": "Gare de Lyon", "lat": 48.8443, "lng": 2.3743, "placeId": "ChIJ…" },
+  "origin": { "label": "Gare de Lyon", "placeId": "ChIJ…" },
   "destination": { "label": "CDG T2", "lat": 49.0097, "lng": 2.5479 },
   "pickupLocalDateTime": "2026-10-25T14:30",
   "passengers": 2,
@@ -129,7 +129,9 @@ Requête (JSON, schéma strict de `createBooking` : toute clé inconnue, un mont
 }
 ```
 
-`displayedTotal` n'est qu'une comparaison avec le prix recalculé, jamais un prix.
+- Lieu : `placeId` (lat/lng alors facultatives et ignorées) **ou** `lat`/`lng`, toujours avec un `label`. Contrairement au devis, un `placeId` peut être accompagné de lat/lng (ignorées). Le formulaire public (VTC-047) envoie le `placeId` choisi dans l'autocomplete, sans coordonnées ; la réservation stocke toujours les points de l'itinéraire tarifé (VTC-035).
+- `displayedTotal` n'est qu'une comparaison avec le prix recalculé, jamais un prix.
+- Appelée par l'étape 2 du parcours public (`/reservation`, VTC-047, `docs/product/booking.md`).
 
 Réponse (`cache-control: no-store`), rien d'autre (ni prix, ni id interne, ni id Stripe) :
 

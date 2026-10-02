@@ -1,7 +1,8 @@
 import { useFormatter, useTranslations } from "next-intl";
 import { setRequestLocale } from "next-intl/server";
 
-import { QuoteStep, QuoteUnavailable } from "@/components/booking/quote-step";
+import { BookingFlow } from "@/components/booking/booking-flow";
+import { QuoteUnavailable } from "@/components/booking/quote-step";
 import { ProvisionalNotice } from "@/components/site/provisional-notice";
 import { PageSection, SitePage } from "@/components/site/site-page";
 import { textLinkClasses } from "@/components/ui/text-link";
@@ -14,8 +15,8 @@ import { publicQuoteSettings, type PublicQuoteSettings } from "@/server/public-b
 export const generateMetadata = pageMetadata("booking", "/reservation");
 
 /**
- * Booking page. Behind `PUBLIC_BOOKING_ENABLED` (VTC-045) it offers step 1 of the booking flow,
- * the server quote (VTC-046); switched off, it stays the placeholder that reads back the home
+ * Booking page. Behind `PUBLIC_BOOKING_ENABLED` (VTC-045) it offers the booking flow: the server
+ * quote (VTC-046), then the request with the card saved through Stripe (VTC-047); switched off, it stays the placeholder that reads back the home
  * page search (VTC-014) and never shows a price. Invalid parameters are ignored, never a 500.
  * The settings are read per request (the page is dynamic: it reads its search parameters).
  */
@@ -42,10 +43,11 @@ function OnlineBooking({
   return (
     <SitePage title={t("title")} lead={t("quote.lead")}>
       {settings.mapsBrowserKey ? (
-        <QuoteStep
+        <BookingFlow
           search={search}
           mapsBrowserKey={settings.mapsBrowserKey}
           serviceArea={settings.serviceArea}
+          stripePublishableKey={settings.stripePublishableKey}
         />
       ) : (
         <QuoteUnavailable />

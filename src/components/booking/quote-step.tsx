@@ -335,7 +335,7 @@ function QuoteFailureMessage({ failure }: { failure: QuoteFailure }) {
 }
 
 /** Direct channels (DEC-20, configurable in `site-identity`), then the contact page. */
-function DirectContact() {
+export function DirectContact() {
   const t = useTranslations("Pages.booking.quote");
   const { phone, email } = siteIdentity;
   return (

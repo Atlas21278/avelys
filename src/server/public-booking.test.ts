@@ -47,7 +47,22 @@ describe("publicQuoteSettings (VTC-046)", () => {
       enabled: true,
       mapsBrowserKey: "unit-test-browser-placeholder",
       serviceArea: { south: 41, west: -5.5, north: 51.5, east: 10 },
+      stripePublishableKey: null,
     });
+  });
+
+  it("hands the test-mode publishable key to the request step (VTC-047)", () => {
+    const publishable = `pk_test_${"A1b2".repeat(6)}`;
+    serverEnv.mockReturnValue(
+      env({ PUBLIC_BOOKING_ENABLED: "true", NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY: publishable }),
+    );
+    expect(publicQuoteSettings()).toMatchObject({ stripePublishableKey: publishable });
+  });
+
+  it("never hands the Stripe secret key to the browser", () => {
+    const secret = `sk_test_${"A1b2".repeat(6)}`;
+    serverEnv.mockReturnValue(env({ PUBLIC_BOOKING_ENABLED: "true", STRIPE_SECRET_KEY: secret }));
+    expect(JSON.stringify(publicQuoteSettings())).not.toContain(secret);
   });
 
   it("reports a missing browser key so the page offers contact instead of a quote", () => {

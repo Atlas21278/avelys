@@ -2,7 +2,12 @@ import "server-only";
 
 import { z } from "zod";
 
-import { ContactEmailSchema } from "@/domain/booking/contact";
+import {
+  BookingCustomerSchema,
+  BookingPlaceSchema,
+  BookingTransportSchema,
+  CustomerNotesSchema,
+} from "@/domain/booking/request-schema";
 import { INITIAL_BOOKING_STATUS, type BookingStatus } from "@/domain/booking/status";
 import { assertCanCreateBooking } from "@/domain/booking/transitions";
 import { INITIAL_PAYMENT_STATUS } from "@/domain/payment/status";
@@ -34,25 +39,6 @@ import {
  * is charged: no PaymentIntent exists at this stage. No public route or server action here.
  */
 
-/** Display label of a place: stored on the booking, never priced, never logged. */
-const LabelSchema = z.string().trim().min(1).max(200);
-
-/**
- * A place of the booking form: coordinates plus, when the place came from Places autocomplete,
- * its id. The route is computed from the place id when present, from the coordinates otherwise —
- * as for the quote the customer saw. The submitted coordinates are a routing input only: the
- * booking stores the end points of the priced route (VTC-035), so a request cannot be priced
- * A→B and dispatched C→D.
- */
-export const BookingPlaceSchema = z.strictObject({
-  label: LabelSchema,
-  lat: z.number().min(-90).max(90),
-  lng: z.number().min(-180).max(180),
-  placeId: z.string().trim().min(1).max(1024).optional(),
-});
-
-const OptionalText = (max: number) => z.string().trim().min(1).max(max).optional();
-
 /**
  * Booking request. Strict: any unknown key is refused — a price, a snapshot or a `snapshotId`
  * from the client in particular (BR-12). `displayedTotal` is what the customer saw; it is only
@@ -65,27 +51,9 @@ export const CreateBookingRequestSchema = z.strictObject({
   pickupLocalDateTime: z.string().max(32),
   passengers: z.int().min(1),
   luggage: z.int().min(0),
-  customer: z.strictObject({
-    name: z.string().trim().min(1).max(200),
-    email: ContactEmailSchema,
-    phone: z
-      .string()
-      .trim()
-      .regex(/^\+?[0-9][0-9 .()-]{5,31}$/)
-      .optional(),
-    locale: z.enum(["fr", "en"]).default("fr"),
-  }),
-  customerNotes: OptionalText(1_000),
-  /** Airport or station arrival (BR-34): scheduled time distinct from the pickup time. */
-  transport: z
-    .strictObject({
-      kind: z.enum(["FLIGHT", "TRAIN"]),
-      number: OptionalText(32),
-      origin: OptionalText(120),
-      terminal: OptionalText(120),
-      scheduledAt: z.iso.datetime({ offset: true }).optional(),
-    })
-    .optional(),
+  customer: BookingCustomerSchema,
+  customerNotes: CustomerNotesSchema,
+  transport: BookingTransportSchema.optional(),
   termsAccepted: z.literal(true),
   displayedTotal: z.strictObject({
     amountCents: z.int().nonnegative(),
@@ -170,7 +138,7 @@ export function parseBookingRequest(input: unknown): ParsedRequest {
 }
 
 function quotePlace(place: ParsedRequest["origin"]): QuoteRequest["origin"] {
-  return place.placeId
+  return "placeId" in place
     ? { placeId: place.placeId, label: place.label }
     : { lat: place.lat, lng: place.lng, label: place.label };
 }
@@ -296,11 +264,11 @@ async function persist(
         // never stored.
         pickupLat: quote.pricedOrigin.lat,
         pickupLng: quote.pricedOrigin.lng,
-        pickupPlaceId: request.origin.placeId ?? null,
+        pickupPlaceId: "placeId" in request.origin ? request.origin.placeId : null,
         dropoffLabel: request.destination.label,
         dropoffLat: quote.pricedDestination.lat,
         dropoffLng: quote.pricedDestination.lng,
-        dropoffPlaceId: request.destination.placeId ?? null,
+        dropoffPlaceId: "placeId" in request.destination ? request.destination.placeId : null,
         pickupAt: new Date(snapshot.inputs.pickupAt),
         pickupLocalDateTime: localDateTimeColumn(snapshot.inputs.pickupLocalDateTime),
         pickupTimeZone: snapshot.inputs.timeZone,
