@@ -262,6 +262,22 @@ describe("parseServerEnv", () => {
     expect(message).not.toContain(secretLooking);
   });
 
+  it("treats the payment link secret as optional, at least 32 characters (VTC-042)", () => {
+    expect(parseServerEnv(valid).PAYMENT_LINK_SECRET).toBeUndefined();
+    expect(parseServerEnv({ ...valid, PAYMENT_LINK_SECRET: "" }).PAYMENT_LINK_SECRET).toBeUndefined();
+    const key = "unit-tests-only-payment-link-key-000000";
+    expect(parseServerEnv({ ...valid, PAYMENT_LINK_SECRET: key }).PAYMENT_LINK_SECRET).toBe(key);
+    const short = "too-short-link-key";
+    let message = "";
+    try {
+      parseServerEnv({ ...valid, PAYMENT_LINK_SECRET: short });
+    } catch (error) {
+      message = (error as Error).message;
+    }
+    expect(message).toMatch(/PAYMENT_LINK_SECRET/);
+    expect(message).not.toContain(short);
+  });
+
   it("rejects a Better Auth secret shorter than 32 characters", () => {
     expect(() => parseServerEnv({ ...valid, BETTER_AUTH_SECRET: "too-short" })).toThrowError(
       /BETTER_AUTH_SECRET/,

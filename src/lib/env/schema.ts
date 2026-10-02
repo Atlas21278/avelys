@@ -1,5 +1,6 @@
 import * as z from "zod";
 
+import { MIN_REGULARIZATION_KEY_LENGTH } from "@/domain/payment/regularization-token";
 import { PROVISIONAL_SERVICE_AREA, ServiceAreaSchema } from "@/domain/geo/service-area";
 import { isEmailSender } from "@/integrations/email/address";
 import {
@@ -24,6 +25,12 @@ export const serverEnvSchema = z.object({
   DATABASE_URL: z.url({ protocol: /^postgres(ql)?$/ }),
   // Signs and encrypts Better Auth cookies, tokens and TOTP secrets (VTC-016). At least 32 characters.
   BETTER_AUTH_SECRET: z.string().min(32),
+  // Signs the SCA regularisation links sent to customers (VTC-042, HMAC-SHA256). At least 32
+  // characters, distinct from every other secret. Optional so that `next build` and every other
+  // page work without it: absent, no link is generated and every link page answers "invalid".
+  // Changing it invalidates every link in circulation (rotation: docs/architecture/security.md).
+  // Empty = not configured.
+  PAYMENT_LINK_SECRET: optionalString(z.string().min(MIN_REGULARIZATION_KEY_LENGTH)),
   // Reverse proxies (IPs or CIDR ranges, comma-separated) whose X-Forwarded-For entries are
   // trusted when resolving the client IP for auth rate limiting. Empty by default; the ingress
   // topology is fixed by INFRA-005 (docs/architecture/security.md).

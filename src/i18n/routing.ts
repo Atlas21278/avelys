@@ -29,8 +29,13 @@ export const routing = defineRouting({
     "/confidentialite": { fr: "/confidentialite", en: "/privacy" },
     "/cookies": "/cookies",
     "/cgv": { fr: "/cgv", en: "/terms" },
+    // SCA regularisation page reached by a signed link (VTC-042): never linked from the site,
+    // never in a sitemap, `noindex`.
+    "/paiement/[token]": { fr: "/paiement/[token]", en: "/payment/[token]" },
   },
 });
 
 export type Locale = (typeof routing.locales)[number];
 export type AppPathname = keyof typeof routing.pathnames;
+/** Pathnames without a dynamic segment: the indexable pages, with canonical and hreflang. */
+export type StaticPathname = Exclude<AppPathname, `${string}[${string}]${string}`>;

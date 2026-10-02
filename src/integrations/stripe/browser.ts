@@ -1,4 +1,6 @@
 import type {
+  PaymentIntentOrSetupIntentResult,
+  PaymentIntentResult,
   SetupIntentResult,
   Stripe,
   StripeElements,
@@ -146,4 +148,96 @@ export async function confirmCardSetup(
     // Generic failure below.
   }
   return { ok: false, message: null };
+}
+
+// ---------------------------------------------------------------------------------------------
+// SCA regularisation (VTC-042)
+// ---------------------------------------------------------------------------------------------
+
+/** How the regularisation page asks Stripe.js to authenticate (see `regularizationStep`). */
+export type AuthenticationStep = "confirm" | "next_action";
+
+/**
+ * Result of the customer's authentication as seen by the browser. Informative only: the
+ * booking and the Payment change only through the webhooks (BR-41).
+ * - `settled`: Stripe reports the PaymentIntent `succeeded` or `processing`;
+ * - `failed`: anything else, with Stripe's localised message for a card or input error, null
+ *   otherwise (a generic message is shown).
+ */
+export type PaymentAuthentication =
+  | { readonly outcome: "settled" }
+  | { readonly outcome: "failed"; readonly message: string | null };
+
+/** The three Stripe.js calls of the regularisation page (mockable). */
+export interface PaymentAuthenticationClient {
+  confirmPayment(options: {
+    clientSecret: string;
+    confirmParams: { payment_method: string; return_url: string };
+    redirect: "if_required";
+  }): Promise<PaymentIntentResult>;
+  handleNextAction(options: { clientSecret: string }): Promise<PaymentIntentOrSetupIntentResult>;
+  retrievePaymentIntent(clientSecret: string): Promise<PaymentIntentResult>;
+}
+
+const SETTLED_STATUSES = new Set(["succeeded", "processing"]);
+
+function authenticationOf(result: PaymentIntentOrSetupIntentResult): PaymentAuthentication | null {
+  if (result.error) {
+    const message = result.error.message;
+    return CUSTOMER_FACING_ERRORS.has(result.error.type) && message
+      ? { outcome: "failed", message }
+      : null;
+  }
+  if (result.paymentIntent && SETTLED_STATUSES.has(result.paymentIntent.status)) {
+    return { outcome: "settled" };
+  }
+  return null;
+}
+
+/**
+ * Authenticates the existing PaymentIntent of the regularisation page, on session (Stripe docs,
+ * "save and reuse": confirm the declined PaymentIntent with its client secret):
+ *
+ * - `confirm`: `stripe.confirmPayment` with the client secret and the payment method saved at
+ *   the request: the same PaymentIntent, the same card, its frozen amount (no amount, no card
+ *   data from this page). Stripe.js opens the bank's 3-D Secure window; a card never redirects
+ *   (`redirect: "if_required"`), `returnUrl` is only required by Stripe.js;
+ * - `next_action`: `stripe.handleNextAction` for a PaymentIntent already `requires_action`.
+ *
+ * A card error keeps Stripe's localised message. Any other outcome (Stripe.js throwing, a lost
+ * answer, an unexpected status) reads the PaymentIntent back: settled if Stripe says so,
+ * otherwise a generic failure.
+ */
+export async function authenticatePayment(
+  stripe: PaymentAuthenticationClient,
+  input: {
+    step: AuthenticationStep;
+    clientSecret: string;
+    paymentMethodId: string;
+    returnUrl: string;
+  },
+): Promise<PaymentAuthentication> {
+  try {
+    const result =
+      input.step === "next_action"
+        ? await stripe.handleNextAction({ clientSecret: input.clientSecret })
+        : await stripe.confirmPayment({
+            clientSecret: input.clientSecret,
+            confirmParams: { payment_method: input.paymentMethodId, return_url: input.returnUrl },
+            redirect: "if_required",
+          });
+    const outcome = authenticationOf(result);
+    if (outcome) return outcome;
+  } catch {
+    // Read the PaymentIntent back below.
+  }
+  try {
+    const retrieved = await stripe.retrievePaymentIntent(input.clientSecret);
+    if (!retrieved.error && SETTLED_STATUSES.has(retrieved.paymentIntent.status)) {
+      return { outcome: "settled" };
+    }
+  } catch {
+    // Generic failure below.
+  }
+  return { outcome: "failed", message: null };
 }
