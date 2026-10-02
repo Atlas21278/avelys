@@ -6,6 +6,7 @@
  */
 import "dotenv/config";
 
+import { EnvValidationError } from "../src/lib/env/schema";
 import { assertSeedAllowed } from "../src/server/seed-guard";
 
 // Checked before anything touches the database.
@@ -65,6 +66,8 @@ main().catch((error: unknown) => {
     typeof error === "object" && error !== null && "code" in error
       ? ` (${String(error.code)})`
       : "";
-  console.error(`Échec du seed : ${name}${code}.`);
+  // EnvValidationError lists variable names and issue codes only, never values: safe to print.
+  const variables = error instanceof EnvValidationError ? ` : ${error.variables.join(", ")}` : "";
+  console.error(`Échec du seed : ${name}${code}${variables}.`);
   process.exit(1);
 });
