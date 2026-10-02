@@ -12,9 +12,10 @@ import {
 const create = vi.fn();
 const list = vi.fn();
 const retrieve = vi.fn();
+const cancel = vi.fn();
 
 const fakeStripe = {
-  paymentIntents: { create, list, retrieve },
+  paymentIntents: { create, list, retrieve, cancel },
 } as unknown as PaymentIntentStripeClient;
 
 const gateway = createStripePaymentIntentGateway(fakeStripe);
@@ -261,5 +262,36 @@ describe("retrievePaymentIntent", () => {
     const error = new Stripe.errors.StripeAPIError({ type: "api_error" });
     retrieve.mockRejectedValue(error);
     await expect(gateway.retrievePaymentIntent("pi_Test123")).rejects.toBe(error);
+  });
+});
+
+describe("cancelPaymentIntent", () => {
+  it("cancels as abandoned with the given idempotency key", async () => {
+    cancel.mockResolvedValue(paymentIntent({ status: "canceled" }));
+
+    await expect(
+      gateway.cancelPaymentIntent("pi_Test123", "booking:b1:cancel:1"),
+    ).resolves.toMatchObject({ id: "pi_Test123", status: "canceled", attempt: 1 });
+    expect(cancel).toHaveBeenCalledWith(
+      "pi_Test123",
+      { cancellation_reason: "abandoned" },
+      { idempotencyKey: "booking:b1:cancel:1" },
+    );
+  });
+
+  it("refuses an id that is not a PaymentIntent id, without calling Stripe", async () => {
+    await expect(gateway.cancelPaymentIntent("cus_1", "k")).rejects.toBeInstanceOf(
+      PaymentIntentError,
+    );
+    expect(cancel).not.toHaveBeenCalled();
+  });
+
+  it("lets a Stripe refusal through (e.g. a PaymentIntent that already succeeded)", async () => {
+    const error = new Stripe.errors.StripeInvalidRequestError({
+      type: "invalid_request_error",
+      code: "payment_intent_unexpected_state",
+    });
+    cancel.mockRejectedValue(error);
+    await expect(gateway.cancelPaymentIntent("pi_Test123", "k")).rejects.toBe(error);
   });
 });

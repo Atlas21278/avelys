@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 
+import Stripe from "stripe";
 import { vi } from "vitest";
 
 import type { BookingStatus } from "@/domain/booking/status";
@@ -220,18 +221,44 @@ export function fakePaymentIntents() {
     },
   );
 
+  // Like Stripe: only a still-open PaymentIntent can be cancelled; anything else is refused.
+  const CANCELABLE = ["requires_payment_method", "requires_action", "requires_confirmation"];
+  let beforeCancel: ((id: string) => Promise<void>) | null = null;
+  const cancelPaymentIntent = vi.fn(async (id: string, _idempotencyKey: string) => {
+    if (beforeCancel) await beforeCancel(id);
+    const current = intents.get(id);
+    if (!current || !CANCELABLE.includes(current.status)) {
+      throw new Stripe.errors.StripeInvalidRequestError({
+        type: "invalid_request_error",
+        code: current ? "payment_intent_unexpected_state" : "resource_missing",
+      });
+    }
+    const canceled = { ...current, status: "canceled" };
+    intents.set(id, canceled);
+    return canceled;
+  });
+
+  const listCustomerPaymentIntents = vi.fn(async (customerId: string) =>
+    [...intents.values()].filter((intent) => intent.customerId === customerId).reverse(),
+  );
+
   const gateway: PaymentIntentGateway = {
     createOffSessionCharge,
-    listCustomerPaymentIntents: vi.fn(async (customerId: string) =>
-      [...intents.values()].filter((intent) => intent.customerId === customerId).reverse(),
-    ),
+    listCustomerPaymentIntents,
     retrievePaymentIntent: vi.fn(async (id: string) => intents.get(id) ?? null),
+    cancelPaymentIntent,
   };
 
   return {
     gateway,
     createOffSessionCharge,
+    cancelPaymentIntent,
+    listCustomerPaymentIntents,
     intents,
+    /** Runs `hook` when a cancellation reaches Stripe, before it is applied (races). */
+    beforeCancel(hook: ((id: string) => Promise<void>) | null) {
+      beforeCancel = hook;
+    },
     confirmWith(next: FakeConfirmation) {
       confirmation = next;
     },
