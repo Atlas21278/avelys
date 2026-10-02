@@ -224,7 +224,8 @@ export function fakePaymentIntents() {
   // Like Stripe: only a still-open PaymentIntent can be cancelled; anything else is refused.
   const CANCELABLE = ["requires_payment_method", "requires_action", "requires_confirmation"];
   let beforeCancel: ((id: string) => Promise<void>) | null = null;
-  const cancelPaymentIntent = vi.fn(async (id: string, _idempotencyKey: string) => {
+  const cancelPaymentIntent = vi.fn(async (id: string, idempotencyKey: string) => {
+    if (!idempotencyKey) throw new Error("idempotency key required");
     if (beforeCancel) await beforeCancel(id);
     const current = intents.get(id);
     if (!current || !CANCELABLE.includes(current.status)) {

@@ -131,8 +131,16 @@ describe("checkRetryable", () => {
 
   it.each([
     ["no payment", { payment: null }, "no_payment"],
-    ["REQUIRES_ACTION", { payment: { status: "REQUIRES_ACTION" as const } }, "payment_requires_action"],
-    ["an untouched PENDING", { payment: { status: "PENDING" as const, attempt: 0 } }, "no_attempt_yet"],
+    [
+      "REQUIRES_ACTION",
+      { payment: { status: "REQUIRES_ACTION" as const } },
+      "payment_requires_action",
+    ],
+    [
+      "an untouched PENDING",
+      { payment: { status: "PENDING" as const, attempt: 0 } },
+      "no_attempt_yet",
+    ],
     ["a CONFIRMED booking", { booking: { status: "CONFIRMED" as const } }, "booking_not_accepted"],
   ])("refuses %s with PAYMENT_NOT_RETRYABLE", (_label, overrides, reason) => {
     expect(checkRetryable(candidate(overrides))).toEqual({

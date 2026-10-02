@@ -271,4 +271,65 @@ describe("writeAuditLog", () => {
       });
     });
   });
+
+  describe("manual retry (VTC-041)", () => {
+    const failed = {
+      bookingRef: "VTC-7K2M9QXB",
+      status: "FAILED",
+      version: 3,
+      amountCents: 6_188,
+      currency: "EUR",
+      attempt: 1,
+    } as const;
+    const after = { ...failed, version: 4, attempt: 2 } as const;
+
+    it.each([
+      ["with the previous PaymentIntent id", { ...failed, paymentIntentId: "pi_Test123" }],
+      ["without one (interrupted first attempt)", { ...failed, status: "PENDING" as const }],
+    ])("writes a retry by ADMIN %s", async (_label, before) => {
+      const { client, create } = writer();
+      await writeAuditLog(client, {
+        action: "payment.retry",
+        actorType: "ADMIN",
+        actorId: "user-id",
+        entityId: "payment-id",
+        before,
+        after,
+        correlationId: "corr-12345678",
+      });
+      expect(create).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          entityType: "Payment",
+          action: "payment.retry",
+          actorType: "ADMIN",
+          before,
+          after,
+        }) as unknown,
+      });
+    });
+
+    it.each([
+      [
+        "another Stripe id as previous PaymentIntent",
+        { before: { ...failed, paymentIntentId: "pm_Test1" }, after },
+      ],
+      [
+        "a PaymentIntent id after the retry",
+        { before: failed, after: { ...after, paymentIntentId: "pi_Test123" } },
+      ],
+    ])("refuses %s", async (_label, states) => {
+      const { client, create } = writer();
+      await expect(
+        writeAuditLog(client, {
+          action: "payment.retry",
+          actorType: "ADMIN",
+          actorId: "user-id",
+          entityId: "payment-id",
+          ...(states as { before: typeof failed; after: typeof after }),
+          correlationId: null,
+        }),
+      ).rejects.toBeInstanceOf(AuditLogPayloadError);
+      expect(create).not.toHaveBeenCalled();
+    });
+  });
 });

@@ -299,7 +299,9 @@ export async function retryBookingCharge(
         ...state,
         version: payment.version,
         attempt: payment.attempt,
-        ...(payment.stripePaymentIntentId ? { paymentIntentId: payment.stripePaymentIntentId } : {}),
+        ...(payment.stripePaymentIntentId
+          ? { paymentIntentId: payment.stripePaymentIntentId }
+          : {}),
       },
       after: { ...state, version: payment.version + 1, attempt: nextAttempt },
       correlationId: currentCorrelationId() ?? null,

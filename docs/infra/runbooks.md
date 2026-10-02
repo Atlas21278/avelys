@@ -19,12 +19,18 @@ Interdit : `kubectl set image` / édition manuelle dans le cluster.
 ## RB-03 — Incident paiement
 
 - Webhooks en échec : vérifier l'endpoint et le secret de signature (sans l'afficher), rejouer les événements depuis le Dashboard Stripe ; l'idempotence garantit l'absence de double effet. Logs `stripe webhook refused` (`code` : `INVALID_WEBHOOK_SIGNATURE` → secret ou endpoint erroné, `WEBHOOK_NOT_CONFIGURED` → `STRIPE_WEBHOOK_SECRET` absent) et `stripe webhook failed` (`eventId`, `eventType`, `errorName` : handler en échec, transaction annulée, Stripe réessaie).
-- Paiement `REQUIRES_ACTION`/`FAILED` : vérifier l'email client, contacter le client, annuler si délai dépassé (DEC-13). Pas de relance automatique (DEC-27) : relance manuelle depuis le back-office (VTC-041).
+- Paiement `REQUIRES_ACTION`/`FAILED` : vérifier l'email client, contacter le client, annuler si délai dépassé (DEC-13). Pas de relance automatique (DEC-27) : relance manuelle depuis le back-office (VTC-041, ci-dessous) pour `FAILED` ; `REQUIRES_ACTION` se régularise par le lien client.
 - Débit à l'acceptation (VTC-033) — logs et conduite à tenir (jamais d'id Stripe dans les logs : retrouver le PaymentIntent dans le Dashboard de test par la métadonnée `bookingRef`) :
   - `charge failed before an outcome` (`bookingRef`, `errorName`) : Stripe injoignable, clé absente ou refusée. Payment `PENDING`, tentative 1, réservation `ACCEPTED`. Vérifier dans le Dashboard si un PaymentIntent existe pour ce `bookingRef` : s'il existe, son webhook le rattachera (rejouer l'événement au besoin) ; sinon, relance manuelle (VTC-041).
   - `charge refused` (`code` `PAYMENT_AMOUNT_MISMATCH` ou `PAYMENT_STATE_INCONSISTENT`) : aucun débit. Incohérence de données à analyser avant toute action ; ne jamais corriger un montant à la main sans ticket.
   - `succeeded PaymentIntent of a previous attempt` (`alert: orphan_succeeded_payment_intent`) ou `payment succeeded for a booking that is no longer ACCEPTED` : **argent encaissé sans effet sur la réservation**. Rembourser manuellement depuis le Dashboard (politique DEC-05) et le tracer.
   - `onPaymentRequiresAction failed` : l'email de régularisation n'est pas parti (VTC-044) ; le Payment reste `REQUIRES_ACTION`. Contacter le client.
+- Relance manuelle (VTC-041, `payments.md` « Relance manuelle ») : bouton « Relancer le débit » sur le détail d'une réservation `ACCEPTED` dont le Payment est `FAILED` ou `PENDING` après une tentative ; `ADMIN` avec 2FA uniquement ; jamais depuis `REQUIRES_ACTION` (le client passe par son lien). Stripe est vérifié avant toute nouvelle tentative : un paiement déjà réussi est rapproché sans nouveau débit, les PaymentIntents encore ouverts sont annulés. Pas de limite de relances : chaque relance est une décision humaine. Logs et conduite à tenir :
+  - `retry not started: Stripe could not be checked` (`PAYMENT_UNAVAILABLE`) : rien n'a été écrit ni débité ; réessayer plus tard.
+  - `retry refused: payment in progress` (`PAYMENT_IN_PROGRESS`) : un PaymentIntent est `processing` ; attendre son webhook, ne pas relancer.
+  - `retry interrupted before an outcome` (`PAYMENT_ATTEMPT_INTERRUPTED`) : tentative réservée et auditée (`payment.retry`), Stripe sans réponse ; relancer plus tard (le PaymentIntent éventuellement créé est rapproché s'il a réussi, annulé sinon).
+  - `retry refused: a succeeded PaymentIntent exists but cannot be reconciled` (`alert: unmatched_succeeded_payment_intent`) : **argent encaissé non rattaché**, aucun nouveau débit. Vérifier dans le Dashboard (métadonnée `bookingRef`) et traiter à la main (DEC-05).
+  - L'id du PaymentIntent de chaque tentative précédente est dans l'`AuditLog` (`payment.retry`, champ `before.paymentIntentId`), jamais dans les logs.
 
 ## RB-04 — Email indisponible
 

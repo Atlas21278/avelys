@@ -73,7 +73,10 @@ export interface PaymentIntentGateway {
    * never succeed in parallel with a new attempt. Throws when Stripe refuses (already succeeded,
    * already canceled, processing) or fails: the caller reads the PaymentIntent back.
    */
-  cancelPaymentIntent(paymentIntentId: string, idempotencyKey: string): Promise<PaymentIntentSummary>;
+  cancelPaymentIntent(
+    paymentIntentId: string,
+    idempotencyKey: string,
+  ): Promise<PaymentIntentSummary>;
 }
 
 /** Stripe answered something the charge cannot rely on. Carries a reason, never an id. */

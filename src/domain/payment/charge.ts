@@ -123,10 +123,7 @@ export type ChargeCheck =
   | Readonly<{ ok: false; refusal: ChargeRefusal }>;
 
 /** Payment ownership: an inconsistent pointer is never charged, whatever the statuses. */
-export function checkPaymentOwnership({
-  booking,
-  payment,
-}: ChargeCandidate): ChargeRefusal | null {
+export function checkPaymentOwnership({ booking, payment }: ChargeCandidate): ChargeRefusal | null {
   if (payment === null || booking.currentPaymentId === null) {
     return { code: "NOT_CHARGEABLE", reason: "no_payment" };
   }
