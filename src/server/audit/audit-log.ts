@@ -39,6 +39,19 @@ export const PaymentAuditStateSchema = z.strictObject({
   attempt: z.int().nonnegative(),
 });
 
+/**
+ * Payment state after a charge attempt (VTC-033): the payment state plus the id of the attempt's
+ * PaymentIntent. Documented exception to "no Stripe id" (docs/product/payments.md): a `pi_…` id
+ * is neither card data, nor personal data, nor a secret, and traces each attempt. Format checked;
+ * every other Stripe id stays refused.
+ */
+export const PaymentChargeAuditStateSchema = PaymentAuditStateSchema.extend({
+  paymentIntentId: z
+    .string()
+    .max(255)
+    .regex(/^pi_[A-Za-z0-9]+$/),
+});
+
 /** Booking state recorded for a status transition (VTC-032): reference, status and version only. */
 export const BookingTransitionAuditStateSchema = BookingAuditStateSchema.pick({
   bookingRef: true,
@@ -71,6 +84,24 @@ const AUDIT_ACTIONS = {
     entityType: "Booking",
     before: BookingTransitionAuditStateSchema,
     after: BookingTransitionAuditStateSchema,
+  },
+  /** `ACCEPTED → CONFIRMED` by SYSTEM once the charge succeeded (VTC-033). */
+  "booking.confirm": {
+    entityType: "Booking",
+    before: BookingTransitionAuditStateSchema,
+    after: BookingTransitionAuditStateSchema,
+  },
+  /** Charge attempt reserved on the Payment (`attempt` + 1) before Stripe is called (VTC-033). */
+  "payment.charge_attempt": {
+    entityType: "Payment",
+    before: PaymentAuditStateSchema,
+    after: PaymentAuditStateSchema,
+  },
+  /** Outcome of a charge attempt applied to the Payment, with its PaymentIntent id (VTC-033). */
+  "payment.charge": {
+    entityType: "Payment",
+    before: PaymentAuditStateSchema,
+    after: PaymentChargeAuditStateSchema,
   },
 } as const satisfies Record<
   string,

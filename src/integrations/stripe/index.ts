@@ -5,10 +5,19 @@ import type Stripe from "stripe";
 import { serverEnv } from "@/lib/env/server";
 
 import { createStripeClient } from "./client";
+import { createStripePaymentIntentGateway, type PaymentIntentGateway } from "./payment-intents";
 import { createStripePaymentSetupGateway, type PaymentSetupGateway } from "./setup-intents";
 import { createStripeWebhookVerifier, type StripeWebhookVerifier } from "./webhooks";
 
 export { STRIPE_API_VERSION, StripeConfigError, type StripeConfigErrorReason } from "./client";
+export {
+  PAYMENT_INTENT_ID,
+  PaymentIntentError,
+  type OffSessionChargeInput,
+  type OffSessionChargeResult,
+  type PaymentIntentGateway,
+  type PaymentIntentSummary,
+} from "./payment-intents";
 export {
   PaymentSetupError,
   SETUP_INTENT_ID,
@@ -27,6 +36,7 @@ export {
 let client: Stripe | undefined;
 let verifier: StripeWebhookVerifier | undefined;
 let paymentSetup: PaymentSetupGateway | undefined;
+let paymentIntents: PaymentIntentGateway | undefined;
 
 /**
  * Server Stripe client (test mode only), created on first use: neither import nor `next build`
@@ -51,4 +61,13 @@ export function stripeWebhooks(): StripeWebhookVerifier {
 export function stripePaymentSetup(): PaymentSetupGateway {
   paymentSetup ??= createStripePaymentSetupGateway(stripeClient());
   return paymentSetup;
+}
+
+/**
+ * PaymentIntent gateway (VTC-033) on the server client: same lazy, test-mode-only rules as
+ * `stripeClient()` (a `StripeConfigError` without a usable test key).
+ */
+export function stripePaymentIntents(): PaymentIntentGateway {
+  paymentIntents ??= createStripePaymentIntentGateway(stripeClient());
+  return paymentIntents;
 }

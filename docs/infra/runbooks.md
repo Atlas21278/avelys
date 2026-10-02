@@ -19,7 +19,12 @@ Interdit : `kubectl set image` / édition manuelle dans le cluster.
 ## RB-03 — Incident paiement
 
 - Webhooks en échec : vérifier l'endpoint et le secret de signature (sans l'afficher), rejouer les événements depuis le Dashboard Stripe ; l'idempotence garantit l'absence de double effet. Logs `stripe webhook refused` (`code` : `INVALID_WEBHOOK_SIGNATURE` → secret ou endpoint erroné, `WEBHOOK_NOT_CONFIGURED` → `STRIPE_WEBHOOK_SECRET` absent) et `stripe webhook failed` (`eventId`, `eventType`, `errorName` : handler en échec, transaction annulée, Stripe réessaie).
-- Paiement `REQUIRES_ACTION`/`FAILED` : vérifier l'email client, contacter le client, annuler si délai dépassé (DEC-13).
+- Paiement `REQUIRES_ACTION`/`FAILED` : vérifier l'email client, contacter le client, annuler si délai dépassé (DEC-13). Pas de relance automatique (DEC-27) : relance manuelle depuis le back-office (VTC-041).
+- Débit à l'acceptation (VTC-033) — logs et conduite à tenir (jamais d'id Stripe dans les logs : retrouver le PaymentIntent dans le Dashboard de test par la métadonnée `bookingRef`) :
+  - `charge failed before an outcome` (`bookingRef`, `errorName`) : Stripe injoignable, clé absente ou refusée. Payment `PENDING`, tentative 1, réservation `ACCEPTED`. Vérifier dans le Dashboard si un PaymentIntent existe pour ce `bookingRef` : s'il existe, son webhook le rattachera (rejouer l'événement au besoin) ; sinon, relance manuelle (VTC-041).
+  - `charge refused` (`code` `PAYMENT_AMOUNT_MISMATCH` ou `PAYMENT_STATE_INCONSISTENT`) : aucun débit. Incohérence de données à analyser avant toute action ; ne jamais corriger un montant à la main sans ticket.
+  - `succeeded PaymentIntent of a previous attempt` (`alert: orphan_succeeded_payment_intent`) ou `payment succeeded for a booking that is no longer ACCEPTED` : **argent encaissé sans effet sur la réservation**. Rembourser manuellement depuis le Dashboard (politique DEC-05) et le tracer.
+  - `onPaymentRequiresAction failed` : l'email de régularisation n'est pas parti (VTC-044) ; le Payment reste `REQUIRES_ACTION`. Contacter le client.
 
 ## RB-04 — Email indisponible
 

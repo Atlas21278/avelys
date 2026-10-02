@@ -4,12 +4,15 @@ import type Stripe from "stripe";
 
 import type { Prisma, PrismaClient } from "@/generated/prisma/client";
 import { stripeWebhooks, type StripeWebhookVerifier } from "@/integrations/stripe";
+import { logger } from "@/lib/logger";
 import { db } from "@/server/db";
 
 import {
   STRIPE_WEBHOOK_HANDLERS,
+  type StripeWebhookAfterCommit,
   type StripeWebhookHandler,
   type StripeWebhookHandlers,
+  type StripeWebhookTransactionStep,
 } from "./webhook-handlers";
 
 export { StripeWebhookError, type StripeWebhookErrorCode } from "@/integrations/stripe";
@@ -66,6 +69,10 @@ export async function receiveStripeWebhook(
  * concurrent delivery, the unique index makes the second insert wait for the first transaction:
  * once it commits, the second inserts nothing; if it rolls back, the second proceeds. A handler
  * failure rolls back the insert too, so Stripe's next retry is processed again.
+ *
+ * VTC-033: a handler with `prepare` reads Stripe before the transaction opens (a failure there
+ * records nothing, Stripe retries); the effect it may return runs after commit, and its failure
+ * is logged without failing the delivery (BR-50).
  */
 export async function processStripeWebhookEvent(
   event: Stripe.Event,
@@ -76,14 +83,53 @@ export async function processStripeWebhookEvent(
   // The registry is keyed by type, so the handler matches this event's variant.
   const handler = handlers[event.type] as StripeWebhookHandler | undefined;
 
-  return client.$transaction(async (tx: Prisma.TransactionClient): Promise<ProcessedWebhook> => {
-    const { count } = await tx.processedWebhookEvent.createMany({
-      data: [{ provider: "STRIPE", eventId: event.id, eventType: event.type }],
-      skipDuplicates: true,
+  let step: StripeWebhookTransactionStep | undefined;
+  if (typeof handler === "function") {
+    step = (tx) => handler(event, tx);
+  } else if (handler) {
+    // A delivery already recorded is answered without reading Stripe again. A concurrent
+    // duplicate may still prepare: the unique index below keeps its effect single.
+    const seen = await client.processedWebhookEvent.findUnique({
+      where: { provider_eventId: { provider: "STRIPE", eventId: event.id } },
+      select: { id: true },
     });
-    if (count === 0) return { outcome: "duplicate", handled: false };
+    if (seen) return { outcome: "duplicate", handled: false };
+    // Outside the transaction (VTC-033): network reads never hold a database transaction open.
+    step = await handler.prepare(event);
+  }
 
-    if (handler) await handler(event, tx);
-    return { outcome: "processed", handled: handler !== undefined };
-  });
+  const { result, afterCommit } = await client.$transaction(
+    async (
+      tx: Prisma.TransactionClient,
+    ): Promise<{ result: ProcessedWebhook; afterCommit?: StripeWebhookAfterCommit }> => {
+      const { count } = await tx.processedWebhookEvent.createMany({
+        data: [{ provider: "STRIPE", eventId: event.id, eventType: event.type }],
+        skipDuplicates: true,
+      });
+      if (count === 0) return { result: { outcome: "duplicate", handled: false } };
+
+      const effect = step ? await step(tx) : undefined;
+      return {
+        result: { outcome: "processed", handled: step !== undefined },
+        ...(effect ? { afterCommit: effect } : {}),
+      };
+    },
+  );
+
+  if (afterCommit) {
+    // After commit (BR-50): a failure is logged, never fails the webhook nor changes any state.
+    try {
+      await afterCommit();
+    } catch (error) {
+      logger().error(
+        {
+          eventId: event.id,
+          eventType: event.type,
+          errorName: error instanceof Error ? error.name : "unknown",
+        },
+        "stripe webhook after-commit effect failed",
+      );
+    }
+  }
+  return result;
 }

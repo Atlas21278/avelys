@@ -176,4 +176,99 @@ describe("writeAuditLog", () => {
     ).rejects.toBeInstanceOf(AuditLogPayloadError);
     expect(create).not.toHaveBeenCalled();
   });
+
+  describe("charge actions (VTC-033)", () => {
+    const paymentBefore = {
+      bookingRef: "VTC-7K2M9QXB",
+      status: "PENDING",
+      version: 2,
+      amountCents: 6_188,
+      currency: "EUR",
+      attempt: 1,
+    } as const;
+
+    it("writes a charge outcome with the PaymentIntent id under the Payment entity type", async () => {
+      const { client, create } = writer();
+      const after = {
+        ...paymentBefore,
+        status: "PAID",
+        version: 3,
+        paymentIntentId: "pi_Test123",
+      } as const;
+      await writeAuditLog(client, {
+        action: "payment.charge",
+        actorType: "SYSTEM",
+        actorId: null,
+        entityId: "payment-id",
+        before: paymentBefore,
+        after,
+        correlationId: null,
+      });
+      expect(create).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          entityType: "Payment",
+          action: "payment.charge",
+          after,
+        }) as unknown,
+      });
+    });
+
+    it.each([
+      ["a malformed PaymentIntent id", { paymentIntentId: "pm_Test123" }],
+      ["a payment method id", { paymentIntentId: "pi_Test123", stripePaymentMethodId: "pm_Test1" }],
+      ["a customer id", { paymentIntentId: "pi_Test123", stripeCustomerId: "cus_Test1" }],
+    ])("refuses %s in a charge outcome", async (_label, extra) => {
+      const { client, create } = writer();
+      await expect(
+        writeAuditLog(client, {
+          action: "payment.charge",
+          actorType: "SYSTEM",
+          actorId: null,
+          entityId: "payment-id",
+          before: paymentBefore,
+          after: { ...paymentBefore, status: "FAILED", version: 3, ...extra },
+          correlationId: null,
+        }),
+      ).rejects.toBeInstanceOf(AuditLogPayloadError);
+      expect(create).not.toHaveBeenCalled();
+    });
+
+    it("refuses a PaymentIntent id in a charge attempt reservation", async () => {
+      const { client, create } = writer();
+      await expect(
+        writeAuditLog(client, {
+          action: "payment.charge_attempt",
+          actorType: "SYSTEM",
+          actorId: null,
+          entityId: "payment-id",
+          before: { ...paymentBefore, attempt: 0, version: 1 },
+          after: { ...paymentBefore, paymentIntentId: "pi_Test123" } as typeof paymentBefore,
+          correlationId: null,
+        }),
+      ).rejects.toBeInstanceOf(AuditLogPayloadError);
+      expect(create).not.toHaveBeenCalled();
+    });
+
+    it("writes a booking confirmation by SYSTEM with reference, status and version", async () => {
+      const { client, create } = writer();
+      const before = { bookingRef: "VTC-7K2M9QXB", status: "ACCEPTED", version: 2 } as const;
+      const after = { ...before, status: "CONFIRMED", version: 3 } as const;
+      await writeAuditLog(client, {
+        action: "booking.confirm",
+        actorType: "SYSTEM",
+        actorId: null,
+        entityId: "booking-id",
+        before,
+        after,
+        correlationId: null,
+      });
+      expect(create).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          entityType: "Booking",
+          action: "booking.confirm",
+          after,
+        }) as unknown,
+      });
+    });
+  });
 });

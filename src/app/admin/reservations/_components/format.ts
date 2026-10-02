@@ -1,5 +1,6 @@
 import type { BookingStatus } from "@/domain/booking/status";
 import type { BookingActor } from "@/domain/booking/transitions";
+import type { PaymentStatus } from "@/domain/payment/status";
 import { CURRENCIES, type Currency, formatMoney, money } from "@/lib/money";
 
 // Display helpers of the back-office booking screens (French, like the rest of /admin).
@@ -14,6 +15,17 @@ export const STATUS_LABELS: Record<BookingStatus, string> = {
   IN_PROGRESS: "En cours",
   NO_SHOW: "Client absent",
   COMPLETED: "Terminée",
+};
+
+export const PAYMENT_STATUS_LABELS: Record<PaymentStatus, string> = {
+  PENDING: "En attente",
+  REQUIRES_ACTION: "Authentification client requise",
+  AUTHORIZED: "Autorisé",
+  PAID: "Payé",
+  FAILED: "Échec",
+  CANCELED: "Annulé",
+  REFUNDED: "Remboursé",
+  PARTIALLY_REFUNDED: "Partiellement remboursé",
 };
 
 export const ACTOR_LABELS: Record<BookingActor, string> = {
