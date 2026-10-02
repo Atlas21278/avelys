@@ -122,35 +122,33 @@ export type ChargeCheck =
   | Readonly<{ ok: true; amountCents: number; currency: string }>
   | Readonly<{ ok: false; refusal: ChargeRefusal }>;
 
-/**
- * Whether the first charge attempt may be made, and for which amount. The amount is the frozen
- * one of the Payment, and must equal the booking total and the validated snapshot total: never
- * a value from the browser (BR-12), never a recomputation with a newer rule (BR-13).
- */
-export function checkChargeable({ booking, payment }: ChargeCandidate): ChargeCheck {
-  const refuse = (refusal: ChargeRefusal): ChargeCheck => ({ ok: false, refusal });
-
+/** Payment ownership: an inconsistent pointer is never charged, whatever the statuses. */
+export function checkPaymentOwnership({ booking, payment }: ChargeCandidate): ChargeRefusal | null {
   if (payment === null || booking.currentPaymentId === null) {
-    return refuse({ code: "NOT_CHARGEABLE", reason: "no_payment" });
+    return { code: "NOT_CHARGEABLE", reason: "no_payment" };
   }
-  // Ownership first: an inconsistent pointer is never charged, whatever the statuses.
   if (booking.currentPaymentId !== payment.id) {
-    return refuse({ code: "PAYMENT_STATE_INCONSISTENT", reason: "payment_not_current" });
+    return { code: "PAYMENT_STATE_INCONSISTENT", reason: "payment_not_current" };
   }
   if (payment.bookingId !== booking.id) {
-    return refuse({ code: "PAYMENT_STATE_INCONSISTENT", reason: "payment_of_other_booking" });
+    return { code: "PAYMENT_STATE_INCONSISTENT", reason: "payment_of_other_booking" };
   }
+  return null;
+}
 
-  if (booking.status !== "ACCEPTED") {
-    return refuse({ code: "NOT_CHARGEABLE", reason: "booking_not_accepted" });
-  }
-  if (payment.status !== "PENDING") {
-    return refuse({ code: "NOT_CHARGEABLE", reason: "payment_not_pending" });
-  }
-  if (payment.attempt !== 0 || payment.stripePaymentIntentId !== null) {
-    return refuse({ code: "NOT_CHARGEABLE", reason: "attempt_already_made" });
-  }
-
+/**
+ * The amount to charge: the frozen one of the Payment, which must equal the booking total and
+ * the validated snapshot total: never a value from the browser (BR-12), never a recomputation
+ * with a newer rule (BR-13). Shared by the first attempt and the manual retry (VTC-041).
+ */
+export function checkChargeAmount({
+  booking,
+  payment,
+}: Readonly<{
+  booking: ChargeCandidate["booking"];
+  payment: NonNullable<ChargeCandidate["payment"]>;
+}>): ChargeCheck {
+  const refuse = (refusal: ChargeRefusal): ChargeCheck => ({ ok: false, refusal });
   if (payment.amountCents !== booking.totalTtcCents || payment.currency !== booking.currency) {
     return refuse({ code: "PAYMENT_AMOUNT_MISMATCH", reason: "payment_vs_booking" });
   }
@@ -170,6 +168,28 @@ export function checkChargeable({ booking, payment }: ChargeCandidate): ChargeCh
     // A zero or negative total is never sent to Stripe.
     return refuse({ code: "PAYMENT_AMOUNT_MISMATCH", reason: "non_positive_amount" });
   }
-
   return { ok: true, amountCents: payment.amountCents, currency: payment.currency };
+}
+
+/**
+ * Whether the first charge attempt may be made, and for which amount (`checkChargeAmount`).
+ */
+export function checkChargeable(candidate: ChargeCandidate): ChargeCheck {
+  const refuse = (refusal: ChargeRefusal): ChargeCheck => ({ ok: false, refusal });
+  const { booking, payment } = candidate;
+
+  const ownership = checkPaymentOwnership(candidate);
+  if (ownership) return refuse(ownership);
+  if (payment === null) return refuse({ code: "NOT_CHARGEABLE", reason: "no_payment" });
+
+  if (booking.status !== "ACCEPTED") {
+    return refuse({ code: "NOT_CHARGEABLE", reason: "booking_not_accepted" });
+  }
+  if (payment.status !== "PENDING") {
+    return refuse({ code: "NOT_CHARGEABLE", reason: "payment_not_pending" });
+  }
+  if (payment.attempt !== 0 || payment.stripePaymentIntentId !== null) {
+    return refuse({ code: "NOT_CHARGEABLE", reason: "attempt_already_made" });
+  }
+  return checkChargeAmount({ booking, payment });
 }

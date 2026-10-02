@@ -139,7 +139,7 @@ Handlers (`createPaymentIntentWebhookHandlers`, `src/server/payments/webhook-han
 ### Audit, logs, affichage
 
 - `AuditLog` (acteur `SYSTEM`) : `payment.charge_attempt` (état Payment avant/après, sans id Stripe), `payment.charge` (`bookingRef`, `attempt`, statut, version, montant, devise avant/après + `paymentIntentId` après), `booking.confirm` (`bookingRef`, statut, version).
-- **Exception documentée** à la règle « aucun id Stripe dans l'`AuditLog` » : l'id `pi_…` est autorisé dans `payment.charge` pour tracer chaque tentative (ni donnée carte, ni donnée personnelle, ni secret ; format `pi_…` validé). Les autres ids Stripe (Customer, SetupIntent, moyen de paiement) restent refusés.
+- **Exception documentée** à la règle « aucun id Stripe dans l'`AuditLog` » : l'id `pi_…` est autorisé dans `payment.charge` (et dans `before` de `payment.retry`, VTC-041) pour tracer chaque tentative (ni donnée carte, ni donnée personnelle, ni secret ; format `pi_…` validé). Les autres ids Stripe (Customer, SetupIntent, moyen de paiement) restent refusés.
 - **Logs** : `bookingRef`, tentative, statuts, code d'erreur Stripe (`card_declined`…) et nom d'erreur uniquement ; **jamais d'id d'objet Stripe** (PaymentIntent, Customer, SetupIntent, moyen de paiement), de donnée carte ni de donnée personnelle. **Seule exception tolérée** : l'id d'événement webhook `evt_…` (`eventId`), déjà journalisé par l'endpoint depuis VTC-030 pour corréler les livraisons avec le Dashboard ; il ne désigne ni un paiement ni une personne. Il figure aussi dans le log d'échec d'un effet après commit.
 - **Back-office** : le détail d'une réservation affiche le statut du Payment courant, le numéro de tentative et le montant (lus depuis `Payment`, BR-41), sans id Stripe. Le passage `ACCEPTED → CONFIRMED` apparaît dans l'historique (acteur « Système »).
 
@@ -155,6 +155,37 @@ Pour le propriétaire, compte Stripe en **test mode**, clés de test dans le `.e
 3. Dans le Dashboard de test : un PaymentIntent par acceptation, métadonnées `bookingRef` et `attempt` seules, montant = total de la réservation. Accepter deux fois (double clic) ne crée pas de second PaymentIntent.
 4. `stripe events resend <evt_id>` sur un `payment_intent.succeeded` déjà traité : 200, aucun nouvel effet.
 5. Logs : aucun id `pi_`, `cus_`, `pm_`, `seti_`.
+
+## Relance manuelle d'un débit (VTC-041)
+
+Décision des associés : DEC-27 (pas de relance automatique ; un associé relance depuis le back-office ; vérification du statut Stripe avant toute nouvelle tentative ; réservation `ACCEPTED` jusqu'au paiement réussi). Service `retryBookingCharge` (`src/server/payments/retry-charge.ts`), règles pures `src/domain/payment/retry.ts`, corps de l'action `runChargeRetry` (`src/server/payments/retry-charge-action.ts`).
+
+- **Qui** : rôle `ADMIN` uniquement, session et 2FA revérifiées côté serveur à chaque appel (`checkAccess`), puis revérifiées par le service. Étendre au `DISPATCHER` = modifier d'abord ce document et `docs/product/booking.md`.
+- **Quand** : réservation `ACCEPTED` **et** Payment courant `FAILED`, ou `PENDING` avec `attempt ≥ 1` (première tentative interrompue par une erreur technique ou un crash). **Jamais depuis `REQUIRES_ACTION`** : le client s'authentifie par le lien de régularisation (VTC-042/VTC-044) ; une relance hors session redemanderait l'authentification et invaliderait son lien.
+- **Aucune limite de nombre de relances** : chaque relance est une action humaine explicite, confirmée (le montant figé est rappelé) et auditée. Aucune valeur n'est inventée.
+
+Déroulé (modèle de tentatives ci-dessus, même ligne `Payment`, aucune migration) :
+
+1. Entrée Zod stricte (`reference`, `expectedPaymentVersion`) ; contrôles d'accès, d'état, d'appartenance (`payment.bookingId = booking.id` et `booking.currentPaymentId = payment.id`, sinon `PAYMENT_STATE_INCONSISTENT`) et de montant (Payment = Booking = snapshot, sinon `PAYMENT_AMOUNT_MISMATCH`) ; version affichée périmée → `PAYMENT_CONCURRENT_UPDATE` avant tout appel Stripe.
+2. **Vérification Stripe** : liste des PaymentIntents du Customer Stripe dédié à la réservation.
+   - un PaymentIntent `succeeded` → **aucun nouveau débit** : rapprochement par le service de la première tentative (`applyChargeResult` : Payment `→ PAID`, Booking `ACCEPTED → CONFIRMED`, acteur `SYSTEM`, audit) ; message « paiement déjà reçu ». Un succès impossible à rattacher (autre tentative, autre montant) n'est jamais redébité : refus `PAYMENT_STATE_INCONSISTENT`, log d'erreur `alert: unmatched_succeeded_payment_intent`, vérification à la main (DEC-05) ;
+   - un PaymentIntent `processing` (ou `requires_capture`, ou un statut inconnu) → refus `PAYMENT_IN_PROGRESS`, rien n'est écrit ;
+   - chaque PaymentIntent encore confirmable (`requires_payment_method`, `requires_action`, `requires_confirmation`) est **annulé** (`cancellation_reason: abandoned`, clé `booking:{bookingId}:cancel:{attempt}` où `attempt` est celui du PaymentIntent annulé ; id du PaymentIntent à défaut de métadonnée), pour qu'aucun ancien PaymentIntent ne puisse être confirmé en parallèle. Annulation refusée ou en échec → relecture : `canceled` → on continue ; `succeeded` → rapprochement ; `processing` → `PAYMENT_IN_PROGRESS` ; sinon `PAYMENT_UNAVAILABLE`.
+   - Erreur technique Stripe à cette étape → `PAYMENT_UNAVAILABLE`, rien n'est écrit.
+3. **Réservation de la tentative** (transaction) : mise à jour conditionnelle `attempt + 1`, `version + 1`, `stripePaymentIntentId` remis à nul, filtrée sur `version = expectedPaymentVersion`, le statut et la tentative lus ; `AuditLog` `payment.retry` (acteur `ADMIN` + id utilisateur ; `bookingRef`, statut, montant, `attempt` et version avant/après ; `paymentIntentId` de la tentative précédente dans `before` quand elle a atteint Stripe). 0 ligne (double clic, deux associés) → `PAYMENT_CONCURRENT_UPDATE`, rien d'autre.
+4. **Nouveau PaymentIntent** avec les règles de l'étape 2 (montant figé, `off_session`, `confirm`, clé `booking:{bookingId}:charge:{attempt}`, métadonnées `bookingRef` + `attempt`), puis application du résultat par `applyChargeResult` : `stripePaymentIntentId` = celui de la nouvelle tentative ; `FAILED → PAID` (+ `ACCEPTED → CONFIRMED`), `FAILED → REQUIRES_ACTION` (port `onPaymentRequiresAction` après commit), ou `FAILED` conservé (pas une transition, PaymentIntent tout de même enregistré). Erreur technique → `PAYMENT_ATTEMPT_INTERRUPTED` : Payment inchangé hormis `attempt` (déjà audité) ; la relance suivante revérifie Stripe (un PaymentIntent créé malgré tout est rapproché ou annulé).
+5. Les webhooks d'une tentative antérieure (dont `payment_intent.canceled`) sont ignorés par les handlers de l'étape 2 : l'id précédent n'est plus sur la ligne et `metadata.attempt` ne correspond plus.
+
+`currentPaymentId` ne change pas, aucun nouveau `Payment`, table des transitions Payment inchangée. Logs : `bookingRef`, tentatives, statuts, codes et noms d'erreur, jamais d'id Stripe. Écran : bouton « Relancer le débit » dans la section Paiement de `/admin/reservations/[référence]` (ADMIN, état éligible), confirmation explicite rappelant le montant, page rafraîchie et résultat affiché après chaque issue ; erreurs `{ code, message, correlationId }` en français.
+
+### Vérification manuelle (test mode)
+
+Mêmes prérequis que l'étape 2 (test mode, `stripe listen`, `pnpm dev`), connecté en `ADMIN` avec 2FA :
+
+1. **Refus puis relance** : demande avec `4000 0000 0000 0341`, acceptation → Payment « Échec », bouton « Relancer le débit ». Relancer → nouvel échec (tentative n° 2, réservation « Acceptée »). Dans le Dashboard : le PaymentIntent de la tentative 1 est « Canceled », celui de la tentative 2 porte `attempt = 2`.
+2. **Succès non enregistré puis relance** : avec `4242 4242 4242 4242`, arrêter `stripe listen` et couper le réseau de l'application au moment de l'acceptation (ou simuler l'erreur technique) pour laisser le Payment « En attente » (tentative 1) alors que le PaymentIntent a réussi chez Stripe ; relancer → message « paiement déjà reçu », réservation « Confirmée », **aucun nouveau PaymentIntent** dans le Dashboard.
+3. Un `DISPATCHER` ne voit pas le bouton ; un double clic ou deux associés simultanés ne créent qu'une tentative.
+4. Logs : aucun id `pi_`, `cus_`, `pm_`, `seti_`.
 
 ## Idempotence
 
