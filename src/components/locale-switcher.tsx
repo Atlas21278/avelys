@@ -1,6 +1,7 @@
 "use client";
 
 import NextLink from "next/link";
+import { useParams } from "next/navigation";
 import { useLocale, useTranslations } from "next-intl";
 
 import { getPathname, usePathname } from "@/i18n/navigation";
@@ -16,6 +17,12 @@ export function LocaleSwitcher() {
   const t = useTranslations("LocaleSwitcher");
   const current = useLocale();
   const pathname = usePathname();
+  // A dynamic page (the regularisation link, VTC-042) keeps its parameter in every locale.
+  const params = useParams<{ token?: string }>();
+  const href =
+    pathname === "/paiement/[token]"
+      ? { pathname, params: { token: params.token ?? "" } }
+      : pathname;
 
   return (
     <nav aria-label={t("label")}>
@@ -25,7 +32,7 @@ export function LocaleSwitcher() {
           return (
             <li key={locale}>
               <NextLink
-                href={getPathname({ href: pathname, locale })}
+                href={getPathname({ href, locale })}
                 hrefLang={locale}
                 lang={locale}
                 aria-current={active ? "page" : undefined}

@@ -1,3 +1,4 @@
+import type * as Crypto from "node:crypto";
 import { createHmac } from "node:crypto";
 
 import { describe, expect, it, vi } from "vitest";
@@ -11,7 +12,7 @@ import {
 const { timingSafeEqualSpy } = vi.hoisted(() => ({ timingSafeEqualSpy: vi.fn() }));
 
 vi.mock("node:crypto", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("node:crypto")>();
+  const actual = await importOriginal<typeof Crypto>();
   timingSafeEqualSpy.mockImplementation(actual.timingSafeEqual);
   return { ...actual, timingSafeEqual: timingSafeEqualSpy };
 });

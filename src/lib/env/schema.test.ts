@@ -264,7 +264,9 @@ describe("parseServerEnv", () => {
 
   it("treats the payment link secret as optional, at least 32 characters (VTC-042)", () => {
     expect(parseServerEnv(valid).PAYMENT_LINK_SECRET).toBeUndefined();
-    expect(parseServerEnv({ ...valid, PAYMENT_LINK_SECRET: "" }).PAYMENT_LINK_SECRET).toBeUndefined();
+    expect(
+      parseServerEnv({ ...valid, PAYMENT_LINK_SECRET: "" }).PAYMENT_LINK_SECRET,
+    ).toBeUndefined();
     const key = "unit-tests-only-payment-link-key-000000";
     expect(parseServerEnv({ ...valid, PAYMENT_LINK_SECRET: key }).PAYMENT_LINK_SECRET).toBe(key);
     const short = "too-short-link-key";

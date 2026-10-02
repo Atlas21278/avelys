@@ -448,5 +448,34 @@
     "layout": {
       "notice": "Vous recevez cet email au sujet de votre réservation Avelys."
     }
+  },
+  "Regularization": {
+    "metaTitle": "Finaliser votre paiement — Avelys",
+    "title": "Finaliser votre paiement",
+    "lead": "Votre banque demande une authentification pour régler votre course. Le montant est celui de votre réservation : il ne peut pas être modifié ici.",
+    "summaryTitle": "Votre course",
+    "reference": "Référence",
+    "pickup": "Prise en charge",
+    "pickupHint": "Heure de Paris",
+    "amount": "Montant TTC",
+    "otherLanguage": "English",
+    "authenticateTitle": "Authentifier le paiement",
+    "authenticateText": "La fenêtre sécurisée de votre banque s’ouvre pour valider le paiement avec la carte enregistrée lors de votre demande. Aucune nouvelle carte n’est demandée.",
+    "authenticate": "Authentifier le paiement",
+    "loading": "Chargement du module de paiement sécurisé…",
+    "failed": "L’authentification n’a pas abouti. Vous pouvez réessayer.",
+    "settledTitle": "Paiement reçu",
+    "settledText": "Votre paiement est en cours de confirmation. Votre réservation sera confirmée dès sa validation par notre prestataire de paiement : vous pouvez fermer cette page.",
+    "closedTitle": "Ce paiement ne peut plus être finalisé en ligne",
+    "closedText": "Contactez-nous pour régler votre course.",
+    "unavailableTitle": "Paiement momentanément indisponible",
+    "unavailableText": "Le module de paiement ne répond pas pour le moment. Réessayez dans quelques minutes ou contactez-nous.",
+    "contactLink": "Nous contacter",
+    "invalid": {
+      "metaTitle": "Lien invalide ou expiré — Avelys",
+      "title": "Lien invalide ou expiré",
+      "description": "Ce lien de paiement n’est pas ou plus valide. Si vous avez déjà finalisé votre paiement, aucune autre démarche n’est nécessaire.",
+      "contact": "Une question ? Contactez-nous"
+    }
   }
 }

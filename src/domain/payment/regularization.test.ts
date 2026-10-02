@@ -62,13 +62,15 @@ describe("isRegularizationLinkUsable", () => {
     expect(
       isRegularizationLinkUsable(candidate({ booking: { currentPaymentId: "pay2" } }), NOW),
     ).toBe(false);
-    expect(isRegularizationLinkUsable(candidate({ booking: { currentPaymentId: null } }), NOW)).toBe(
-      false,
-    );
+    expect(
+      isRegularizationLinkUsable(candidate({ booking: { currentPaymentId: null } }), NOW),
+    ).toBe(false);
     expect(isRegularizationLinkUsable(candidate({ payment: { bookingId: "book2" } }), NOW)).toBe(
       false,
     );
-    expect(isRegularizationLinkUsable(candidate({ claim: { paymentId: "pay2" } }), NOW)).toBe(false);
+    expect(isRegularizationLinkUsable(candidate({ claim: { paymentId: "pay2" } }), NOW)).toBe(
+      false,
+    );
   });
 
   it.each(PAYMENT_STATUSES.filter((status) => status !== "REQUIRES_ACTION"))(
@@ -109,7 +111,11 @@ describe("isRegularizationLinkUsable", () => {
 });
 
 describe("regularizationStep", () => {
-  const intent = (status: string, errorCode: string | null = null, declineCode: string | null = null) => ({
+  const intent = (
+    status: string,
+    errorCode: string | null = null,
+    declineCode: string | null = null,
+  ) => ({
     status,
     errorCode,
     declineCode,
@@ -137,11 +143,13 @@ describe("regularizationStep", () => {
   });
 
   it("closes anything else: declined, failed authentication, canceled", () => {
-    expect(regularizationStep(intent("requires_payment_method", "card_declined", "insufficient_funds"))).toBe(
-      "closed",
-    );
     expect(
-      regularizationStep(intent("requires_payment_method", "payment_intent_authentication_failure")),
+      regularizationStep(intent("requires_payment_method", "card_declined", "insufficient_funds")),
+    ).toBe("closed");
+    expect(
+      regularizationStep(
+        intent("requires_payment_method", "payment_intent_authentication_failure"),
+      ),
     ).toBe("closed");
     expect(regularizationStep(intent("requires_payment_method"))).toBe("closed");
     expect(regularizationStep(intent("canceled"))).toBe("closed");

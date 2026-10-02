@@ -184,8 +184,7 @@ describe("authenticatePayment (VTC-042)", () => {
     returnUrl: "https://avelys.example/",
   };
   const intent = (status: string) => ({ paymentIntent: { status } }) as never;
-  const cardError = (message: string) =>
-    ({ error: { type: "card_error", message } }) as never;
+  const cardError = (message: string) => ({ error: { type: "card_error", message } }) as never;
 
   function client() {
     return {

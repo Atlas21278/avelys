@@ -15,9 +15,8 @@ vi.mock("@/lib/logger", () => ({ logger: () => log }));
 vi.mock("@/server/db", () => ({ db: () => ({}) }));
 vi.mock("@/server/auth/access", () => ({ checkAccess: vi.fn() }));
 
-const { paymentRegularizationUrl, resolveRegularizationLink } = await import(
-  "./regularization-link"
-);
+const { paymentRegularizationUrl, resolveRegularizationLink } =
+  await import("./regularization-link");
 
 const PAYMENT_ID = "c1x9k2m3n4p5q6r7s8t9u0v1";
 

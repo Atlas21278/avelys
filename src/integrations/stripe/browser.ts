@@ -165,8 +165,7 @@ export type AuthenticationStep = "confirm" | "next_action";
  *   otherwise (a generic message is shown).
  */
 export type PaymentAuthentication =
-  | { readonly outcome: "settled" }
-  | { readonly outcome: "failed"; readonly message: string | null };
+  { readonly outcome: "settled" } | { readonly outcome: "failed"; readonly message: string | null };
 
 /** The three Stripe.js calls of the regularisation page (mockable). */
 export interface PaymentAuthenticationClient {

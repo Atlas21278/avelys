@@ -194,9 +194,9 @@ export async function resolveRegularizationLink(
 
   let read;
   try {
-    read = await (deps.gateway ?? stripePaymentAuthentication)().retrievePaymentIntentForAuthentication(
-      paymentIntentId,
-    );
+    read = await (
+      deps.gateway ?? stripePaymentAuthentication
+    )().retrievePaymentIntentForAuthentication(paymentIntentId);
   } catch (error) {
     if (!isTechnicalStripeFailure(error)) throw error;
     log.error(
