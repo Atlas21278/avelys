@@ -12,7 +12,14 @@ const nextConfig: NextConfig = {
       { key: "Cache-Control", value: "no-store" },
       { key: "X-Robots-Tag", value: "noindex, nofollow" },
     ];
-    return ["/paiement/:token", "/fr/paiement/:token", "/en/payment/:token"].map((source) => ({
+    // Canonical paths, plus the untranslated or prefixed spellings next-intl redirects.
+    return [
+      "/paiement/:token",
+      "/fr/paiement/:token",
+      "/en/payment/:token",
+      "/en/paiement/:token",
+      "/fr/payment/:token",
+    ].map((source) => ({
       source,
       headers: linkHeaders,
     }));

@@ -463,7 +463,7 @@
     "authenticateText": "La fenêtre sécurisée de votre banque s’ouvre pour valider le paiement avec la carte enregistrée lors de votre demande. Aucune nouvelle carte n’est demandée.",
     "authenticate": "Authentifier le paiement",
     "loading": "Chargement du module de paiement sécurisé…",
-    "failed": "L’authentification n’a pas abouti. Vous pouvez réessayer.",
+    "failed": "L’authentification n’a pas abouti. Vous pouvez réessayer depuis cette page tant qu’elle est ouverte ; si vous la quittez, contactez-nous.",
     "settledTitle": "Paiement reçu",
     "settledText": "Votre paiement est en cours de confirmation. Votre réservation sera confirmée dès sa validation par notre prestataire de paiement : vous pouvez fermer cette page.",
     "closedTitle": "Ce paiement ne peut plus être finalisé en ligne",

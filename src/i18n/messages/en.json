@@ -463,7 +463,7 @@
     "authenticateText": "Your bank’s secure window opens to approve the payment with the card saved with your request. No new card is asked for.",
     "authenticate": "Authenticate the payment",
     "loading": "Loading the secure payment module…",
-    "failed": "The authentication did not go through. You can try again.",
+    "failed": "The authentication did not go through. You can try again from this page while it stays open; if you leave it, contact us.",
     "settledTitle": "Payment received",
     "settledText": "Your payment is being confirmed. Your booking will be confirmed as soon as our payment provider validates it: you can close this page.",
     "closedTitle": "This payment can no longer be completed online",

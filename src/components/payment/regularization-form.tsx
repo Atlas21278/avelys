@@ -4,6 +4,8 @@ import { useTranslations } from "next-intl";
 import { useEffect, useMemo, useRef, useState } from "react";
 
 import { Button } from "@/components/ui/button";
+import { textLinkClasses } from "@/components/ui/text-link";
+import { Link } from "@/i18n/navigation";
 import {
   authenticatePayment,
   stripeBrowser,
@@ -129,6 +131,11 @@ export function RegularizationForm({
         >
           {state.message ? <p className="text-rubric">{state.message}</p> : null}
           <p>{t("failed")}</p>
+          <p>
+            <Link href="/contact" className={textLinkClasses}>
+              {t("contactLink")}
+            </Link>
+          </p>
         </div>
       ) : null}
     </div>

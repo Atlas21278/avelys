@@ -85,6 +85,13 @@ export interface RegularizationDeps {
  * no link is generated and every link is invalid. The configuration error is logged by name
  * only, never with a value.
  */
+let missingKeyLogged = false;
+
+/** Test hook: forgets that the missing key was logged. */
+export function resetRegularizationLinkLogState(): void {
+  missingKeyLogged = false;
+}
+
 function linkKey(): string | null {
   let key: string | undefined;
   try {
@@ -95,10 +102,15 @@ function linkKey(): string | null {
     return null;
   }
   if (!key) {
-    logger().error(
-      { variable: "PAYMENT_LINK_SECRET", reason: "not_configured" },
-      "regularisation link unavailable: PAYMENT_LINK_SECRET is not configured",
-    );
+    // Once per process: anonymous requests on /paiement/* must not control the error volume
+    // (rate limiting comes with INFRA-005).
+    if (!missingKeyLogged) {
+      missingKeyLogged = true;
+      logger().error(
+        { variable: "PAYMENT_LINK_SECRET", reason: "not_configured" },
+        "regularisation link unavailable: PAYMENT_LINK_SECRET is not configured",
+      );
+    }
     return null;
   }
   return key;
@@ -142,7 +154,9 @@ export async function resolveRegularizationLink(
 ): Promise<RegularizationPage> {
   const log = logger();
   const invalid = (reason: string, bookingRef: string | null = null): RegularizationPage => {
-    log.info({ bookingRef, reason }, "regularisation link refused");
+    // Debug level: refused links are driven by anonymous requests (volume, INFRA-005). Never
+    // the token.
+    log.debug({ bookingRef, reason }, "regularisation link refused");
     return { kind: "invalid" };
   };
 

@@ -8,14 +8,14 @@ const env = vi.fn(() => ({
   APP_URL: "https://avelys.example",
   PAYMENT_LINK_SECRET: KEY as string | undefined,
 }));
-const log = { info: vi.fn(), warn: vi.fn(), error: vi.fn() };
+const log = { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() };
 
 vi.mock("@/lib/env/server", () => ({ serverEnv: () => env() }));
 vi.mock("@/lib/logger", () => ({ logger: () => log }));
 vi.mock("@/server/db", () => ({ db: () => ({}) }));
 vi.mock("@/server/auth/access", () => ({ checkAccess: vi.fn() }));
 
-const { paymentRegularizationUrl, resolveRegularizationLink } =
+const { paymentRegularizationUrl, resetRegularizationLinkLogState, resolveRegularizationLink } =
   await import("./regularization-link");
 
 const PAYMENT_ID = "c1x9k2m3n4p5q6r7s8t9u0v1";
@@ -27,6 +27,7 @@ function tokenOf(url: string, prefix: string): string {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  resetRegularizationLinkLogState();
 });
 
 describe("paymentRegularizationUrl", () => {
@@ -58,6 +59,16 @@ describe("paymentRegularizationUrl", () => {
     );
   });
 
+  it("logs the missing PAYMENT_LINK_SECRET once per process, not per request", async () => {
+    env.mockReturnValue({ APP_URL: "https://avelys.example", PAYMENT_LINK_SECRET: undefined });
+
+    for (let request = 0; request < 5; request += 1) {
+      await resolveRegularizationLink("anything");
+      paymentRegularizationUrl(PAYMENT_ID, 1, "fr");
+    }
+    expect(log.error).toHaveBeenCalledOnce();
+  });
+
   it("treats every link as invalid without PAYMENT_LINK_SECRET, before any read", async () => {
     env.mockReturnValue({ APP_URL: "https://avelys.example", PAYMENT_LINK_SECRET: undefined });
     const gateway = vi.fn();
@@ -73,7 +84,15 @@ describe("paymentRegularizationUrl", () => {
     const token = "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA";
 
     await expect(resolveRegularizationLink(token)).resolves.toEqual({ kind: "invalid" });
-    const logged = JSON.stringify([log.info.mock.calls, log.warn.mock.calls, log.error.mock.calls]);
+    const logged = JSON.stringify([
+      log.debug.mock.calls,
+      log.info.mock.calls,
+      log.warn.mock.calls,
+      log.error.mock.calls,
+    ]);
+    // Refused links are logged at debug level only (volume driven by anonymous requests).
+    expect(log.debug).toHaveBeenCalledOnce();
+    expect(log.info).not.toHaveBeenCalled();
     expect(logged).not.toContain(token);
     expect(logged).toContain("bad_token");
   });

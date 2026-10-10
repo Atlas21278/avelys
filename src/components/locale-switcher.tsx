@@ -17,12 +17,17 @@ export function LocaleSwitcher() {
   const t = useTranslations("LocaleSwitcher");
   const current = useLocale();
   const pathname = usePathname();
-  // A dynamic page (the regularisation link, VTC-042) keeps its parameter in every locale.
   const params = useParams<{ token?: string }>();
-  const href =
-    pathname === "/paiement/[token]"
-      ? { pathname, params: { token: params.token ?? "" } }
-      : pathname;
+  // Typing only: the routing table now holds a dynamic pathname (`/paiement/[token]`, VTC-042),
+  // whose page renders its own language link and never this selector. Should it ever be rendered
+  // there without its parameter, the selector is omitted rather than pointing to a broken URL.
+  let href: Parameters<typeof getPathname>[0]["href"];
+  if (pathname === "/paiement/[token]") {
+    if (!params.token) return null;
+    href = { pathname, params: { token: params.token } };
+  } else {
+    href = pathname;
+  }
 
   return (
     <nav aria-label={t("label")}>

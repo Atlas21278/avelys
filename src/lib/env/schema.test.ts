@@ -280,6 +280,17 @@ describe("parseServerEnv", () => {
     expect(message).not.toContain(short);
   });
 
+  it("rejects a payment link secret equal to the Better Auth secret, by name only", () => {
+    let message = "";
+    try {
+      parseServerEnv({ ...valid, PAYMENT_LINK_SECRET: valid.BETTER_AUTH_SECRET });
+    } catch (error) {
+      message = (error as Error).message;
+    }
+    expect(message).toMatch(/PAYMENT_LINK_SECRET \(custom\)/);
+    expect(message).not.toContain(valid.BETTER_AUTH_SECRET);
+  });
+
   it("rejects a Better Auth secret shorter than 32 characters", () => {
     expect(() => parseServerEnv({ ...valid, BETTER_AUTH_SECRET: "too-short" })).toThrowError(
       /BETTER_AUTH_SECRET/,
