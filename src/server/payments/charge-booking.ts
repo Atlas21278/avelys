@@ -46,6 +46,8 @@ export interface ChargeBookingDeps {
   /** Resolved on use: a missing or live key is a technical failure (no transition). */
   readonly gateway: () => PaymentIntentGateway;
   readonly onPaymentRequiresAction?: OnPaymentRequiresAction;
+  /** Clock of the reservation timestamp (tests inject one). */
+  readonly now?: () => Date;
 }
 
 export type ChargeBookingOutcome = Readonly<
@@ -136,7 +138,13 @@ export async function chargeBooking(
         status: "PENDING",
         stripePaymentIntentId: null,
       },
-      data: { attempt: FIRST_ATTEMPT, version: { increment: 1 } },
+      // `updatedAt` set explicitly: it starts the in-flight window a manual retry waits out
+      // (VTC-041) while this attempt is not bound to a PaymentIntent.
+      data: {
+        attempt: FIRST_ATTEMPT,
+        version: { increment: 1 },
+        updatedAt: (deps.now ?? (() => new Date()))(),
+      },
     });
     if (updated.count !== 1) return false;
     const state = {
@@ -212,6 +220,13 @@ export async function chargeBooking(
   );
   if (applied.outcome === "ignored") {
     log.error({ bookingRef, reason: applied.reason }, "charge outcome not applied");
+    if (applied.reason === "attempt_mismatch" && result.intent.status === "succeeded") {
+      // Same alert as the webhook (webhook-handlers.ts): money taken on another attempt.
+      log.error(
+        { bookingRef, attempt: result.intent.attempt, alert: "orphan_succeeded_payment_intent" },
+        "succeeded PaymentIntent of a previous attempt: manual refund needed (DEC-05)",
+      );
+    }
     return { outcome: "ignored", reason: applied.reason };
   }
   log.info(

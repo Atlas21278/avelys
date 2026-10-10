@@ -48,7 +48,7 @@ export const CHARGE_RETRY_ERROR_MESSAGES = {
   PAYMENT_AMOUNT_MISMATCH:
     "Les montants de la réservation et du paiement ne concordent pas : aucun débit n’a été lancé.",
   PAYMENT_IN_PROGRESS:
-    "Un paiement est en cours de traitement chez Stripe : aucun nouveau débit n’a été lancé. Réessayez plus tard.",
+    "Une tentative de débit est peut-être encore en cours chez Stripe : aucun nouveau débit n’a été lancé. Réessayez dans quelques minutes.",
   PAYMENT_CONCURRENT_UPDATE:
     "Ce paiement a été modifié entre-temps (double clic ou autre associé). La page a été actualisée : vérifiez son état avant d’agir.",
   PAYMENT_UNAVAILABLE:

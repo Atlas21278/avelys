@@ -144,6 +144,46 @@ export function planChargeRetry<T extends RetryIntent>(intents: readonly T[]): R
   return { kind: "charge", toCancel };
 }
 
+/** What the in-flight check needs to know about a listed PaymentIntent. */
+export type InFlightIntent = RetryIntent &
+  Readonly<{
+    /** A confirmation error is recorded (`last_payment_error`): the attempt has ended. */
+    hasError: boolean;
+  }>;
+
+/**
+ * Whether the current attempt may still be in flight: reserved (`attempt` ≥ 1) but not bound to
+ * a PaymentIntent yet, and Stripe shows no ended PaymentIntent for it. Its creation request may
+ * not have reached Stripe yet, so an empty list proves nothing: a new attempt would risk a second
+ * charge. Within `graceMs` of the reservation (`reservedAt`) the retry is refused; past it, the
+ * request has either reached Stripe (then listed) or failed for good.
+ *
+ * A PaymentIntent of the current attempt that has ended (`succeeded`, `canceled`, or a recorded
+ * confirmation error) settles the question; `processing` is refused by `planChargeRetry` anyway.
+ */
+export function attemptMayBeInFlight(
+  input: Readonly<{
+    boundIntentId: string | null;
+    attempt: number;
+    reservedAt: Date;
+    now: Date;
+    graceMs: number;
+    intents: readonly InFlightIntent[];
+  }>,
+): boolean {
+  if (input.boundIntentId !== null || input.attempt < 1) return false;
+  const current = input.intents.find((intent) => intent.attempt === input.attempt);
+  if (
+    current &&
+    (current.status === "succeeded" ||
+      current.status === "canceled" ||
+      (current.status === "requires_payment_method" && current.hasError))
+  ) {
+    return false;
+  }
+  return input.now.getTime() - input.reservedAt.getTime() < input.graceMs;
+}
+
 /**
  * Stripe idempotency key of the cancellation of a booking's PaymentIntent: one per attempt (from
  * the PaymentIntent metadata), or per PaymentIntent id for one created without our metadata.

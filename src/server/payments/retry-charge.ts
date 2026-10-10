@@ -6,6 +6,7 @@ import type { Role } from "@/domain/auth/access";
 import type { BookingStatus } from "@/domain/booking/status";
 import { chargeIdempotencyKey } from "@/domain/payment/charge";
 import {
+  attemptMayBeInFlight,
   cancelIdempotencyKey,
   canRetryChargeAs,
   checkRetryable,
@@ -16,6 +17,7 @@ import type { PaymentStatus } from "@/domain/payment/status";
 import type { PrismaClient } from "@/generated/prisma/client";
 import {
   PaymentIntentError,
+  STRIPE_REQUEST_MAX_DURATION_MS,
   StripeConfigError,
   type OffSessionChargeResult,
   type PaymentIntentGateway,
@@ -62,7 +64,21 @@ export interface RetryChargeDeps {
   /** Resolved on use: a missing or live key is a technical failure. */
   readonly gateway: () => PaymentIntentGateway;
   readonly onPaymentRequiresAction?: OnPaymentRequiresAction;
+  /** Clock of the in-flight window and of the reservation timestamp (tests inject one). */
+  readonly now?: () => Date;
 }
+
+/** Margin added to the longest Stripe call for clock skew and processing (technical value). */
+const IN_FLIGHT_MARGIN_MS = 60_000;
+
+/**
+ * How long after its reservation an attempt not yet bound to a PaymentIntent is presumed still
+ * in flight (VTC-041): the longest possible duration of the creation request with the pinned
+ * client settings (timeout × (1 + network retries) + retry delays, `STRIPE_REQUEST_MAX_DURATION_MS`)
+ * plus a margin. Technical value derived from the Stripe client, not a business rule; it follows
+ * the client settings automatically. Currently 310 s.
+ */
+export const CHARGE_IN_FLIGHT_GRACE_MS = STRIPE_REQUEST_MAX_DURATION_MS + IN_FLIGHT_MARGIN_MS;
 
 export type ChargeRetryErrorCode =
   | "ACCESS_DENIED"
@@ -110,20 +126,26 @@ function errorName(error: unknown): string {
 
 type Resolution =
   | Readonly<{ kind: "reconcile"; intent: PaymentIntentSummary }>
-  | Readonly<{ kind: "in_progress" }>
+  | Readonly<{ kind: "in_progress"; reason: "processing" | "attempt_in_flight" }>
   | Readonly<{ kind: "charge" }>;
 
 /**
- * Step 2: what Stripe says before any new attempt. Every still-open PaymentIntent is cancelled
- * first, so that none of them can be confirmed in parallel (not even through a customer link).
+ * Step 2: what Stripe says before any new attempt. A succeeded PaymentIntent is reconciled; an
+ * unsettled one, or a current attempt possibly still in flight (`inFlight`), blocks; otherwise
+ * every still-open PaymentIntent is cancelled first, so that none of them can be confirmed in
+ * parallel (not even through a customer link).
  */
 async function resolveWithStripe(
   gateway: PaymentIntentGateway,
   bookingId: string,
   customerId: string,
+  inFlight: (intents: readonly PaymentIntentSummary[]) => boolean,
 ): Promise<Resolution> {
-  const plan = planChargeRetry(await gateway.listCustomerPaymentIntents(customerId));
-  if (plan.kind !== "charge") return plan;
+  const intents = await gateway.listCustomerPaymentIntents(customerId);
+  const plan = planChargeRetry(intents);
+  if (plan.kind === "reconcile") return plan;
+  if (plan.kind === "in_progress") return { kind: "in_progress", reason: "processing" };
+  if (inFlight(intents)) return { kind: "in_progress", reason: "attempt_in_flight" };
 
   for (const intent of plan.toCancel) {
     try {
@@ -134,7 +156,7 @@ async function resolveWithStripe(
       const current = await gateway.retrievePaymentIntent(intent.id);
       if (current?.status === "canceled") continue;
       if (current?.status === "succeeded") return { kind: "reconcile", intent: current };
-      if (current?.status === "processing") return { kind: "in_progress" };
+      if (current?.status === "processing") return { kind: "in_progress", reason: "processing" };
       throw error;
     }
   }
@@ -149,6 +171,7 @@ export async function retryBookingCharge(
 ): Promise<ChargeRetryOutcome> {
   const client = deps.db ?? db();
   const log = logger();
+  const now = deps.now ?? (() => new Date());
   const refuse = (code: ChargeRetryErrorCode, reason: string): never => {
     throw new ChargeRetryError(code, reason);
   };
@@ -179,6 +202,7 @@ export async function retryBookingCharge(
           stripePaymentMethodId: true,
           amountCents: true,
           currency: true,
+          updatedAt: true,
         },
       },
     },
@@ -206,7 +230,24 @@ export async function retryBookingCharge(
   let resolution: Resolution;
   try {
     gateway = deps.gateway();
-    resolution = await resolveWithStripe(gateway, booking.id, payment.stripeCustomerId);
+    resolution = await resolveWithStripe(gateway, booking.id, payment.stripeCustomerId, (intents) =>
+      attemptMayBeInFlight({
+        boundIntentId: payment.stripePaymentIntentId,
+        attempt: payment.attempt,
+        // Set by the reservation of the current attempt (first charge or retry): the last write
+        // of a Payment not yet bound to a PaymentIntent.
+        reservedAt: payment.updatedAt,
+        now: now(),
+        graceMs: CHARGE_IN_FLIGHT_GRACE_MS,
+        intents: intents.map((intent) => ({
+          id: intent.id,
+          status: intent.status,
+          attempt: intent.attempt,
+          hasError:
+            intent.lastPaymentErrorCode !== null || intent.lastPaymentErrorDeclineCode !== null,
+        })),
+      }),
+    );
   } catch (error) {
     if (!isTechnicalStripeFailure(error)) throw error;
     log.error(
@@ -217,8 +258,11 @@ export async function retryBookingCharge(
   }
 
   if (resolution.kind === "in_progress") {
-    log.info({ bookingRef, attempt: payment.attempt }, "retry refused: payment in progress");
-    return refuse("PAYMENT_IN_PROGRESS", "processing");
+    log.info(
+      { bookingRef, attempt: payment.attempt, reason: resolution.reason },
+      "retry refused: payment in progress",
+    );
+    return refuse("PAYMENT_IN_PROGRESS", resolution.reason);
   }
 
   if (resolution.kind === "reconcile") {
@@ -280,7 +324,13 @@ export async function retryBookingCharge(
       },
       // The previous PaymentIntent is forgotten by the row (kept in the AuditLog): its late
       // webhooks then match no current attempt and are ignored (VTC-033 handlers).
-      data: { attempt: nextAttempt, stripePaymentIntentId: null, version: { increment: 1 } },
+      // `updatedAt` set explicitly: it starts the in-flight window of this attempt.
+      data: {
+        attempt: nextAttempt,
+        stripePaymentIntentId: null,
+        version: { increment: 1 },
+        updatedAt: now(),
+      },
     });
     if (updated.count !== 1) return false;
     const state = {

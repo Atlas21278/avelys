@@ -5,6 +5,7 @@ import { PROVISIONAL_RULE, route } from "../pricing/fixtures";
 import { buildPricingSnapshot } from "../pricing/snapshot";
 import type { ChargeCandidate } from "./charge";
 import {
+  attemptMayBeInFlight,
   cancelIdempotencyKey,
   canRetryChargeAs,
   checkRetryable,
@@ -211,4 +212,64 @@ describe("cancelIdempotencyKey", () => {
   it("refuses an empty booking id", () => {
     expect(() => cancelIdempotencyKey("", intent("requires_action"))).toThrow(RangeError);
   });
+});
+
+describe("attemptMayBeInFlight", () => {
+  const reservedAt = new Date("2026-10-02T10:00:00.000Z");
+  const graceMs = 300_000;
+  const at = (ms: number) => new Date(reservedAt.getTime() + ms);
+  const base = {
+    boundIntentId: null,
+    attempt: 2,
+    reservedAt,
+    now: at(1_000),
+    graceMs,
+    intents: [],
+  };
+  const listed = (status: string, attempt: number, hasError = false) => ({
+    id: `pi_${status}${attempt}`,
+    status,
+    attempt,
+    hasError,
+  });
+
+  it("refuses an unbound attempt with nothing listed within the window, allows it after", () => {
+    expect(attemptMayBeInFlight(base)).toBe(true);
+    expect(attemptMayBeInFlight({ ...base, now: at(graceMs - 1) })).toBe(true);
+    expect(attemptMayBeInFlight({ ...base, now: at(graceMs) })).toBe(false);
+  });
+
+  it("ignores PaymentIntents of other attempts", () => {
+    expect(
+      attemptMayBeInFlight({ ...base, intents: [listed("canceled", 1), listed("succeeded", 3)] }),
+    ).toBe(true);
+  });
+
+  it("is not in flight once bound to a PaymentIntent, or before any attempt", () => {
+    expect(attemptMayBeInFlight({ ...base, boundIntentId: "pi_Bound1" })).toBe(false);
+    expect(attemptMayBeInFlight({ ...base, attempt: 0 })).toBe(false);
+  });
+
+  it.each(["succeeded", "canceled"])(
+    "is settled by a %s PaymentIntent of the current attempt",
+    (status) => {
+      expect(attemptMayBeInFlight({ ...base, intents: [listed(status, 2)] })).toBe(false);
+    },
+  );
+
+  it("is settled by a failed confirmation of the current attempt", () => {
+    expect(
+      attemptMayBeInFlight({ ...base, intents: [listed("requires_payment_method", 2, true)] }),
+    ).toBe(false);
+  });
+
+  it.each(["requires_payment_method", "requires_confirmation", "requires_action", "processing"])(
+    "stays in flight within the window on a %s PaymentIntent without error",
+    (status) => {
+      expect(attemptMayBeInFlight({ ...base, intents: [listed(status, 2)] })).toBe(true);
+      expect(
+        attemptMayBeInFlight({ ...base, now: at(graceMs), intents: [listed(status, 2)] }),
+      ).toBe(false);
+    },
+  );
 });
