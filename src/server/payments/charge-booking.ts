@@ -20,6 +20,7 @@ import { db } from "@/server/db";
 
 import { runRequiresActionPort, type OnPaymentRequiresAction } from "./after-charge";
 import { applyChargeResult } from "./apply-charge";
+import { type AttemptClock, databaseNow, withinSendBudget } from "./attempt-timing";
 
 /**
  * Off-session charge at acceptance (VTC-033, docs/product/payments.md step 2, ADR-0006, DEC-27).
@@ -46,8 +47,8 @@ export interface ChargeBookingDeps {
   /** Resolved on use: a missing or live key is a technical failure (no transition). */
   readonly gateway: () => PaymentIntentGateway;
   readonly onPaymentRequiresAction?: OnPaymentRequiresAction;
-  /** Clock of the reservation timestamp (tests inject one). */
-  readonly now?: () => Date;
+  /** Clock of the attempt timing: the database clock by default (tests inject one). */
+  readonly now?: AttemptClock;
 }
 
 export type ChargeBookingOutcome = Readonly<
@@ -124,7 +125,10 @@ export async function chargeBooking(
   // checkChargeable returns ok only with a payment.
   if (!payment) throw new Error("unreachable: chargeable without payment");
 
-  // 3. Reserve the attempt: of two concurrent calls, only one moves attempt 0 → 1.
+  // 3. Reserve the attempt: of two concurrent calls, only one moves attempt 0 → 1. Its
+  // timestamp (database clock) starts the send budget and the in-flight window (VTC-041).
+  const now = deps.now ?? (() => databaseNow(client));
+  const reservedAt = await now();
   const reserved = await client.$transaction(async (tx) => {
     const stillAccepted = await tx.booking.count({
       where: { id: booking.id, status: "ACCEPTED", currentPaymentId: payment.id },
@@ -140,11 +144,7 @@ export async function chargeBooking(
       },
       // `updatedAt` set explicitly: it starts the in-flight window a manual retry waits out
       // (VTC-041) while this attempt is not bound to a PaymentIntent.
-      data: {
-        attempt: FIRST_ATTEMPT,
-        version: { increment: 1 },
-        updatedAt: (deps.now ?? (() => new Date()))(),
-      },
+      data: { attempt: FIRST_ATTEMPT, version: { increment: 1 }, updatedAt: reservedAt },
     });
     if (updated.count !== 1) return false;
     const state = {
@@ -189,6 +189,15 @@ export async function chargeBooking(
         declineCode: settled.lastPaymentErrorDeclineCode,
       };
     } else {
+      // Send deadline (VTC-041): past the send budget, a manual retry may already consider
+      // this attempt over; never send then. The attempt stays interrupted (PENDING, attempt 1).
+      if (!withinSendBudget(reservedAt, await now())) {
+        log.error(
+          { bookingRef, attempt: FIRST_ATTEMPT, reason: "send_deadline_exceeded" },
+          "charge not sent: send deadline exceeded; the payment stays PENDING and the booking ACCEPTED",
+        );
+        return { outcome: "technical_error", errorName: "SendDeadlineExceeded" };
+      }
       result = await gateway.createOffSessionCharge({
         customerId: payment.stripeCustomerId,
         paymentMethodId: payment.stripePaymentMethodId,

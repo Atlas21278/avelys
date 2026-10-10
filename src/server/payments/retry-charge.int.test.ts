@@ -18,12 +18,8 @@ import { enrolTotp, signIn, staff } from "@/test/staff-session";
 import type { OnPaymentRequiresAction } from "./after-charge";
 import { chargeBooking } from "./charge-booking";
 import { processStripeWebhookEvent } from "./process-webhook";
-import {
-  CHARGE_IN_FLIGHT_GRACE_MS,
-  ChargeRetryError,
-  retryBookingCharge,
-  type RetryChargeActor,
-} from "./retry-charge";
+import { CHARGE_IN_FLIGHT_GRACE_MS, CHARGE_SEND_BUDGET_MS, databaseNow } from "./attempt-timing";
+import { ChargeRetryError, retryBookingCharge, type RetryChargeActor } from "./retry-charge";
 import { runChargeRetry } from "./retry-charge-action";
 import { createPaymentIntentWebhookHandlers } from "./webhook-handlers";
 
@@ -511,6 +507,74 @@ describe("manual charge retry (integration)", () => {
         paymentStatus: "PAID",
       });
       expect(stripe.cancelPaymentIntent).toHaveBeenCalledOnce();
+    });
+
+    it("never sends the first charge past the send budget; a retry waits out the window", async () => {
+      const fixture = await bookingWithPayment();
+      // Stripe degraded: the list call made after the reservation outlasts the send budget.
+      vi.mocked(stripe.gateway.listCustomerPaymentIntents).mockImplementationOnce(async () => {
+        at(CHARGE_SEND_BUDGET_MS + 1_000);
+        return [];
+      });
+
+      await expect(chargeBooking(fixture.bookingId, deps())).resolves.toEqual({
+        outcome: "technical_error",
+        errorName: "SendDeadlineExceeded",
+      });
+      expect(stripe.createOffSessionCharge).not.toHaveBeenCalled();
+      const { booking, payment } = await chargeState(fixture);
+      expect(payment).toMatchObject({ status: "PENDING", attempt: 1, stripePaymentIntentId: null });
+      expect(booking.status).toBe("ACCEPTED");
+
+      // The reviewer's scenario (T + 320 s), and the last instant of the window: refused.
+      for (const ms of [320_000, CHARGE_IN_FLIGHT_GRACE_MS - 1_000]) {
+        at(ms);
+        expect(await retryError(retry(fixture, payment.version))).toBe("PAYMENT_IN_PROGRESS");
+      }
+      expect(stripe.createOffSessionCharge).not.toHaveBeenCalled();
+
+      pastWindow();
+      await expect(retry(fixture, payment.version)).resolves.toMatchObject({
+        attempt: 2,
+        paymentStatus: "PAID",
+      });
+      expect(stripe.createOffSessionCharge).toHaveBeenCalledOnce();
+    });
+
+    it("never sends a retry past the send budget (pause after the reservation)", async () => {
+      const { fixture, version } = await failedBooking();
+      const late = new Date(T0.getTime() + CHARGE_SEND_BUDGET_MS + 1);
+      // Clock reads: in-flight check, reservation, then the send check (late).
+      const now = vi.fn<() => Date>().mockReturnValueOnce(T0).mockReturnValueOnce(T0);
+      now.mockReturnValue(late);
+
+      expect(
+        await retryError(
+          retryBookingCharge(fixture.reference, version, admin(), { ...deps(), now }),
+        ),
+      ).toBe("PAYMENT_ATTEMPT_INTERRUPTED");
+      expect(stripe.createOffSessionCharge).not.toHaveBeenCalled();
+      expect((await chargeState(fixture)).payment).toMatchObject({
+        status: "FAILED",
+        attempt: 2,
+        stripePaymentIntentId: null,
+      });
+    });
+
+    it("stamps reservations with the database clock by default", async () => {
+      const fixture = await bookingWithPayment();
+      stripe.confirmWith({ throws: new Stripe.errors.StripeAPIError({ type: "api_error" }) });
+      const before = await databaseNow(db());
+
+      await chargeBooking(fixture.bookingId, { gateway: () => stripe.gateway });
+
+      const after = await databaseNow(db());
+      const { updatedAt } = await db().payment.findUniqueOrThrow({
+        where: { id: fixture.paymentId },
+        select: { updatedAt: true },
+      });
+      expect(updatedAt.getTime()).toBeGreaterThanOrEqual(before.getTime());
+      expect(updatedAt.getTime()).toBeLessThanOrEqual(after.getTime());
     });
 
     it("raises the orphan alert when the first charge meets a success of another attempt", async () => {

@@ -17,7 +17,6 @@ import type { PaymentStatus } from "@/domain/payment/status";
 import type { PrismaClient } from "@/generated/prisma/client";
 import {
   PaymentIntentError,
-  STRIPE_REQUEST_MAX_DURATION_MS,
   StripeConfigError,
   type OffSessionChargeResult,
   type PaymentIntentGateway,
@@ -31,6 +30,12 @@ import { db } from "@/server/db";
 
 import { runRequiresActionPort, type OnPaymentRequiresAction } from "./after-charge";
 import { applyChargeResult } from "./apply-charge";
+import {
+  type AttemptClock,
+  CHARGE_IN_FLIGHT_GRACE_MS,
+  databaseNow,
+  withinSendBudget,
+} from "./attempt-timing";
 
 /**
  * Manual retry of a failed off-session charge by an owner (VTC-041, DEC-27,
@@ -64,21 +69,9 @@ export interface RetryChargeDeps {
   /** Resolved on use: a missing or live key is a technical failure. */
   readonly gateway: () => PaymentIntentGateway;
   readonly onPaymentRequiresAction?: OnPaymentRequiresAction;
-  /** Clock of the in-flight window and of the reservation timestamp (tests inject one). */
-  readonly now?: () => Date;
+  /** Clock of the attempt timing: the database clock by default (tests inject one). */
+  readonly now?: AttemptClock;
 }
-
-/** Margin added to the longest Stripe call for clock skew and processing (technical value). */
-const IN_FLIGHT_MARGIN_MS = 60_000;
-
-/**
- * How long after its reservation an attempt not yet bound to a PaymentIntent is presumed still
- * in flight (VTC-041): the longest possible duration of the creation request with the pinned
- * client settings (timeout × (1 + network retries) + retry delays, `STRIPE_REQUEST_MAX_DURATION_MS`)
- * plus a margin. Technical value derived from the Stripe client, not a business rule; it follows
- * the client settings automatically. Currently 310 s.
- */
-export const CHARGE_IN_FLIGHT_GRACE_MS = STRIPE_REQUEST_MAX_DURATION_MS + IN_FLIGHT_MARGIN_MS;
 
 export type ChargeRetryErrorCode =
   | "ACCESS_DENIED"
@@ -171,7 +164,7 @@ export async function retryBookingCharge(
 ): Promise<ChargeRetryOutcome> {
   const client = deps.db ?? db();
   const log = logger();
-  const now = deps.now ?? (() => new Date());
+  const now = deps.now ?? (() => databaseNow(client));
   const refuse = (code: ChargeRetryErrorCode, reason: string): never => {
     throw new ChargeRetryError(code, reason);
   };
@@ -228,6 +221,8 @@ export async function retryBookingCharge(
   // 2. Stripe before any new attempt (outside any transaction).
   let gateway: PaymentIntentGateway;
   let resolution: Resolution;
+  // Read before the Stripe list: an earlier "now" only makes the in-flight check stricter.
+  const checkedAt = await now();
   try {
     gateway = deps.gateway();
     resolution = await resolveWithStripe(gateway, booking.id, payment.stripeCustomerId, (intents) =>
@@ -237,7 +232,7 @@ export async function retryBookingCharge(
         // Set by the reservation of the current attempt (first charge or retry): the last write
         // of a Payment not yet bound to a PaymentIntent.
         reservedAt: payment.updatedAt,
-        now: now(),
+        now: checkedAt,
         graceMs: CHARGE_IN_FLIGHT_GRACE_MS,
         intents: intents.map((intent) => ({
           id: intent.id,
@@ -310,6 +305,7 @@ export async function retryBookingCharge(
 
   // 3. Reserve the attempt under the optimistic lock of the displayed version.
   const nextAttempt = payment.attempt + 1;
+  const reservedAt = await now();
   const reserved = await client.$transaction(async (tx) => {
     const stillAccepted = await tx.booking.count({
       where: { id: booking.id, status: "ACCEPTED", currentPaymentId: payment.id },
@@ -329,7 +325,7 @@ export async function retryBookingCharge(
         attempt: nextAttempt,
         stripePaymentIntentId: null,
         version: { increment: 1 },
-        updatedAt: now(),
+        updatedAt: reservedAt,
       },
     });
     if (updated.count !== 1) return false;
@@ -364,6 +360,14 @@ export async function retryBookingCharge(
   }
 
   // 4. New PaymentIntent, then its outcome through the service of the first charge.
+  // Send deadline: never send once a later retry may consider this attempt over.
+  if (!withinSendBudget(reservedAt, await now())) {
+    log.error(
+      { bookingRef, attempt: nextAttempt, reason: "send_deadline_exceeded" },
+      "retry interrupted before sending: send deadline exceeded",
+    );
+    return refuse("PAYMENT_ATTEMPT_INTERRUPTED", "send_deadline_exceeded");
+  }
   let result: OffSessionChargeResult;
   try {
     result = await gateway.createOffSessionCharge({
