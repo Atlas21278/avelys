@@ -18,7 +18,12 @@ import { enrolTotp, signIn, staff } from "@/test/staff-session";
 import type { OnPaymentRequiresAction } from "./after-charge";
 import { chargeBooking } from "./charge-booking";
 import { processStripeWebhookEvent } from "./process-webhook";
-import { ChargeRetryError, retryBookingCharge, type RetryChargeActor } from "./retry-charge";
+import {
+  CHARGE_IN_FLIGHT_GRACE_MS,
+  ChargeRetryError,
+  retryBookingCharge,
+  type RetryChargeActor,
+} from "./retry-charge";
 import { runChargeRetry } from "./retry-charge-action";
 import { createPaymentIntentWebhookHandlers } from "./webhook-handlers";
 
@@ -35,7 +40,16 @@ vi.mock("@/lib/logger", () => ({ logger: () => log }));
 
 let stripe = fakePaymentIntents();
 const onPaymentRequiresAction = vi.fn<OnPaymentRequiresAction>();
-const deps = () => ({ gateway: () => stripe.gateway, onPaymentRequiresAction });
+// Injected clock shared by the reservations (chargeBooking, retry) and the in-flight check.
+const T0 = new Date("2026-10-02T10:00:00.000Z");
+let clock = T0;
+const deps = () => ({ gateway: () => stripe.gateway, onPaymentRequiresAction, now: () => clock });
+/** Moves the clock to `ms` after T0. */
+const at = (ms: number) => {
+  clock = new Date(T0.getTime() + ms);
+};
+/** Just past the in-flight window of an attempt reserved at T0. */
+const pastWindow = () => at(CHARGE_IN_FLIGHT_GRACE_MS);
 
 const sessions = {
   admin: new Headers(),
@@ -112,6 +126,7 @@ describe("manual charge retry (integration)", () => {
   });
 
   beforeEach(async () => {
+    clock = T0;
     stripe = fakePaymentIntents();
     onPaymentRequiresAction.mockReset();
     onPaymentRequiresAction.mockResolvedValue(undefined);
@@ -228,6 +243,7 @@ describe("manual charge retry (integration)", () => {
 
     it("retries a first attempt interrupted by a technical error (PENDING, attempt 1)", async () => {
       const { fixture, version } = await interruptedBooking();
+      pastWindow();
 
       await expect(retry(fixture, version)).resolves.toMatchObject({
         outcome: "charged",
@@ -406,6 +422,9 @@ describe("manual charge retry (integration)", () => {
       expect(booking.status).toBe("ACCEPTED");
 
       stripe.confirmWith({ status: "succeeded", errorCode: null });
+      // Attempt 2 is unbound and unlisted: presumed in flight until the window has passed.
+      expect(await retryError(retry(fixture, version + 1))).toBe("PAYMENT_IN_PROGRESS");
+      pastWindow();
       await expect(retry(fixture, version + 1)).resolves.toMatchObject({
         attempt: 3,
         paymentStatus: "PAID",
@@ -413,6 +432,133 @@ describe("manual charge retry (integration)", () => {
       expect(stripe.createOffSessionCharge).toHaveBeenLastCalledWith(
         expect.objectContaining({ idempotencyKey: `booking:${fixture.bookingId}:charge:3` }),
       );
+    });
+
+    /** Makes the next PaymentIntent creation hang before reaching Stripe until released. */
+    function holdNextCreation() {
+      let release: () => void = () => undefined;
+      const gate = new Promise<void>((resolve) => {
+        release = resolve;
+      });
+      stripe.createOffSessionCharge.mockImplementationOnce(async () => {
+        await gate;
+        throw new Stripe.errors.StripeConnectionError({ type: "api_error", message: "lost" });
+      });
+      return () => release();
+    }
+
+    it("refuses while the first attempt is still in flight (PENDING), then allows it after the window", async () => {
+      const fixture = await bookingWithPayment();
+      const release = holdNextCreation();
+      const first = chargeBooking(fixture.bookingId, deps());
+      await vi.waitFor(() => expect(stripe.createOffSessionCharge).toHaveBeenCalledOnce());
+      const { payment } = await chargeState(fixture);
+      expect(payment).toMatchObject({ status: "PENDING", attempt: 1, stripePaymentIntentId: null });
+
+      at(CHARGE_IN_FLIGHT_GRACE_MS - 1_000);
+      expect(await retryError(retry(fixture, payment.version))).toBe("PAYMENT_IN_PROGRESS");
+      expect(stripe.createOffSessionCharge).toHaveBeenCalledOnce();
+      expect((await chargeState(fixture)).payment).toEqual(payment);
+
+      release();
+      await expect(first).resolves.toMatchObject({ outcome: "technical_error" });
+      pastWindow();
+      await expect(retry(fixture, payment.version)).resolves.toMatchObject({
+        outcome: "charged",
+        attempt: 2,
+        paymentStatus: "PAID",
+      });
+      expect(stripe.createOffSessionCharge).toHaveBeenCalledTimes(2);
+    });
+
+    it("refuses while a previous retry is still in flight (FAILED, unbound), then allows it after the window", async () => {
+      const { fixture, version } = await failedBooking();
+      const release = holdNextCreation();
+      const firstRetry = retry(fixture, version);
+      await vi.waitFor(() => expect(stripe.createOffSessionCharge).toHaveBeenCalledOnce());
+      const { payment } = await chargeState(fixture);
+      expect(payment).toMatchObject({ status: "FAILED", attempt: 2, stripePaymentIntentId: null });
+
+      // Another owner (or another tab) on the refreshed page, same version.
+      at(60_000);
+      expect(await retryError(retry(fixture, payment.version))).toBe("PAYMENT_IN_PROGRESS");
+      expect(stripe.createOffSessionCharge).toHaveBeenCalledOnce();
+
+      release();
+      expect(await retryError(firstRetry)).toBe("PAYMENT_ATTEMPT_INTERRUPTED");
+      pastWindow();
+      await expect(retry(fixture, payment.version)).resolves.toMatchObject({
+        attempt: 3,
+        paymentStatus: "PAID",
+      });
+    });
+
+    it("does not wait when the current attempt's PaymentIntent is listed as failed", async () => {
+      const fixture = await bookingWithPayment();
+      // Declined at Stripe, but the answer was lost: PENDING, unbound, attempt 1 listed as failed.
+      stripe.confirmWith({ status: "requires_payment_method", errorCode: "card_declined" });
+      stripe.beforeAnswer(async () => {
+        throw new Stripe.errors.StripeConnectionError({ type: "api_error", message: "lost" });
+      });
+      await chargeBooking(fixture.bookingId, deps());
+      stripe.beforeAnswer(null);
+      stripe.confirmWith({ status: "succeeded", errorCode: null });
+      const { payment } = await chargeState(fixture);
+      expect(payment).toMatchObject({ status: "PENDING", attempt: 1, stripePaymentIntentId: null });
+
+      await expect(retry(fixture, payment.version)).resolves.toMatchObject({
+        attempt: 2,
+        paymentStatus: "PAID",
+      });
+      expect(stripe.cancelPaymentIntent).toHaveBeenCalledOnce();
+    });
+
+    it("raises the orphan alert when the first charge meets a success of another attempt", async () => {
+      const fixture = await bookingWithPayment();
+      stripe.put({
+        id: "pi_OtherAttempt1",
+        status: "succeeded",
+        amountCents: TEST_TOTAL,
+        currency: "EUR",
+        livemode: false,
+        customerId: fixture.customerId,
+        bookingRef: fixture.reference,
+        attempt: 7,
+        lastPaymentErrorCode: null,
+        lastPaymentErrorDeclineCode: null,
+      });
+
+      await expect(chargeBooking(fixture.bookingId, deps())).resolves.toEqual({
+        outcome: "ignored",
+        reason: "attempt_mismatch",
+      });
+      expect(log.error).toHaveBeenCalledWith(
+        { bookingRef: fixture.reference, attempt: 7, alert: "orphan_succeeded_payment_intent" },
+        expect.any(String),
+      );
+    });
+
+    it("stamps updatedAt at each attempt reservation (start of the in-flight window)", async () => {
+      const fixture = await bookingWithPayment();
+      const stamp = () =>
+        db().payment.findUniqueOrThrow({
+          where: { id: fixture.paymentId },
+          select: { updatedAt: true, attempt: true, version: true },
+        });
+      stripe.confirmWith({ throws: new Stripe.errors.StripeAPIError({ type: "api_error" }) });
+
+      at(5_000);
+      await chargeBooking(fixture.bookingId, deps());
+      const first = await stamp();
+      expect(first).toMatchObject({ attempt: 1, updatedAt: new Date(T0.getTime() + 5_000) });
+
+      const later = 5_000 + CHARGE_IN_FLIGHT_GRACE_MS;
+      at(later);
+      expect(await retryError(retry(fixture, first.version))).toBe("PAYMENT_ATTEMPT_INTERRUPTED");
+      expect(await stamp()).toMatchObject({
+        attempt: 2,
+        updatedAt: new Date(T0.getTime() + later),
+      });
     });
 
     it("ignores a late webhook of the previous attempt", async () => {
