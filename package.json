@@ -21,6 +21,7 @@
     "db:deploy": "prisma migrate deploy",
     "db:status": "prisma migrate status",
     "db:seed": "prisma db seed",
+    "env:init": "node scripts/init-env.mjs",
     "auth:create-staff": "tsx --conditions=react-server scripts/create-staff-user.ts"
   },
   "dependencies": {

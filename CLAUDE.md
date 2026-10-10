@@ -23,7 +23,7 @@ Node.js LTS (`.nvmrc` + `engines`) · pnpm via Corepack · Next.js App Router (`
 fnm use                          # Node LTS lue depuis .nvmrc (24)
 corepack enable && pnpm install --frozen-lockfile   # lance aussi prisma generate
 git config core.hooksPath .githooks   # refuse les push directs sur main
-cp .env.example .env             # une fois ; valeurs locales uniquement
+pnpm env:init                    # crée .env depuis .env.example + BETTER_AUTH_SECRET (ancien .env → .env.backup)
 pnpm db:up                       # PostgreSQL 17 local (docker compose, port 5433, bases avelys + avelys_test)
 pnpm db:migrate                  # prisma migrate dev — dev uniquement
 pnpm dev
