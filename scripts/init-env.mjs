@@ -2,7 +2,8 @@
  * Creates the local .env from .env.example (VTC-016): `pnpm env:init`.
  *
  * - Copies .env.example to .env, so every variable of the current template is present.
- * - Generates BETTER_AUTH_SECRET (32 random bytes, base64) when the template leaves it empty.
+ * - Generates BETTER_AUTH_SECRET and PAYMENT_LINK_SECRET (VTC-042), 32 random bytes each, base64,
+ *   when the template leaves them empty.
  * - An existing .env is kept as .env.backup first; values are never printed.
  *
  * Local development only: staging and production get their variables from the platform.
@@ -24,12 +25,13 @@ if (existsSync(TARGET)) {
   console.log(`Ancien ${TARGET} sauvegardé dans ${BACKUP}.`);
 }
 
-const secret = randomBytes(32).toString("base64");
-const content = readFileSync(TEMPLATE, "utf8").replace(
-  /^BETTER_AUTH_SECRET=\s*$/m,
-  `BETTER_AUTH_SECRET=${secret}`,
-);
+const secret = () => randomBytes(32).toString("base64");
+const content = readFileSync(TEMPLATE, "utf8")
+  .replace(/^BETTER_AUTH_SECRET=\s*$/m, `BETTER_AUTH_SECRET=${secret()}`)
+  .replace(/^PAYMENT_LINK_SECRET=\s*$/m, `PAYMENT_LINK_SECRET=${secret()}`);
 writeFileSync(TARGET, content, { encoding: "utf8", mode: 0o600 });
 
-console.log(`${TARGET} créé depuis ${TEMPLATE}, avec un BETTER_AUTH_SECRET généré.`);
+console.log(
+  `${TARGET} créé depuis ${TEMPLATE}, avec BETTER_AUTH_SECRET et PAYMENT_LINK_SECRET générés.`,
+);
 console.log("Clés externes (Stripe, Google Maps, Resend) : à renseigner à la main si besoin.");
