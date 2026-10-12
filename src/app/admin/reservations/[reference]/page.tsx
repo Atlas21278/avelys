@@ -7,6 +7,7 @@ import type { ReactNode } from "react";
 import { RouteLine } from "@/components/ui/route-line";
 import { textLinkClasses } from "@/components/ui/text-link";
 import { allowedTransitions } from "@/domain/booking/transitions";
+import { canRetryChargeAs, retryRefusal } from "@/domain/payment/retry";
 import { formatParisDateTime, formatParisOffset } from "@/lib/dates";
 import { type BookingAuditEntry, getBackOfficeBooking } from "@/server/admin/bookings";
 import { requireBackOfficeUser } from "@/server/auth/back-office";
@@ -29,6 +30,7 @@ import {
 } from "../_components/format";
 import { StatusBadge } from "../_components/status-badge";
 import { BookingDecision } from "./booking-decision";
+import { ChargeRetry } from "./charge-retry";
 import { CopyRegularizationLink } from "./copy-regularization-link";
 
 export const dynamic = "force-dynamic";
@@ -169,6 +171,8 @@ export default async function BookingDetailPage({
                 Carte débitée hors session à l’acceptation. La réservation reste « Acceptée » tant
                 que le paiement n’a pas réussi.
               </p>
+              {/* Mutually exclusive: the link needs REQUIRES_ACTION (VTC-042), the retry FAILED or
+                  PENDING after an attempt (VTC-041, retryRefusal). */}
               {regularization?.status === "available" ? (
                 <CopyRegularizationLink url={regularization.url} />
               ) : null}
@@ -177,6 +181,22 @@ export default async function BookingDetailPage({
                   Lien de régularisation indisponible : PAYMENT_LINK_SECRET n’est pas configuré.
                 </p>
               ) : null}
+              <ChargeRetry
+                reference={booking.reference}
+                paymentVersion={booking.currentPayment.version}
+                amountLabel={formatAmount(
+                  booking.currentPayment.amountCents,
+                  booking.currentPayment.currency,
+                )}
+                allowed={
+                  canRetryChargeAs(user.role) &&
+                  retryRefusal({
+                    bookingStatus: booking.status,
+                    paymentStatus: booking.currentPayment.status,
+                    attempt: booking.currentPayment.attempt,
+                  }) === null
+                }
+              />
             </>
           ) : (
             <p className="text-graphite">Aucun paiement enregistré pour cette réservation.</p>

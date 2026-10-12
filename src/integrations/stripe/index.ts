@@ -13,7 +13,12 @@ import { createStripePaymentIntentGateway, type PaymentIntentGateway } from "./p
 import { createStripePaymentSetupGateway, type PaymentSetupGateway } from "./setup-intents";
 import { createStripeWebhookVerifier, type StripeWebhookVerifier } from "./webhooks";
 
-export { STRIPE_API_VERSION, StripeConfigError, type StripeConfigErrorReason } from "./client";
+export {
+  STRIPE_API_VERSION,
+  STRIPE_REQUEST_MAX_DURATION_MS,
+  StripeConfigError,
+  type StripeConfigErrorReason,
+} from "./client";
 export {
   type PaymentAuthenticationGateway,
   type PaymentIntentForAuthentication,

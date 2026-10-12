@@ -52,6 +52,14 @@ export const PaymentChargeAuditStateSchema = PaymentAuditStateSchema.extend({
     .regex(/^pi_[A-Za-z0-9]+$/),
 });
 
+/**
+ * Payment state before a manual retry (VTC-041): the payment state plus, when the previous
+ * attempt reached Stripe, its PaymentIntent id (same documented exception as `payment.charge`).
+ */
+export const PaymentRetryAuditStateSchema = PaymentAuditStateSchema.extend({
+  paymentIntentId: PaymentChargeAuditStateSchema.shape.paymentIntentId.optional(),
+});
+
 /** Booking state recorded for a status transition (VTC-032): reference, status and version only. */
 export const BookingTransitionAuditStateSchema = BookingAuditStateSchema.pick({
   bookingRef: true,
@@ -102,6 +110,15 @@ const AUDIT_ACTIONS = {
     entityType: "Payment",
     before: PaymentAuditStateSchema,
     after: PaymentChargeAuditStateSchema,
+  },
+  /**
+   * Manual retry reserved by an owner (VTC-041): `attempt` + 1, the PaymentIntent of the previous
+   * attempt (if any) kept in `before` since the Payment row forgets it.
+   */
+  "payment.retry": {
+    entityType: "Payment",
+    before: PaymentRetryAuditStateSchema,
+    after: PaymentAuditStateSchema,
   },
 } as const satisfies Record<
   string,

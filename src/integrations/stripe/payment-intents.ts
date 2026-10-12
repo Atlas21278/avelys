@@ -68,6 +68,15 @@ export interface PaymentIntentGateway {
   listCustomerPaymentIntents(customerId: string): Promise<readonly PaymentIntentSummary[]>;
   /** Reads a PaymentIntent back; null when Stripe does not know the id. */
   retrievePaymentIntent(paymentIntentId: string): Promise<PaymentIntentSummary | null>;
+  /**
+   * Cancels a PaymentIntent that may still be confirmed (manual retry, VTC-041), so that it can
+   * never succeed in parallel with a new attempt. Throws when Stripe refuses (already succeeded,
+   * already canceled, processing) or fails: the caller reads the PaymentIntent back.
+   */
+  cancelPaymentIntent(
+    paymentIntentId: string,
+    idempotencyKey: string,
+  ): Promise<PaymentIntentSummary>;
 }
 
 /** Stripe answered something the charge cannot rely on. Carries a reason, never an id. */
@@ -108,7 +117,7 @@ export function summarizePaymentIntent(intent: Stripe.PaymentIntent): PaymentInt
 
 /** The subset of the Stripe client this adapter uses (a fake in unit tests). */
 export type PaymentIntentStripeClient = {
-  paymentIntents: Pick<Stripe["paymentIntents"], "create" | "list" | "retrieve">;
+  paymentIntents: Pick<Stripe["paymentIntents"], "create" | "list" | "retrieve" | "cancel">;
 };
 
 export function createStripePaymentIntentGateway(
@@ -173,6 +182,19 @@ export function createStripePaymentIntentGateway(
         }
         throw error;
       }
+    },
+
+    async cancelPaymentIntent(paymentIntentId, idempotencyKey) {
+      if (!PAYMENT_INTENT_ID.test(paymentIntentId)) {
+        throw new PaymentIntentError("invalid_payment_intent_id");
+      }
+      // `abandoned`: replaced by a new attempt of the same booking (docs.stripe.com/api).
+      const intent = await stripe.paymentIntents.cancel(
+        paymentIntentId,
+        { cancellation_reason: "abandoned" },
+        { idempotencyKey },
+      );
+      return summarizePaymentIntent(intent);
     },
   };
 }
