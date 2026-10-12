@@ -447,6 +447,23 @@
   "Email": {
     "layout": {
       "notice": "You are receiving this email about your Avelys booking."
+    },
+    "paymentActionRequired": {
+      "subject": "Authentication required to pay for your ride {reference}",
+      "preview": "Your bank asks for authentication to pay for your ride.",
+      "title": "Payment authentication required",
+      "lead": "Your bank asks for authentication to pay for your ride. The amount is the one of your booking.",
+      "summaryTitle": "Your ride",
+      "reference": "Reference",
+      "pickup": "Pick-up",
+      "pickupHint": "Paris time",
+      "amount": "Total incl. VAT",
+      "action": "Authenticate the payment",
+      "actionText": "The button opens the secure page where your bank asks you to approve the payment with the card saved with your request. No new card is asked for.",
+      "linkFallback": "If the button does not work, copy this link into your browser:",
+      "confirmation": "Your booking will be confirmed once the payment is approved. If you have already completed your payment, there is nothing else to do.",
+      "contact": "A question?",
+      "contactLink": "Contact us"
     }
   },
   "Regularization": {

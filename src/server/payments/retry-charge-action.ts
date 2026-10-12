@@ -14,6 +14,7 @@ import {
 import { checkAccess } from "@/server/auth/access";
 import { databaseUnavailableReason } from "@/server/db-errors";
 
+import { sendPaymentActionRequiredEmailPort } from "./action-required-email";
 import {
   type ChargeRetryErrorCode,
   ChargeRetryError,
@@ -98,7 +99,11 @@ function errorCode(error: unknown): ChargeRetryActionErrorCode {
 export async function runChargeRetry(
   requestHeaders: Headers,
   input: unknown,
-  deps: RetryChargeDeps = { gateway: stripePaymentIntents },
+  // An entry in REQUIRES_ACTION emails the new regularisation link after commit (VTC-044).
+  deps: RetryChargeDeps = {
+    gateway: stripePaymentIntents,
+    onPaymentRequiresAction: sendPaymentActionRequiredEmailPort,
+  },
 ): Promise<ChargeRetryResult> {
   const correlationId = currentCorrelationId() ?? correlationIdFrom(requestHeaders);
 

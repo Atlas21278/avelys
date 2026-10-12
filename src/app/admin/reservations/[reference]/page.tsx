@@ -9,7 +9,11 @@ import { textLinkClasses } from "@/components/ui/text-link";
 import { allowedTransitions } from "@/domain/booking/transitions";
 import { canRetryChargeAs, retryRefusal } from "@/domain/payment/retry";
 import { formatParisDateTime, formatParisOffset } from "@/lib/dates";
-import { type BookingAuditEntry, getBackOfficeBooking } from "@/server/admin/bookings";
+import {
+  type BookingAuditEntry,
+  getBackOfficeBooking,
+  type PaymentActionEmailStatus,
+} from "@/server/admin/bookings";
 import { requireBackOfficeUser } from "@/server/auth/back-office";
 import {
   backOfficeRegularizationLink,
@@ -166,6 +170,9 @@ export default async function BookingDetailPage({
                     booking.currentPayment.currency,
                   )}
                 </Fact>
+                <Fact label="Email d’authentification">
+                  <PaymentActionEmail email={booking.paymentActionEmail} />
+                </Fact>
               </Facts>
               <p className="text-sm text-graphite">
                 Carte débitée hors session à l’acceptation. La réservation reste « Acceptée » tant
@@ -303,6 +310,54 @@ function Note({ title, hint, children }: { title: string; hint: string; children
 
 function DateTime({ instant }: { instant: Date }) {
   return <time dateTime={instant.toISOString()}>{formatParisDateTime(instant)}</time>;
+}
+
+/**
+ * Outcome of the "payment authentication required" email of the current Payment (VTC-044):
+ * status, date and technical code only, never the address or the content.
+ */
+function PaymentActionEmail({ email }: { email: PaymentActionEmailStatus | null }) {
+  if (!email) return <span className="text-graphite">Aucun</span>;
+  const attempt = email.attempt ? ` (tentative n° ${email.attempt})` : "";
+  switch (email.state) {
+    case "sent":
+      return (
+        <span>
+          Envoyé
+          {email.sentAt ? (
+            <>
+              {" "}
+              le <DateTime instant={email.sentAt} />
+            </>
+          ) : null}
+          <span className="text-sm text-graphite">{attempt}</span>
+        </span>
+      );
+    case "failed":
+      return (
+        <span className="border-l-2 border-rubric pl-2">
+          <span className="font-semibold">Échec de l’envoi</span>
+          <span className="text-sm text-graphite">
+            {email.lastErrorCode ? ` · ${email.lastErrorCode}` : ""}
+            {attempt}
+          </span>
+        </span>
+      );
+    case "sending":
+      return (
+        <span>
+          En cours d’envoi<span className="text-sm text-graphite">{attempt}</span>
+        </span>
+      );
+    case "interrupted":
+      // PENDING older than the send lease: the attempt died, nothing is being sent (RB-04).
+      return (
+        <span className="border-l-2 border-rubric pl-2">
+          <span className="font-semibold">Envoi interrompu — à relancer</span>
+          <span className="text-sm text-graphite">{attempt}</span>
+        </span>
+      );
+  }
 }
 
 function AuditTrail({ entries }: { entries: readonly BookingAuditEntry[] }) {
