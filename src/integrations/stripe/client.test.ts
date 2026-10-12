@@ -35,6 +35,27 @@ describe("createStripeClient", () => {
     expect(STRIPE_REQUEST_MAX_DURATION_MS).toBe(250_000);
   });
 
+  it("talks to Stripe by default", () => {
+    const client = createStripeClient(fake("sk_test_"));
+    expect(client.getApiField("host")).toBe("api.stripe.com");
+    expect(client.getApiField("protocol")).toBe("https");
+  });
+
+  it("targets the local fake Stripe API of the end-to-end tests when asked (VTC-048)", () => {
+    const client = createStripeClient(fake("sk_test_"), { apiBaseUrl: "http://127.0.0.1:12111" });
+    expect(client.getApiField("host")).toBe("127.0.0.1");
+    expect(client.getApiField("port")).toBe(12111);
+    expect(client.getApiField("protocol")).toBe("http");
+  });
+
+  it("still refuses a live key with a fake API base URL", () => {
+    expect(
+      reasonOf(() =>
+        createStripeClient(fake("sk_live_"), { apiBaseUrl: "http://127.0.0.1:12111" }),
+      ),
+    ).toBe("live_key");
+  });
+
   it("refuses a missing key", () => {
     expect(reasonOf(() => createStripeClient(undefined))).toBe("not_configured");
     expect(reasonOf(() => createStripeClient(""))).toBe("not_configured");

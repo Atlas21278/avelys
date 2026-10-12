@@ -17,6 +17,7 @@ const defaults = {
   BOOKING_MIN_LEAD_TIME_MINUTES: 720,
   ROUTING_SERVICE_AREA: { south: 41, west: -5.5, north: 51.5, east: 10 },
   PUBLIC_BOOKING_ENABLED: false,
+  E2E_FAKE_ROUTING: false,
 };
 
 describe("parseServerEnv", () => {
@@ -295,6 +296,76 @@ describe("parseServerEnv", () => {
     expect(() => parseServerEnv({ ...valid, BETTER_AUTH_SECRET: "too-short" })).toThrowError(
       /BETTER_AUTH_SECRET/,
     );
+  });
+
+  describe("end-to-end test switches (VTC-048)", () => {
+    const stripeUrl = "http://127.0.0.1:12111";
+
+    it("are off by default, empty meaning off", () => {
+      const env = parseServerEnv({ ...valid, E2E_FAKE_ROUTING: "", E2E_STRIPE_API_URL: "" });
+      expect(env.E2E_FAKE_ROUTING).toBe(false);
+      expect(env.E2E_STRIPE_API_URL).toBeUndefined();
+    });
+
+    it("are accepted where tests run (APP_ENV local or ci)", () => {
+      for (const APP_ENV of ["local", "ci"]) {
+        const env = parseServerEnv({
+          ...valid,
+          APP_ENV,
+          E2E_FAKE_ROUTING: "true",
+          E2E_STRIPE_API_URL: stripeUrl,
+        });
+        expect(env.E2E_FAKE_ROUTING).toBe(true);
+        expect(env.E2E_STRIPE_API_URL).toBe(stripeUrl);
+      }
+    });
+
+    it("refuse the fake routing adapter in staging and production", () => {
+      for (const APP_ENV of ["staging", "production"]) {
+        expect(() =>
+          parseServerEnv({ ...valid, APP_ENV, E2E_FAKE_ROUTING: "true" }),
+        ).toThrowError(/E2E_FAKE_ROUTING \(custom\)/);
+        // Explicitly off is harmless.
+        expect(parseServerEnv({ ...valid, APP_ENV, E2E_FAKE_ROUTING: "false" }).E2E_FAKE_ROUTING).toBe(
+          false,
+        );
+      }
+    });
+
+    it("refuse the fake Stripe API in staging and production, naming the variable only", () => {
+      for (const APP_ENV of ["staging", "production"]) {
+        let message = "";
+        try {
+          parseServerEnv({ ...valid, APP_ENV, E2E_STRIPE_API_URL: stripeUrl });
+        } catch (error) {
+          expect(error).toBeInstanceOf(EnvValidationError);
+          message = (error as Error).message;
+        }
+        expect(message).toMatch(/E2E_STRIPE_API_URL \(custom\)/);
+        expect(message).not.toContain("12111");
+      }
+    });
+
+    it("accept only a loopback HTTP(S) URL for the fake Stripe API", () => {
+      for (const value of ["http://localhost:12111", "https://[::1]:8443/"]) {
+        expect(parseServerEnv({ ...valid, E2E_STRIPE_API_URL: value }).E2E_STRIPE_API_URL).toBe(
+          value,
+        );
+      }
+      for (const value of ["https://api.stripe.com", "http://10.0.0.5:12111", "ftp://127.0.0.1"]) {
+        expect(() => parseServerEnv({ ...valid, E2E_STRIPE_API_URL: value })).toThrowError(
+          /E2E_STRIPE_API_URL/,
+        );
+      }
+    });
+
+    it("refuse anything but true or false for the routing switch", () => {
+      for (const value of ["1", "yes", "TRUE"]) {
+        expect(() => parseServerEnv({ ...valid, E2E_FAKE_ROUTING: value })).toThrowError(
+          /E2E_FAKE_ROUTING/,
+        );
+      }
+    });
   });
 
   it("rejects a non-http URL", () => {
