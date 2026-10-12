@@ -6,7 +6,11 @@ import { type BookingContact, resolveBookingContact } from "@/domain/booking/con
 import { InvalidBookingReferenceError, normalizeReference } from "@/domain/booking/reference";
 import { BOOKING_STATUSES, type BookingStatus } from "@/domain/booking/status";
 import type { BookingActor } from "@/domain/booking/transitions";
-import type { Prisma } from "@/generated/prisma/client";
+import {
+  attemptOfPaymentActionRequiredKey,
+  paymentActionRequiredKeyPrefix,
+} from "@/domain/payment/action-required-email";
+import type { NotificationStatus, Prisma } from "@/generated/prisma/client";
 import { parisDayEnd, parisDayStart } from "@/lib/dates";
 import { checkAccess, type StaffIdentity } from "@/server/auth/access";
 import { db } from "@/server/db";
@@ -202,6 +206,8 @@ const DETAIL_SELECT = {
   currentPayment: {
     select: { status: true, attempt: true, version: true, amountCents: true, currency: true },
   },
+  // Internal id, to find the payment-action email of the current Payment (VTC-044); not returned.
+  currentPaymentId: true,
 } as const satisfies Prisma.BookingSelect;
 
 type DetailRow = Prisma.BookingGetPayload<{ select: typeof DETAIL_SELECT }>;
@@ -218,15 +224,28 @@ export interface BookingAuditEntry {
   readonly toStatus: BookingStatus | null;
 }
 
+/** Latest "payment authentication required" email of the current Payment (VTC-044). */
+export type PaymentActionEmailStatus = Readonly<{
+  status: NotificationStatus;
+  /** Charge attempt the email was for. */
+  attempt: number | null;
+  sentAt: Date | null;
+  lastAttemptAt: Date | null;
+  /** Technical code of the latest failure (EMAIL_TIMEOUT…), never a message or an address. */
+  lastErrorCode: string | null;
+}>;
+
 export type BookingDetail = Omit<
   DetailRow,
-  "id" | "customer" | "contactName" | "contactPhone" | "contactLocale"
+  "id" | "customer" | "contactName" | "contactPhone" | "contactLocale" | "currentPaymentId"
 > & {
   /** Contact of this booking (VTC-037), from its own copy or, for older rows, its customer. */
   readonly contact: BookingContact;
   /** Email of the customer profile: the guest matching key, not copied per booking (DEC-25). */
   readonly customerEmail: string;
   readonly audit: readonly BookingAuditEntry[];
+  /** Null when no such email was ever attempted for the current Payment. */
+  readonly paymentActionEmail: PaymentActionEmailStatus | null;
 };
 
 const STAFF_ACTORS: readonly BookingActor[] = ["ADMIN", "DISPATCHER", "DRIVER"];
@@ -304,11 +323,48 @@ export async function getBackOfficeBooking(
   const row = await db().booking.findUnique({ where: { reference }, select: DETAIL_SELECT });
   if (!row) return null;
 
-  const { id, customer, contactName, contactPhone, contactLocale, ...booking } = row;
+  const { id, customer, contactName, contactPhone, contactLocale, currentPaymentId, ...booking } =
+    row;
   return {
     ...booking,
     contact: resolveBookingContact({ contactName, contactPhone, contactLocale }, customer),
     customerEmail: customer.email,
     audit: await auditTrail(id),
+    paymentActionEmail: currentPaymentId
+      ? await latestPaymentActionEmail(id, currentPaymentId)
+      : null,
   };
+}
+
+/**
+ * The latest `PAYMENT_ACTION_REQUIRED` notification of a Payment of `bookingId` (highest
+ * attempt), or null when none was ever created. Status, dates and technical code only: no
+ * address, no content (BR-60). No access check: callers check it.
+ */
+export async function latestPaymentActionEmail(
+  bookingId: string,
+  paymentId: string,
+): Promise<PaymentActionEmailStatus | null> {
+  const rows = await db().notification.findMany({
+    where: {
+      bookingId,
+      kind: "PAYMENT_ACTION_REQUIRED",
+      dedupeKey: { startsWith: paymentActionRequiredKeyPrefix(paymentId) },
+    },
+    select: {
+      dedupeKey: true,
+      status: true,
+      sentAt: true,
+      lastAttemptAt: true,
+      lastErrorCode: true,
+    },
+  });
+  // Keys of one Payment differ by their attempt only: the highest is the latest.
+  const [latest] = rows
+    .map(({ dedupeKey, ...row }) => ({
+      ...row,
+      attempt: attemptOfPaymentActionRequiredKey(dedupeKey),
+    }))
+    .sort((a, b) => (b.attempt ?? 0) - (a.attempt ?? 0));
+  return latest ?? null;
 }

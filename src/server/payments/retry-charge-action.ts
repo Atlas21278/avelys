@@ -21,6 +21,7 @@ import {
   retryBookingCharge,
   type RetryChargeDeps,
 } from "./retry-charge";
+import { sendPaymentActionRequiredEmailPort } from "./action-required-email";
 
 /**
  * Body of the back-office "retry the charge" server action (VTC-041), kept out of the
@@ -98,7 +99,11 @@ function errorCode(error: unknown): ChargeRetryActionErrorCode {
 export async function runChargeRetry(
   requestHeaders: Headers,
   input: unknown,
-  deps: RetryChargeDeps = { gateway: stripePaymentIntents },
+  // An entry in REQUIRES_ACTION emails the new regularisation link after commit (VTC-044).
+  deps: RetryChargeDeps = {
+    gateway: stripePaymentIntents,
+    onPaymentRequiresAction: sendPaymentActionRequiredEmailPort,
+  },
 ): Promise<ChargeRetryResult> {
   const correlationId = currentCorrelationId() ?? correlationIdFrom(requestHeaders);
 

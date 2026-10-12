@@ -122,7 +122,9 @@ export function PaymentActionRequiredEmail(props: PaymentActionRequiredEmailProp
         </Link>
       </Text>
 
-      <Text style={{ ...styles.paragraph, marginTop: "24px" }}>{t("Email.paymentActionRequired.confirmation")}</Text>
+      <Text style={{ ...styles.paragraph, marginTop: "24px" }}>
+        {t("Email.paymentActionRequired.confirmation")}
+      </Text>
       <Text style={styles.paragraph}>
         {t("Email.paymentActionRequired.contact")}{" "}
         <Link href={contactUrl} style={styles.link}>

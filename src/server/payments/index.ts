@@ -2,6 +2,7 @@ import "server-only";
 
 import { stripePaymentIntents, stripePaymentSetup } from "@/integrations/stripe";
 
+import { sendPaymentActionRequiredEmailPort } from "./action-required-email";
 import { chargeBooking } from "./charge-booking";
 import { createPaymentSetup, type PaymentSetup } from "./setup-intent";
 
@@ -18,10 +19,14 @@ export function requestPaymentSetup(input: unknown): Promise<PaymentSetup> {
 
 /**
  * `onBookingAccepted` implementation (VTC-033): off-session charge of the accepted booking with
- * the production Stripe gateway (test mode only). Outcomes are logged by `chargeBooking`; an
+ * the production Stripe gateway (test mode only); an entry in `REQUIRES_ACTION` emails the
+ * regularisation link to the customer after commit (VTC-044). Outcomes are logged by `chargeBooking`; an
  * unexpected error propagates to the decision service, which logs it and keeps the booking
  * `ACCEPTED`.
  */
 export async function chargeAcceptedBooking(bookingId: string): Promise<void> {
-  await chargeBooking(bookingId, { gateway: stripePaymentIntents });
+  await chargeBooking(bookingId, {
+    gateway: stripePaymentIntents,
+    onPaymentRequiresAction: sendPaymentActionRequiredEmailPort,
+  });
 }

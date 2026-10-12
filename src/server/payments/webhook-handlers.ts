@@ -11,6 +11,7 @@ import {
 } from "@/integrations/stripe";
 import { logger } from "@/lib/logger";
 
+import { sendPaymentActionRequiredEmailPort } from "./action-required-email";
 import { runRequiresActionPort, type OnPaymentRequiresAction } from "./after-charge";
 import { applyChargeResult } from "./apply-charge";
 
@@ -188,7 +189,11 @@ async function matchPayment(
   return null;
 }
 
-/** Production registry: charge outcome events on the test-mode PaymentIntent gateway. */
+/**
+ * Production registry: charge outcome events on the test-mode PaymentIntent gateway; an entry in
+ * `REQUIRES_ACTION` emails the regularisation link after commit (VTC-044).
+ */
 export const STRIPE_WEBHOOK_HANDLERS: StripeWebhookHandlers = createPaymentIntentWebhookHandlers({
   gateway: stripePaymentIntents,
+  onPaymentRequiresAction: sendPaymentActionRequiredEmailPort,
 });
