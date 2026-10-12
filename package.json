@@ -16,6 +16,8 @@
     "test:coverage": "vitest run --project unit --coverage",
     "postinstall": "prisma generate",
     "test:int": "vitest run --project integration",
+    "test:e2e": "playwright test",
+    "test:e2e:stripe": "playwright test --config playwright.stripe.config.ts",
     "db:up": "docker compose up -d db",
     "db:migrate": "prisma migrate dev",
     "db:deploy": "prisma migrate deploy",

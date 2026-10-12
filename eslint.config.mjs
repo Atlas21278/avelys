@@ -98,6 +98,11 @@ export default defineConfig([
     ignores: TEST_FILES,
     rules: restrictImports(...appRestrictions.patterns, testOnlyImports),
   },
+  {
+    // Playwright fixtures receive a `use` callback (VTC-048): not a React hook.
+    files: ["e2e/**/*.ts", "playwright*.config.ts"],
+    rules: { "react-hooks/rules-of-hooks": "off" },
+  },
   prettier,
   globalIgnores([
     ".next/**",

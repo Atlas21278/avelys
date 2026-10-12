@@ -322,13 +322,13 @@ describe("parseServerEnv", () => {
 
     it("refuse the fake routing adapter in staging and production", () => {
       for (const APP_ENV of ["staging", "production"]) {
-        expect(() =>
-          parseServerEnv({ ...valid, APP_ENV, E2E_FAKE_ROUTING: "true" }),
-        ).toThrowError(/E2E_FAKE_ROUTING \(custom\)/);
-        // Explicitly off is harmless.
-        expect(parseServerEnv({ ...valid, APP_ENV, E2E_FAKE_ROUTING: "false" }).E2E_FAKE_ROUTING).toBe(
-          false,
+        expect(() => parseServerEnv({ ...valid, APP_ENV, E2E_FAKE_ROUTING: "true" })).toThrowError(
+          /E2E_FAKE_ROUTING \(custom\)/,
         );
+        // Explicitly off is harmless.
+        expect(
+          parseServerEnv({ ...valid, APP_ENV, E2E_FAKE_ROUTING: "false" }).E2E_FAKE_ROUTING,
+        ).toBe(false);
       }
     });
 

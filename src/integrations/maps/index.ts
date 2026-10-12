@@ -37,8 +37,7 @@ export function routingProvider(): RoutingProvider {
   });
   const fake = new FakeRoutingProvider();
   instance = {
-    computeRoute: (request) =>
-      (serverEnv().E2E_FAKE_ROUTING ? fake : google).computeRoute(request),
+    computeRoute: (request) => (serverEnv().E2E_FAKE_ROUTING ? fake : google).computeRoute(request),
   };
   return instance;
 }
