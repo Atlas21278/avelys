@@ -1,6 +1,6 @@
 # Emails transactionnels
 
-Source : Master Spec §15, §18, §19 ; ADR-0011 ; BR-50, BR-60. Socle livré par VTC-043 ; les emails métier (régularisation SCA, réception, acceptation…) arrivent avec leurs tickets (VTC-044 et suivants).
+Source : Master Spec §15, §18, §19 ; ADR-0011 ; BR-50, BR-60. Socle livré par VTC-043 ; les emails métier arrivent avec leurs tickets. Livrés : « authentification du paiement requise » (VTC-044, `docs/product/payments.md`, « Email au client »). À venir : réception, acceptation… (EPIC-13).
 
 ## Principe
 
@@ -22,11 +22,12 @@ transaction métier (commit) ──► sendNotification({ kind, bookingId, dedup
 | `src/integrations/email/sender.ts`              | Port `EmailSender` (mockable) et codes d'erreur techniques.                                                                                                                                 |
 | `src/integrations/email/resend.ts`              | Adaptateur Resend : une tentative par appel, délai d'expiration borné (10 s par défaut), **aucune relance automatique**, erreurs du fournisseur ramenées à un code (le message est ignoré). |
 | `src/integrations/email/index.ts`               | `emailSender()` câblé sur l'environnement, créé au premier usage (jamais au build).                                                                                                         |
+| `src/emails/payment-action-required.tsx`        | Gabarit « authentification du paiement requise » (VTC-044) ; envoyé par `src/server/payments/action-required-email.ts`.                                                                     |
 | `src/emails/layout.tsx`, `render.ts`, `i18n.ts` | Mise en page commune (marque Avelys, `DESIGN.md`, styles inline), rendu HTML + texte, textes lus dans les catalogues `src/i18n/messages` (espaces `Email` et `Site.footer`).                |
 
 ## Déduplication et tentatives
 
-- `dedupeKey` (≤ 255 caractères) est choisie par l'appelant, par exemple `booking:{id}:payment-action-required:{paymentId}` : **un email au plus par clé**. Une clé déjà utilisée pour une autre réservation ou un autre type est refusée (`DEDUPE_KEY_CONFLICT`).
+- `dedupeKey` (≤ 255 caractères) est choisie par l'appelant, par exemple `payment-action-required:{paymentId}:{attempt}` (VTC-044) : **un email au plus par clé**. Une clé déjà utilisée pour une autre réservation ou un autre type est refusée (`DEDUPE_KEY_CONFLICT`).
 - `SENT` : aucun nouvel envoi (`skipped` / `ALREADY_SENT`).
 - `PENDING` dont la tentative a commencé il y a moins de `leaseMs` (60 s par défaut, supérieur au délai d'expiration de l'adaptateur) : un autre appel est en cours (`skipped` / `IN_PROGRESS`).
 - `FAILED`, ou `PENDING` abandonné (processus interrompu) : nouvelle tentative, `attempts + 1`. La prise de la tentative est un compare-and-set sur `attempts` : entre appels concurrents, un seul envoie (test d'intégration).

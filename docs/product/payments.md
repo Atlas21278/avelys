@@ -134,14 +134,14 @@ Handlers (`createPaymentIntentWebhookHandlers`, `src/server/payments/webhook-han
 
 ### Port `onPaymentRequiresAction`
 
-`src/server/payments/after-charge.ts` : `onPaymentRequiresAction(paymentId)`, no-op par défaut, appelé **une fois**, après commit de toute entrée en `REQUIRES_ACTION` (chemin synchrone et webhook). L'email avec lien de régularisation s'y branchera (VTC-044) ; il construit le lien avec `paymentRegularizationUrl` (page VTC-042, ci-dessous).
+`src/server/payments/after-charge.ts` : `onPaymentRequiresAction(paymentId)`, appelé **une fois** par transition, après commit de toute entrée en `REQUIRES_ACTION` (débit à l'acceptation, relance VTC-041, webhook). Son échec est journalisé et ne change rien. Implémentation de production : l'email client avec le lien de régularisation (VTC-044, « Email au client » ci-dessous), branché par les trois points d'entrée (`chargeAcceptedBooking`, `runChargeRetry`, `STRIPE_WEBHOOK_HANDLERS`) ; no-op quand un appelant n'en fournit pas (tests).
 
 ### Audit, logs, affichage
 
 - `AuditLog` (acteur `SYSTEM`) : `payment.charge_attempt` (état Payment avant/après, sans id Stripe), `payment.charge` (`bookingRef`, `attempt`, statut, version, montant, devise avant/après + `paymentIntentId` après), `booking.confirm` (`bookingRef`, statut, version).
 - **Exception documentée** à la règle « aucun id Stripe dans l'`AuditLog` » : l'id `pi_…` est autorisé dans `payment.charge` (et dans `before` de `payment.retry`, VTC-041) pour tracer chaque tentative (ni donnée carte, ni donnée personnelle, ni secret ; format `pi_…` validé). Les autres ids Stripe (Customer, SetupIntent, moyen de paiement) restent refusés.
 - **Logs** : `bookingRef`, tentative, statuts, code d'erreur Stripe (`card_declined`…) et nom d'erreur uniquement ; **jamais d'id d'objet Stripe** (PaymentIntent, Customer, SetupIntent, moyen de paiement), de donnée carte ni de donnée personnelle. **Seule exception tolérée** : l'id d'événement webhook `evt_…` (`eventId`), déjà journalisé par l'endpoint depuis VTC-030 pour corréler les livraisons avec le Dashboard ; il ne désigne ni un paiement ni une personne. Il figure aussi dans le log d'échec d'un effet après commit.
-- **Back-office** : le détail d'une réservation affiche le statut du Payment courant, le numéro de tentative et le montant (lus depuis `Payment`, BR-41), sans id Stripe ; en `REQUIRES_ACTION`, le lien de régularisation pour un `ADMIN` (VTC-042). Le passage `ACCEPTED → CONFIRMED` apparaît dans l'historique (acteur « Système »).
+- **Back-office** : le détail d'une réservation affiche le statut du Payment courant, le numéro de tentative et le montant (lus depuis `Payment`, BR-41), sans id Stripe ; l'issue de l'email d'authentification (VTC-044) ; en `REQUIRES_ACTION`, le lien de régularisation pour un `ADMIN` (VTC-042). Le passage `ACCEPTED → CONFIRMED` apparaît dans l'historique (acteur « Système »).
 
 ### Vérification manuelle (test mode)
 
@@ -231,6 +231,19 @@ Décision : DEC-27 (lien de régularisation si une authentification est requise)
 
 Sur le détail d'une réservation, pour un `ADMIN` et un Payment courant `REQUIRES_ACTION` dont le lien est utilisable : bloc « Authentification du client requise » avec le lien (dans la langue du contact de la réservation) et un bouton « Copier le lien de régularisation », pour le transmettre à la main si l'email (VTC-044) échoue. `backOfficeRegularizationLink` revérifie le rôle (`ADMIN`, 2FA) et toutes les conditions du lien. `DISPATCHER` : pas de lien. Sans `PAYMENT_LINK_SECRET` : mention « lien indisponible ».
 
+### Email au client (VTC-044)
+
+À chaque entrée en `REQUIRES_ACTION`, le port `onPaymentRequiresAction` envoie au client un email « Authentification du paiement requise » (`src/server/payments/action-required-email.ts`, gabarit `src/emails/payment-action-required.tsx`), **après commit**, par `sendNotification` (`docs/architecture/email.md`) :
+
+- **Une fois par tentative** : `kind` `PAYMENT_ACTION_REQUIRED`, `dedupeKey` `payment-action-required:{paymentId}:{attempt}` (`src/domain/payment/action-required-email.ts`). Un webhook rejoué, une double livraison ou la même tentative repassée `FAILED → REQUIRES_ACTION` depuis la page de régularisation n'envoient rien de plus ; une relance (VTC-041, `attempt + 1`) qui repasse en `REQUIRES_ACTION` envoie un nouveau lien (les précédents sont alors invalides).
+- **Destinataire** : `Customer.email` de la réservation, lu à l'envoi, jamais stocké. **Langue** : celle du contact de la réservation (`contactLocale`, DEC-25), celle du profil client pour les réservations antérieures à la copie, FR par défaut.
+- **Contenu** : référence publique, date et heure de prise en charge (Europe/Paris), montant TTC figé du Payment, bouton et lien en clair vers `paymentRegularizationUrl` (même langue), lien vers `/contact`. **Texte transactionnel provisoire** (catalogue `Email.paymentActionRequired`, à relire par un associé) : **aucune** échéance (DEC-13), condition d'annulation ou de remboursement (DEC-05), ni mention légale hors pied de page provisoire (DEC-08 / DEC-20, bloquant pour la mise en ligne, #104). Ni adresse, ni téléphone, ni nom, ni donnée carte. Rendu déterministe pour une tentative donnée (aucune horloge dans le gabarit).
+- **Pas d'email avec un lien mort** : si le lien n'est déjà plus utilisable à l'envoi (`isRegularizationLinkUsable` : Payment plus courant ou plus `REQUIRES_ACTION`, réservation plus `ACCEPTED`, prise en charge passée), rien n'est envoyé ni écrit (log `payment action email not sent`, `reason: link_unusable`).
+- **Sans `PAYMENT_LINK_SECRET`** : aucun lien, le rendu refuse ; `Notification` `FAILED` (`EMAIL_RENDER_FAILED`, `errorName: PaymentLinkUnavailableError` dans le log), jamais d'email avec un lien vide.
+- **Échec d'envoi** (fournisseur, configuration, base) : `Notification` `FAILED` avec son code ; **ni `Booking` ni `Payment` ne changent** (règle 10, BR-50, test d'intégration). Le port ne lève jamais. Rappeler `sendPaymentActionRequiredEmail(paymentId)` pour la même tentative relance l'email (RB-04).
+- **Logs** : `bookingRef`, tentative, codes techniques ; **jamais le lien** (il porte le jeton), l'adresse ni le contenu (test d'intégration).
+- **Back-office** : le bloc « Paiement » du détail affiche « Email d'authentification » pour le Payment courant : « Envoyé le … », « Échec de l'envoi · CODE », « En cours d'envoi » ou « Aucun », avec la tentative concernée (dernière tentative du Payment). Ni adresse ni contenu. En cas d'échec, copier le lien de régularisation (ci-dessus) et le transmettre à la main.
+
 ### Rotation de `PAYMENT_LINK_SECRET`
 
 Changer la valeur invalide **tous** les liens en circulation (aucune clé précédente acceptée). Procédure : remplacer la valeur dans le secret manager, redéployer, puis copier un nouveau lien depuis le back-office pour chaque Payment `REQUIRES_ACTION` encore utile (ou le renvoyer par email, VTC-044).
@@ -244,6 +257,17 @@ Prérequis de l'étape 2 (clés de test, `stripe listen`), plus `PAYMENT_LINK_SE
 3. Valider l'authentification dans la fenêtre de test Stripe : « Paiement reçu » ; le webhook `payment_intent.succeeded` passe le Payment « Payé » et la réservation « Confirmée » (historique : « Acceptée → Confirmée » par Système).
 4. Rouvrir le lien : « Lien invalide ou expiré » (404). Variante : échouer l'authentification → message d'échec, puis Payment « Échec » par webhook.
 5. Logs : ni jeton, ni URL de lien, ni `client_secret`, ni id Stripe.
+
+### Vérification manuelle de l'email (test mode, VTC-044)
+
+Prérequis ci-dessus, plus une **clé Resend de test** (`RESEND_API_KEY`) et `EMAIL_FROM` (domaine de test Resend) dans le `.env` local ; envoi vers **sa propre adresse** uniquement :
+
+1. Créer une demande avec sa propre adresse email et la carte `4000 0027 6000 3184`, l'accepter : Payment « Authentification client requise ».
+2. Email reçu (une seule fois, même après `stripe events resend` de l'événement) dans la langue choisie au formulaire : référence, date et heure de Paris, montant TTC, bouton « Authentifier le paiement », lien de contact ; aucune échéance, aucune condition de remboursement.
+3. Back-office : « Email d'authentification : Envoyé le … (tentative n° 1) ».
+4. Ouvrir le bouton de l'email : page de régularisation (étapes 2 à 4 ci-dessus).
+5. Variante échec : retirer `RESEND_API_KEY` (ou `PAYMENT_LINK_SECRET`), refaire 1 : « Échec de l'envoi · EMAIL_NOT_CONFIGURED » (ou `EMAIL_RENDER_FAILED`), réservation et Payment inchangés, lien copiable depuis le back-office (avec `PAYMENT_LINK_SECRET`).
+6. Logs : ni lien, ni jeton, ni adresse.
 
 ## Idempotence
 

@@ -9,7 +9,7 @@ Source : Master Spec §18, §26, §27, §33.4, §42. ADR-0005.
 - Clients : magic link email ; compte facultatif.
 - RBAC : `ADMIN`, `DISPATCHER`, `DRIVER`, `CUSTOMER`, contrôlé côté serveur à chaque action.
 - Accès guest à une réservation : lien signé à usage limité envoyé par email (pas de devinette par référence publique seule).
-- Lien de régularisation SCA (VTC-042) : jeton HMAC-SHA256 (`PAYMENT_LINK_SECRET`) sur `paymentId` + `attempt`, sans stockage ; utilisable seulement tant que le Payment courant attend le client (`REQUIRES_ACTION`, même tentative, réservation `ACCEPTED`, prise en charge future) ; tout refus → même 404 générique ; page `noindex`, `no-store`, `no-referrer`, affichage limité à référence, date et montant. Détail : `docs/product/payments.md` (« Régularisation SCA »).
+- Lien de régularisation SCA (VTC-042) : jeton HMAC-SHA256 (`PAYMENT_LINK_SECRET`) sur `paymentId` + `attempt`, sans stockage ; utilisable seulement tant que le Payment courant attend le client (`REQUIRES_ACTION`, même tentative, réservation `ACCEPTED`, prise en charge future) ; tout refus → même 404 générique ; page `noindex`, `no-store`, `no-referrer`, affichage limité à référence, date et montant. Envoyé au seul `Customer.email` de la réservation (VTC-044), une fois par tentative ; le lien et son jeton ne sont jamais journalisés ni stockés (`Notification` ne garde ni adresse ni contenu) ; le dashboard Resend affiche le contenu des emails envoyés, donc le lien : l'accès au compte Resend est à réserver aux associés. Détail : `docs/product/payments.md` (« Régularisation SCA », « Email au client »).
 
 ### Back-office (VTC-016)
 
