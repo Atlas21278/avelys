@@ -32,27 +32,26 @@ const fakeDriver: StripeDriver = {
 
 /** The first frame (searched repeatedly) where `selector` exists. */
 async function frameWith(page: Page, selector: string, timeout = 30_000): Promise<Frame> {
+  const search = async (): Promise<Frame | null> => {
+    for (const frame of page.frames()) {
+      // A frame may detach while it is searched: it simply does not match.
+      const count = await frame
+        .locator(selector)
+        .count()
+        .catch(() => 0);
+      if (count > 0) return frame;
+    }
+    return null;
+  };
   let found: Frame | null = null;
   await expect
-    .poll(
-      async () => {
-        for (const frame of page.frames()) {
-          if (
-            await frame
-              .locator(selector)
-              .count()
-              .catch(() => 0)
-          ) {
-            found = frame;
-            return true;
-          }
-        }
-        return false;
-      },
-      { timeout, message: `no Stripe frame with ${selector}` },
-    )
+    .poll(async () => (found = await search()) !== null, {
+      timeout,
+      message: `no Stripe frame with ${selector}`,
+    })
     .toBe(true);
-  return found as unknown as Frame;
+  if (!found) throw new Error(`no Stripe frame with ${selector}`);
+  return found;
 }
 
 const stripeTestModeDriver: StripeDriver = {

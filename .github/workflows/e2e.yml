@@ -1,0 +1,199 @@
+name: E2E
+
+# End-to-end suite (VTC-048, ADR-0012, docs/process/e2e.md): quote → booking request → admin
+# acceptance → test payment, SCA regularisation, double submission.
+# - `e2e`: fake Stripe and Maps stubs, no key needed, on every PR touching the application.
+# - `e2e-stripe-test-mode`: the same scenarios against Stripe TEST MODE, opt-in: it runs only
+#   when the repository secrets STRIPE_SECRET_KEY_TEST and NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY_TEST
+#   exist, and reports a notice (not a failure) otherwise.
+on:
+  pull_request:
+    paths:
+      - "src/**"
+      - "prisma/**"
+      - "e2e/**"
+      - "playwright*.config.ts"
+      - "next.config.ts"
+      - "package.json"
+      - "pnpm-lock.yaml"
+      - ".github/workflows/e2e.yml"
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: e2e-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  NEXT_TELEMETRY_DISABLED: "1"
+  # Throwaway credential of the job-scoped service container below; not a secret.
+  E2E_DATABASE_URL: postgresql://avelys:avelys_ci@localhost:5432/avelys_e2e
+
+jobs:
+  e2e:
+    name: e2e
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: avelys
+          POSTGRES_PASSWORD: avelys_ci
+          POSTGRES_DB: avelys_e2e
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U avelys -d avelys_e2e"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+      - name: Install Chromium for Playwright
+        run: pnpm exec playwright install --with-deps chromium
+      # Built without runtime variables, like the Docker image: env is validated at runtime.
+      - run: pnpm build
+      - name: E2E (fake Stripe, Maps stubs)
+        run: pnpm test:e2e
+
+      # Test data only: example.com addresses, test card numbers, a throwaway database. The admin
+      # session (e2e/.auth) is never uploaded.
+      - name: Upload Playwright report, traces and screenshots
+        if: ${{ failure() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: e2e-fake-report
+          path: |
+            playwright-report/
+            test-results/
+          retention-days: 7
+          if-no-files-found: ignore
+      - name: Upload test report
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: e2e-fake-junit
+          path: reports/
+          retention-days: 14
+          if-no-files-found: ignore
+
+  e2e-stripe-test-mode:
+    name: e2e-stripe-test-mode
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: avelys
+          POSTGRES_PASSWORD: avelys_ci
+          POSTGRES_DB: avelys_e2e
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U avelys -d avelys_e2e"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+    steps:
+      # Secrets are given to the steps that need them only, never to the job (pnpm install runs
+      # third-party scripts). Test mode keys only: anything else stops the job before any call.
+      - name: Stripe test mode keys
+        id: keys
+        env:
+          STRIPE_SECRET_KEY_TEST: ${{ secrets.STRIPE_SECRET_KEY_TEST }}
+          NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY_TEST: ${{ secrets.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY_TEST }}
+        run: |
+          if [ -z "$STRIPE_SECRET_KEY_TEST" ] || [ -z "$NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY_TEST" ]; then
+            echo "::notice title=E2E Stripe test mode skipped::STRIPE_SECRET_KEY_TEST / NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY_TEST are not set; the fake Stripe job covers the same scenarios (docs/process/e2e.md)."
+            echo "present=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          case "$STRIPE_SECRET_KEY_TEST" in sk_test_*|rk_test_*) ;; *) echo "::error::STRIPE_SECRET_KEY_TEST is not a test mode key"; exit 1 ;; esac
+          case "$NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY_TEST" in pk_test_*) ;; *) echo "::error::NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY_TEST is not a test mode key"; exit 1 ;; esac
+          echo "present=true" >> "$GITHUB_OUTPUT"
+
+      - if: ${{ steps.keys.outputs.present == 'true' }}
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - if: ${{ steps.keys.outputs.present == 'true' }}
+        uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+
+      - if: ${{ steps.keys.outputs.present == 'true' }}
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      - if: ${{ steps.keys.outputs.present == 'true' }}
+        run: pnpm install --frozen-lockfile
+      - if: ${{ steps.keys.outputs.present == 'true' }}
+        name: Install Chromium for Playwright
+        run: pnpm exec playwright install --with-deps chromium
+      - if: ${{ steps.keys.outputs.present == 'true' }}
+        run: pnpm build
+
+      - if: ${{ steps.keys.outputs.present == 'true' }}
+        name: Install the Stripe CLI (pinned, checksum verified)
+        env:
+          STRIPE_CLI_VERSION: 1.53.1
+        run: |
+          base="https://github.com/stripe/stripe-cli/releases/download/v${STRIPE_CLI_VERSION}"
+          archive="stripe_${STRIPE_CLI_VERSION}_linux_x86_64.tar.gz"
+          curl -fsSLO "${base}/${archive}"
+          curl -fsSLO "${base}/stripe-linux-checksums.txt"
+          grep " ${archive}\$" stripe-linux-checksums.txt | sha256sum --check --strict
+          mkdir -p "$RUNNER_TEMP/stripe-cli"
+          tar -xzf "$archive" -C "$RUNNER_TEMP/stripe-cli" stripe
+          echo "$RUNNER_TEMP/stripe-cli" >> "$GITHUB_PATH"
+
+      # Webhooks: `stripe listen` forwards the test mode events of this account to the app; its
+      # signing secret is specific to this session, masked, and handed to the app only.
+      - if: ${{ steps.keys.outputs.present == 'true' }}
+        name: Forward Stripe test mode webhooks to the app
+        env:
+          STRIPE_API_KEY: ${{ secrets.STRIPE_SECRET_KEY_TEST }}
+        run: |
+          secret="$(stripe listen --print-secret)"
+          echo "::add-mask::$secret"
+          echo "STRIPE_WEBHOOK_SECRET_TEST=$secret" >> "$GITHUB_ENV"
+          nohup stripe listen \
+            --events payment_intent.succeeded,payment_intent.payment_failed,payment_intent.requires_action,payment_intent.canceled \
+            --forward-to http://localhost:3100/api/webhooks/stripe \
+            > "$RUNNER_TEMP/stripe-listen.log" 2>&1 &
+
+      - if: ${{ steps.keys.outputs.present == 'true' }}
+        name: E2E (Stripe test mode)
+        env:
+          STRIPE_SECRET_KEY_TEST: ${{ secrets.STRIPE_SECRET_KEY_TEST }}
+          NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY_TEST: ${{ secrets.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY_TEST }}
+        run: pnpm test:e2e:stripe
+
+      - name: Upload Playwright report, traces and screenshots
+        if: ${{ failure() && steps.keys.outputs.present == 'true' }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: e2e-stripe-test-mode-report
+          path: |
+            playwright-report/
+            test-results/
+          retention-days: 7
+          if-no-files-found: ignore

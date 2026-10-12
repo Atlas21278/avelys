@@ -76,7 +76,9 @@ export function e2eConfig(mode: StripeMode) {
       baseURL: APP_URL,
       locale: "fr-FR",
       timezoneId: "Europe/Paris",
-      trace: "retain-on-failure",
+      // Stripe test mode: no trace (it would record Stripe.js traffic of the test account);
+      // screenshots only.
+      trace: mode === "fake" ? "retain-on-failure" : "off",
       screenshot: "only-on-failure",
       video: "off",
     },

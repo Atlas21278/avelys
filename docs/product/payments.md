@@ -145,6 +145,8 @@ Handlers (`createPaymentIntentWebhookHandlers`, `src/server/payments/webhook-han
 
 ### Vérification manuelle (test mode)
 
+Automatisé par l'E2E (VTC-048, `docs/process/e2e.md`) : cartes `4242…`, `3155`, `3184`, régularisation SCA et double clic, à chaque PR (Stripe simulé) et en Stripe test mode quand les clés de test sont configurées en CI. Les vérifications ci-dessous restent utiles pour ce que l'E2E ne voit pas (Dashboard, `stripe events resend`, logs).
+
 Pour le propriétaire, compte Stripe en **test mode**, clés de test dans le `.env` local uniquement, `stripe listen --forward-to localhost:3000/api/webhooks/stripe` actif (voir « Webhooks en local »), `pnpm dev` :
 
 1. Créer une demande par le formulaire public (`/reservation`, étape 1 ci-dessus) avec la carte de test choisie ci-dessous, puis l'accepter depuis `/admin/reservations/[référence]`.
@@ -250,6 +252,8 @@ Changer la valeur invalide **tous** les liens en circulation (aucune clé préc�
 
 ### Vérification manuelle de la régularisation (test mode)
 
+Étapes 1 à 4 (sans la variante d'échec) automatisées par le scénario 2 de l'E2E (VTC-048, `docs/process/e2e.md`).
+
 Prérequis de l'étape 2 (clés de test, `stripe listen`), plus `PAYMENT_LINK_SECRET` dans le `.env` local :
 
 1. Créer une demande avec la carte `4000 0027 6000 3184` (authentification toujours requise), l'accepter : Payment « Authentification client requise ».
@@ -328,6 +332,8 @@ Procédure avec la [Stripe CLI](https://docs.stripe.com/stripe-cli), compte Stri
 3. Dans un autre terminal : `stripe trigger payment_intent.succeeded` (ou tout autre type). Attendu : 200 ; une ligne `ProcessedWebhookEvent` ; un second envoi du même événement (`stripe events resend <evt_id>`) répond 200 sans nouvel effet.
 
 Les tests d'intégration n'utilisent ni la CLI ni le réseau : ils signent des événements localement (`Stripe.webhooks.generateTestHeaderString`) avec un secret jetable généré à l'exécution.
+
+E2E (VTC-048, `docs/process/e2e.md`) : en mode Stripe simulé, la fausse API Stripe signe ses événements `payment_intent.*` comme Stripe et les poste à `/api/webhooks/stripe` (même vérification, même déduplication) ; en mode Stripe test mode, `stripe listen --forward-to http://localhost:3100/api/webhooks/stripe` et son secret de session (`--print-secret`).
 
 ## Facturation
 

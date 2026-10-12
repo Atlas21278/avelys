@@ -12,7 +12,7 @@ export type StripeMode = "fake" | "stripe-test";
 
 /** Port of the application under test (3000 is often taken by `pnpm dev`). */
 export const APP_PORT = Number(process.env.E2E_APP_PORT ?? 3100);
-export const APP_URL = `http://127.0.0.1:${APP_PORT}`;
+export const APP_URL = `http://localhost:${APP_PORT}`;
 
 /** Port of the local fake Stripe API (`e2e/stubs/fake-stripe-server.ts`). */
 export const FAKE_STRIPE_PORT = Number(process.env.E2E_FAKE_STRIPE_PORT ?? 12111);
@@ -75,7 +75,9 @@ export function appEnv(mode: StripeMode): Record<string, string> {
     ...baseEnv(),
     NODE_ENV: "production",
     PORT: String(APP_PORT),
-    HOSTNAME: "127.0.0.1",
+    // `localhost`, not an IP: Next.js resolves middleware rewrites against `localhost`, and a
+    // different bind host turns the locale rewrite into an external proxy loop.
+    HOSTNAME: "localhost",
     NEXT_TELEMETRY_DISABLED: "1",
     TRUSTED_PROXIES: "",
     AUTH_SESSION_MAX_AGE_SECONDS: "",
