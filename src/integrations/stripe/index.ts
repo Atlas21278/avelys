@@ -5,6 +5,10 @@ import type Stripe from "stripe";
 import { serverEnv } from "@/lib/env/server";
 
 import { createStripeClient } from "./client";
+import {
+  createStripePaymentAuthenticationGateway,
+  type PaymentAuthenticationGateway,
+} from "./payment-authentication";
 import { createStripePaymentIntentGateway, type PaymentIntentGateway } from "./payment-intents";
 import { createStripePaymentSetupGateway, type PaymentSetupGateway } from "./setup-intents";
 import { createStripeWebhookVerifier, type StripeWebhookVerifier } from "./webhooks";
@@ -15,6 +19,10 @@ export {
   StripeConfigError,
   type StripeConfigErrorReason,
 } from "./client";
+export {
+  type PaymentAuthenticationGateway,
+  type PaymentIntentForAuthentication,
+} from "./payment-authentication";
 export {
   PAYMENT_INTENT_ID,
   PaymentIntentError,
@@ -42,6 +50,7 @@ let client: Stripe | undefined;
 let verifier: StripeWebhookVerifier | undefined;
 let paymentSetup: PaymentSetupGateway | undefined;
 let paymentIntents: PaymentIntentGateway | undefined;
+let paymentAuthentication: PaymentAuthenticationGateway | undefined;
 
 /**
  * Server Stripe client (test mode only), created on first use: neither import nor `next build`
@@ -75,4 +84,13 @@ export function stripePaymentSetup(): PaymentSetupGateway {
 export function stripePaymentIntents(): PaymentIntentGateway {
   paymentIntents ??= createStripePaymentIntentGateway(stripeClient());
   return paymentIntents;
+}
+
+/**
+ * PaymentIntent read with its client secret, for the customer's SCA regularisation page only
+ * (VTC-042): same lazy, test-mode-only rules as `stripeClient()`.
+ */
+export function stripePaymentAuthentication(): PaymentAuthenticationGateway {
+  paymentAuthentication ??= createStripePaymentAuthenticationGateway(stripeClient());
+  return paymentAuthentication;
 }

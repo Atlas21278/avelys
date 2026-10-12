@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { localeAlternates } from "./alternates";
-import { routing } from "./routing";
+import { routing, type AppPathname, type StaticPathname } from "./routing";
 
 describe("localeAlternates", () => {
   it("links the French and English home pages both ways", () => {
@@ -23,7 +23,11 @@ describe("localeAlternates", () => {
   });
 
   it("gives every page the same reciprocal set whatever the current locale", () => {
-    for (const href of Object.keys(routing.pathnames) as (keyof typeof routing.pathnames)[]) {
+    const staticPathnames = (Object.keys(routing.pathnames) as AppPathname[]).filter(
+      (href): href is StaticPathname => !href.includes("["),
+    );
+    expect(staticPathnames.length).toBe(Object.keys(routing.pathnames).length - 1);
+    for (const href of staticPathnames) {
       const fr = localeAlternates(href, "fr");
       const en = localeAlternates(href, "en");
       expect(en.languages).toEqual(fr.languages);

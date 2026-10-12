@@ -6,6 +6,7 @@ vi.mock("@stripe/stripe-js/pure", () => ({ loadStripe: (key: string) => loadStri
 
 const {
   StripeBrowserKeyError,
+  authenticatePayment,
   confirmCardSetup,
   confirmationOf,
   paymentElementsOptions,
@@ -172,5 +173,90 @@ describe("confirmCardSetup (mocked Stripe.js)", () => {
   ])("gives a generic failure when the read-back is %s", async (_label, retrieve) => {
     const client = stripe(() => Promise.reject(new Error("network")), retrieve);
     await expect(confirmCardSetup(client, input)).resolves.toEqual({ ok: false, message: null });
+  });
+});
+
+describe("authenticatePayment (VTC-042)", () => {
+  // Fake client secret and ids: not secrets.
+  const input = {
+    clientSecret: "pi_Fake1_secret_Fake2",
+    paymentMethodId: "pm_Fake3",
+    returnUrl: "https://avelys.example/",
+  };
+  const intent = (status: string) => ({ paymentIntent: { status } }) as never;
+  const cardError = (message: string) => ({ error: { type: "card_error", message } }) as never;
+
+  function client() {
+    return {
+      confirmPayment: vi.fn(),
+      handleNextAction: vi.fn(),
+      retrievePaymentIntent: vi.fn(),
+    };
+  }
+
+  it("confirms the same PaymentIntent with the saved payment method, without redirect", async () => {
+    const stripe = client();
+    stripe.confirmPayment.mockResolvedValue(intent("succeeded"));
+
+    await expect(authenticatePayment(stripe, { ...input, step: "confirm" })).resolves.toEqual({
+      outcome: "settled",
+    });
+    expect(stripe.confirmPayment).toHaveBeenCalledWith({
+      clientSecret: input.clientSecret,
+      confirmParams: { payment_method: "pm_Fake3", return_url: "https://avelys.example/" },
+      redirect: "if_required",
+    });
+    expect(stripe.handleNextAction).not.toHaveBeenCalled();
+  });
+
+  it("runs the pending action of a requires_action PaymentIntent", async () => {
+    const stripe = client();
+    stripe.handleNextAction.mockResolvedValue(intent("processing"));
+
+    await expect(authenticatePayment(stripe, { ...input, step: "next_action" })).resolves.toEqual({
+      outcome: "settled",
+    });
+    expect(stripe.handleNextAction).toHaveBeenCalledWith({ clientSecret: input.clientSecret });
+    expect(stripe.confirmPayment).not.toHaveBeenCalled();
+  });
+
+  it("keeps Stripe's localised message for a card error", async () => {
+    const stripe = client();
+    stripe.confirmPayment.mockResolvedValue(cardError("Authentification refusée."));
+
+    await expect(authenticatePayment(stripe, { ...input, step: "confirm" })).resolves.toEqual({
+      outcome: "failed",
+      message: "Authentification refusée.",
+    });
+    expect(stripe.retrievePaymentIntent).not.toHaveBeenCalled();
+  });
+
+  it("reads the PaymentIntent back when Stripe.js throws, and trusts only Stripe's status", async () => {
+    const stripe = client();
+    stripe.confirmPayment.mockRejectedValue(new Error("network"));
+    stripe.retrievePaymentIntent.mockResolvedValue(intent("succeeded"));
+
+    await expect(authenticatePayment(stripe, { ...input, step: "confirm" })).resolves.toEqual({
+      outcome: "settled",
+    });
+    expect(stripe.retrievePaymentIntent).toHaveBeenCalledWith(input.clientSecret);
+  });
+
+  it("fails generically on an API error or an unsettled status", async () => {
+    const stripe = client();
+    stripe.confirmPayment.mockResolvedValue({ error: { type: "api_error", message: "raw" } });
+    stripe.retrievePaymentIntent.mockResolvedValue(intent("requires_payment_method"));
+
+    await expect(authenticatePayment(stripe, { ...input, step: "confirm" })).resolves.toEqual({
+      outcome: "failed",
+      message: null,
+    });
+
+    stripe.handleNextAction.mockResolvedValue(intent("requires_action"));
+    stripe.retrievePaymentIntent.mockRejectedValue(new Error("network"));
+    await expect(authenticatePayment(stripe, { ...input, step: "next_action" })).resolves.toEqual({
+      outcome: "failed",
+      message: null,
+    });
   });
 });

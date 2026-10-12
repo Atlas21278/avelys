@@ -4,7 +4,7 @@ import { getTranslations } from "next-intl/server";
 import { localeAlternates } from "./alternates";
 import { localeFromParams } from "./locale";
 import type messages from "./messages/fr.json";
-import type { AppPathname } from "./routing";
+import type { StaticPathname } from "./routing";
 
 /** A content page with its own `Pages.<key>` namespace (`metaTitle`, `metaDescription`). */
 export type PageKey = keyof (typeof messages)["Pages"];
@@ -13,7 +13,7 @@ export type PageKey = keyof (typeof messages)["Pages"];
  * `generateMetadata` for a public content page: translated title and description, canonical
  * URL and reciprocal hreflang (FR, EN, `x-default`) for its internal pathname.
  */
-export function pageMetadata(key: PageKey, href: AppPathname) {
+export function pageMetadata(key: PageKey, href: StaticPathname) {
   return async function generateMetadata({
     params,
   }: {

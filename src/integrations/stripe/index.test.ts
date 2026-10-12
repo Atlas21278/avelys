@@ -9,6 +9,7 @@ vi.mock("@/lib/env/server", () => ({ serverEnv: () => serverEnv() }));
 
 const {
   stripeClient,
+  stripePaymentAuthentication,
   stripePaymentIntents,
   stripePaymentSetup,
   stripeWebhooks,
@@ -43,6 +44,15 @@ describe("Stripe adapter wiring", () => {
       STRIPE_WEBHOOK_SECRET: undefined,
     });
     expect(() => stripePaymentIntents()).toThrowError(StripeConfigError);
+  });
+
+  it("gives no regularisation read gateway without a usable test key (live keys refused)", () => {
+    expect(() => stripePaymentAuthentication()).toThrowError(StripeConfigError);
+    serverEnv.mockReturnValueOnce({
+      STRIPE_SECRET_KEY: ["sk", "live", "notARealKey000"].join("_"),
+      STRIPE_WEBHOOK_SECRET: undefined,
+    });
+    expect(() => stripePaymentAuthentication()).toThrowError(StripeConfigError);
   });
 
   it("fails as not configured when the webhook signing secret is missing", () => {

@@ -16,6 +16,15 @@ const PENDING_PAGES: readonly AppPathname[] = ["/compte"];
 
 const pathnames = Object.keys(routing.pathnames) as AppPathname[];
 
+const SAMPLE_TOKEN = "sampleToken";
+
+/** A static pathname as is; the dynamic one with a sample parameter. */
+function hrefOf(pathname: AppPathname) {
+  return pathname === "/paiement/[token]"
+    ? { pathname, params: { token: SAMPLE_TOKEN } }
+    : (pathname as Exclude<AppPathname, "/paiement/[token]">);
+}
+
 function pageFile(pathname: AppPathname): string {
   return `${localeDir}${pathname === "/" ? "" : pathname}/page.tsx`;
 }
@@ -25,8 +34,9 @@ function pagesOnDisk(dir = localeDir, prefix = ""): string[] {
   const pages: string[] = [];
   for (const entry of readdirSync(dir, { withFileTypes: true })) {
     if (entry.isFile() && entry.name === "page.tsx") pages.push(prefix || "/");
-    // Private folders (`_components`) and dynamic segments (the 404 catch-all) are not pages.
-    if (entry.isDirectory() && !/^[_[(]/.test(entry.name)) {
+    // Private folders (`_components`), groups and catch-all segments (the 404) are not pages;
+    // a single dynamic segment (`/paiement/[token]`, VTC-042) is.
+    if (entry.isDirectory() && !/^(?:_|\(|\[\[|\[\.\.\.)/.test(entry.name)) {
       pages.push(...pagesOnDisk(`${dir}/${entry.name}`, `${prefix}/${entry.name}`));
     }
   }
@@ -48,9 +58,17 @@ describe("public routes", () => {
   });
 
   it.each(pathnames)("%s has an English URL under /en", (pathname) => {
-    const en = getPathname({ href: pathname, locale: "en" });
+    const en = getPathname({ href: hrefOf(pathname), locale: "en" });
     expect(en === "/en" || en.startsWith("/en/")).toBe(true);
-    expect(getPathname({ href: pathname, locale: "fr" })).toBe(pathname);
+    expect(getPathname({ href: hrefOf(pathname), locale: "fr" })).toBe(
+      pathname.replace("[token]", SAMPLE_TOKEN),
+    );
+  });
+
+  it("gives the regularisation page a translated English slug (DEC-21)", () => {
+    expect(getPathname({ href: hrefOf("/paiement/[token]"), locale: "en" })).toBe(
+      `/en/payment/${SAMPLE_TOKEN}`,
+    );
   });
 
   it("gives English slugs to the legal pages", () => {

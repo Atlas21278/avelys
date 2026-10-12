@@ -1,6 +1,7 @@
 "use client";
 
 import NextLink from "next/link";
+import { useParams } from "next/navigation";
 import { useLocale, useTranslations } from "next-intl";
 
 import { getPathname, usePathname } from "@/i18n/navigation";
@@ -16,6 +17,17 @@ export function LocaleSwitcher() {
   const t = useTranslations("LocaleSwitcher");
   const current = useLocale();
   const pathname = usePathname();
+  const params = useParams<{ token?: string }>();
+  // Typing only: the routing table now holds a dynamic pathname (`/paiement/[token]`, VTC-042),
+  // whose page renders its own language link and never this selector. Should it ever be rendered
+  // there without its parameter, the selector is omitted rather than pointing to a broken URL.
+  let href: Parameters<typeof getPathname>[0]["href"];
+  if (pathname === "/paiement/[token]") {
+    if (!params.token) return null;
+    href = { pathname, params: { token: params.token } };
+  } else {
+    href = pathname;
+  }
 
   return (
     <nav aria-label={t("label")}>
@@ -25,7 +37,7 @@ export function LocaleSwitcher() {
           return (
             <li key={locale}>
               <NextLink
-                href={getPathname({ href: pathname, locale })}
+                href={getPathname({ href, locale })}
                 hrefLang={locale}
                 lang={locale}
                 aria-current={active ? "page" : undefined}

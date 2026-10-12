@@ -20,6 +20,7 @@ export const REDACTED_PATHS = [
   "*.cardNumber",
   "*.DATABASE_URL",
   "*.BETTER_AUTH_SECRET",
+  "*.PAYMENT_LINK_SECRET",
   "*.GOOGLE_MAPS_SERVER_API_KEY",
   "*.NEXT_PUBLIC_GOOGLE_MAPS_BROWSER_API_KEY",
   "*.STRIPE_SECRET_KEY",
@@ -30,6 +31,10 @@ export const REDACTED_PATHS = [
   "*.replyTo",
   "*.recipient",
   "*.stripe-signature",
+  // SCA regularisation page (VTC-042): the PaymentIntent client secret and the signed link.
+  "*.clientSecret",
+  "*.client_secret",
+  "*.regularizationUrl",
   "*.apiKey",
   "*.backupCodes",
   "*.totpURI",

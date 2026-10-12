@@ -9,7 +9,7 @@ Une autorisation carte expire après une durée limitée (à revérifier dans la
 1. **Demande (`REQUESTED`)** — `SetupIntent` avec SCA client (`usage: 'off_session'`), Customer Stripe **créé pour ce parcours** (la réutilisation d'un Customer, réservée à un compte authentifié, est hors périmètre de VTC-031). Aucun débit. Détail : « Étape 1 : enregistrement du moyen de paiement » ci-dessous.
 2. **Acceptation (`ACCEPTED`)** — `PaymentIntent` `off_session: true, confirm: true`, capture automatique, montant **figé côté serveur, contrôlé contre le snapshot** (jamais recalculé avec une règle plus récente, BR-13). Détail : « Étape 2 : débit off-session à l'acceptation » ci-dessous.
    - Succès → Payment `PAID` → Booking `CONFIRMED`.
-   - Authentification requise → Payment `REQUIRES_ACTION` ; email au client avec lien de paiement (VTC-042, VTC-044) ; Booking reste `ACCEPTED`.
+   - Authentification requise → Payment `REQUIRES_ACTION` ; le client authentifie le paiement sur une page atteinte par un lien signé (VTC-042, « Régularisation SCA » ci-dessous), envoyé par email (VTC-044) ou copié depuis le back-office ; Booking reste `ACCEPTED`.
    - Échec → Payment `FAILED` ; statut visible sur le détail back-office (notification admin par email : EPIC-13) ; Booking reste `ACCEPTED` jusqu'à résolution ou annulation (délai DEC-13).
    - **Pas de relance automatique** (DEC-27) : un associé relance manuellement depuis le back-office (VTC-041), après vérification du statut Stripe.
 3. **Annulation** — remboursement total ou partiel selon la politique d'annulation (**DEC-05, À VALIDER**). Tant qu'elle n'est pas validée, le remboursement est une action admin manuelle avec montant saisi et journalisé.
@@ -134,14 +134,14 @@ Handlers (`createPaymentIntentWebhookHandlers`, `src/server/payments/webhook-han
 
 ### Port `onPaymentRequiresAction`
 
-`src/server/payments/after-charge.ts` : `onPaymentRequiresAction(paymentId)`, no-op par défaut, appelé **une fois**, après commit de toute entrée en `REQUIRES_ACTION` (chemin synchrone et webhook). L'email avec lien de régularisation s'y branchera (VTC-044, page VTC-042).
+`src/server/payments/after-charge.ts` : `onPaymentRequiresAction(paymentId)`, no-op par défaut, appelé **une fois**, après commit de toute entrée en `REQUIRES_ACTION` (chemin synchrone et webhook). L'email avec lien de régularisation s'y branchera (VTC-044) ; il construit le lien avec `paymentRegularizationUrl` (page VTC-042, ci-dessous).
 
 ### Audit, logs, affichage
 
 - `AuditLog` (acteur `SYSTEM`) : `payment.charge_attempt` (état Payment avant/après, sans id Stripe), `payment.charge` (`bookingRef`, `attempt`, statut, version, montant, devise avant/après + `paymentIntentId` après), `booking.confirm` (`bookingRef`, statut, version).
 - **Exception documentée** à la règle « aucun id Stripe dans l'`AuditLog` » : l'id `pi_…` est autorisé dans `payment.charge` (et dans `before` de `payment.retry`, VTC-041) pour tracer chaque tentative (ni donnée carte, ni donnée personnelle, ni secret ; format `pi_…` validé). Les autres ids Stripe (Customer, SetupIntent, moyen de paiement) restent refusés.
 - **Logs** : `bookingRef`, tentative, statuts, code d'erreur Stripe (`card_declined`…) et nom d'erreur uniquement ; **jamais d'id d'objet Stripe** (PaymentIntent, Customer, SetupIntent, moyen de paiement), de donnée carte ni de donnée personnelle. **Seule exception tolérée** : l'id d'événement webhook `evt_…` (`eventId`), déjà journalisé par l'endpoint depuis VTC-030 pour corréler les livraisons avec le Dashboard ; il ne désigne ni un paiement ni une personne. Il figure aussi dans le log d'échec d'un effet après commit.
-- **Back-office** : le détail d'une réservation affiche le statut du Payment courant, le numéro de tentative et le montant (lus depuis `Payment`, BR-41), sans id Stripe. Le passage `ACCEPTED → CONFIRMED` apparaît dans l'historique (acteur « Système »).
+- **Back-office** : le détail d'une réservation affiche le statut du Payment courant, le numéro de tentative et le montant (lus depuis `Payment`, BR-41), sans id Stripe ; en `REQUIRES_ACTION`, le lien de régularisation pour un `ADMIN` (VTC-042). Le passage `ACCEPTED → CONFIRMED` apparaît dans l'historique (acteur « Système »).
 
 ### Vérification manuelle (test mode)
 
@@ -178,7 +178,7 @@ Déroulé (modèle de tentatives ci-dessus, même ligne `Payment`, aucune migrat
      - **délai d'envoi** (`CHARGE_SEND_BUDGET_MS`) = 250 s + 30 s de marge = **280 s** : le débit initial (`chargeBooking`) et la relance vérifient, juste avant d'envoyer la création du PaymentIntent, qu'il s'est écoulé au plus 280 s depuis la réservation de la tentative ; sinon **rien n'est envoyé**, la tentative reste interrompue (débit initial : `technical_error` `SendDeadlineExceeded`, Payment `PENDING` ; relance : `PAYMENT_ATTEMPT_INTERRUPTED`) et une relance ultérieure la traite. Pourquoi : le débit initial fait **deux** appels Stripe après sa réservation (liste, puis création) ; sans ce délai, la création pourrait partir jusqu'à 250 s après la réservation et arriver chez Stripe jusqu'à 500 s après. Le délai couvre aussi les pauses (GC, attente de verrou) ;
      - **fenêtre de vol** (`CHARGE_IN_FLIGHT_GRACE_MS`) = délai d'envoi 280 s + durée maximale de la création 250 s + 60 s de marge = **590 s** (9 min 50 s). Passé ce délai après la réservation, la création n'est plus envoyée et celle qui l'a été a soit atteint Stripe, soit échoué définitivement.
      - Réserve : le délai d'expiration de stripe-node est un délai d'**inactivité** du socket, pas une échéance totale ; une connexion qui reçoit des octets au compte-gouttes peut dépasser 80 s par essai. Les marges couvrent ce cas en pratique.
-     - Hypothèse : `updatedAt` d'un Payment **non rattaché** n'est écrit que par la réservation de sa tentative (aujourd'hui, `applyChargeResult` n'écrit qu'en rattachant). Toute autre écriture sur un Payment non rattaché (régularisation VTC-042, remboursements) décalerait le début de la fenêtre vers plus tard, donc dans le sens prudent, mais doit être signalée ici ; VTC-042 ne doit pas écrire sur un Payment non rattaché sans revoir ce point.
+     - Hypothèse : `updatedAt` d'un Payment **non rattaché** n'est écrit que par la réservation de sa tentative (aujourd'hui, `applyChargeResult` n'écrit qu'en rattachant). Toute autre écriture sur un Payment non rattaché (régularisation VTC-042, remboursements) décalerait le début de la fenêtre vers plus tard, donc dans le sens prudent, mais doit être signalée ici ; VTC-042 ne doit pas écrire sur un Payment non rattaché sans revoir ce point. Vérifié pour VTC-042 : la page de régularisation et le lien back-office n'écrivent **aucune** ligne (Payment, Booking, AuditLog, test d'intégration), et le lien n'est utilisable que pour un Payment rattaché (`REQUIRES_ACTION` avec un PaymentIntent).
    - Les annulations de PaymentIntents ne sont **pas auditées** dans l'`AuditLog` (seule la réservation de tentative l'est) : une annulation ne déplace jamais d'argent et reste visible dans le Dashboard Stripe (statut « Canceled », motif `abandoned`). Si la relance échoue après une partie des annulations, celles-ci restent faites.
 3. **Réservation de la tentative** (transaction) : mise à jour conditionnelle `attempt + 1`, `version + 1`, `stripePaymentIntentId` remis à nul, filtrée sur `version = expectedPaymentVersion`, le statut et la tentative lus ; `AuditLog` `payment.retry` (acteur `ADMIN` + id utilisateur ; `bookingRef`, statut, montant, `attempt` et version avant/après ; `paymentIntentId` de la tentative précédente dans `before` quand elle a atteint Stripe). 0 ligne (double clic, deux associés) → `PAYMENT_CONCURRENT_UPDATE`, rien d'autre.
 4. **Nouveau PaymentIntent** avec les règles de l'étape 2 (montant figé, `off_session`, `confirm`, clé `booking:{bookingId}:charge:{attempt}`, métadonnées `bookingRef` + `attempt`), puis application du résultat par `applyChargeResult` : `stripePaymentIntentId` = celui de la nouvelle tentative ; `FAILED → PAID` (+ `ACCEPTED → CONFIRMED`), `FAILED → REQUIRES_ACTION` (port `onPaymentRequiresAction` après commit), ou `FAILED` conservé (pas une transition, PaymentIntent tout de même enregistré). Erreur technique → `PAYMENT_ATTEMPT_INTERRUPTED` : Payment inchangé hormis `attempt` (déjà audité) ; la relance suivante revérifie Stripe (un PaymentIntent créé malgré tout est rapproché ou annulé).
@@ -194,6 +194,56 @@ Mêmes prérequis que l'étape 2 (test mode, `stripe listen`, `pnpm dev`), conne
 2. **Succès non enregistré puis relance** : avec `4242 4242 4242 4242`, arrêter `stripe listen` et couper le réseau de l'application au moment de l'acceptation (ou simuler l'erreur technique) pour laisser le Payment « En attente » (tentative 1) alors que le PaymentIntent a réussi chez Stripe ; relancer → message « paiement déjà reçu », réservation « Confirmée », **aucun nouveau PaymentIntent** dans le Dashboard.
 3. Un `DISPATCHER` ne voit pas le bouton ; un double clic ou deux associés simultanés ne créent qu'une tentative.
 4. Logs : aucun id `pi_`, `cus_`, `pm_`, `seti_`.
+
+## Régularisation SCA (VTC-042)
+
+Décision : DEC-27 (lien de régularisation si une authentification est requise). Le client authentifie **le même PaymentIntent, avec la même carte, pour le montant figé**, en ligne ; la page **n'écrit aucun statut** : `PAID`/`CONFIRMED` ou `FAILED` viennent des webhooks ci-dessus (BR-41).
+
+### Lien signé
+
+- Jeton (`src/domain/payment/regularization-token.ts`, pur) : `base64url("v1:{paymentId}:{attempt}")` suivi de la signature HMAC-SHA256 (43 caractères base64url), clé `PAYMENT_LINK_SECRET` (≥ 32 caractères, validée par Zod, masquée par le logger). Alphabet `[A-Za-z0-9_-]` seul (pas de point : le proxy de locale ignore les chemins à point). Comparaison en temps constant ; encodage canonique exigé (une variante d'écriture des mêmes octets est refusée).
+- **Aucune migration, rien de stocké** : le jeton est lié à la **tentative**. Une relance (VTC-041) incrémente `Payment.attempt` et rend inutilisables les liens précédents.
+- **Validité liée à l'état, aucune durée inventée** (`isRegularizationLinkUsable`, `src/domain/payment/regularization.ts`) : le Payment existe, est le Payment courant de sa réservation, a le même `attempt`, est `REQUIRES_ACTION` avec un PaymentIntent, la réservation est `ACCEPTED` et la prise en charge est dans le futur. Une échéance absolue s'ajoutera avec DEC-13 (hors périmètre).
+- Tout refus (jeton altéré ou d'une autre clé, autre tentative, Payment non courant, statut différent, réservation non `ACCEPTED`, prise en charge passée, `PAYMENT_LINK_SECRET` absent) → **la même page 404 générique** « Lien invalide ou expiré », sans raison affichée et sans appel Stripe (pas d'oracle). La raison est journalisée côté serveur (`bookingRef` si connu), jamais le jeton.
+- Générateur : `paymentRegularizationUrl(paymentId, attempt, locale)` (`src/server/payments/regularization-link.ts`), à partir d'`APP_URL`. Sans `PAYMENT_LINK_SECRET` : aucun lien (null), erreur de configuration journalisée par nom de variable, jamais de valeur.
+
+### Page client
+
+- Routes : `/paiement/[token]` (FR) et `/en/payment/[token]` (EN, slug traduit, DEC-21), `src/app/[locale]/paiement/[token]/`. Hors navigation, hors sitemap ; en-têtes `Referrer-Policy: no-referrer`, `Cache-Control: no-store`, `X-Robots-Tag: noindex, nofollow` (`next.config.ts`), plus les balises `robots` et `referrer` équivalentes. Pas d'alternates hreflang ; le lien de langue garde le jeton.
+- Affichage minimal : référence publique, date et heure de prise en charge (Europe/Paris), montant TTC du Payment. Ni nom, ni adresse, ni email, ni téléphone.
+- Le serveur relit chez Stripe le PaymentIntent de la tentative courante (`retrievePaymentIntentForAuthentication`, seul appel qui lit son `client_secret`) et vérifie qu'il correspond au Payment (id, test mode, Customer, `metadata.attempt`, montant, devise) ; sinon : « ne peut plus être finalisé en ligne ». Selon son état (`regularizationStep`) :
+
+| PaymentIntent                                                                                             | Page                                                                                                                     |
+| --------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
+| `requires_payment_method` avec `authentication_required` (l'une des deux formes), `requires_confirmation` | bouton « Authentifier le paiement » : `stripe.confirmPayment` avec le `client_secret` et le moyen de paiement enregistré |
+| `requires_action`                                                                                         | même bouton : `stripe.handleNextAction`                                                                                  |
+| `succeeded`, `processing`                                                                                 | « Paiement reçu », en cours de confirmation (webhook)                                                                    |
+| tout autre état                                                                                           | « Ce paiement ne peut plus être finalisé en ligne » + lien `/contact`                                                    |
+| Stripe injoignable, clé publiable absente                                                                 | « Paiement momentanément indisponible »                                                                                  |
+
+- Méthode Stripe.js reprise de la doc Stripe (« Save and reuse », vérifiée le 2026-10-02) : après un refus `authentication_required`, confirmer le PaymentIntent refusé avec son `client_secret` via `confirmPayment`. Le moyen de paiement enregistré (`Payment.stripePaymentMethodId`) est passé explicitement (`confirmParams.payment_method`) ; `redirect: "if_required"` (une carte ne redirige pas, la fenêtre 3-D Secure s'ouvre dans la page) ; `return_url` = accueil du site, jamais le lien. Aucun champ carte, aucun montant venant du navigateur (BR-12). Clé `pk_test_` seulement (garde VTC-030).
+- Le résultat affiché par le navigateur est indicatif : la réservation passe `CONFIRMED` à la réception de `payment_intent.succeeded` (ou le Payment `FAILED` sur `payment_intent.payment_failed`, par exemple une authentification refusée). Une fois le Payment sorti de `REQUIRES_ACTION`, le lien répond « invalide ou expiré ».
+- Échec d'authentification : la page déjà ouverte permet de réessayer (le webhook a pu passer le Payment `FAILED` ; une réussite fait `FAILED → PAID`), un rechargement répond « lien invalide », d'où le message « réessayer depuis cette page tant qu'elle est ouverte, sinon contactez-nous ». Une nouvelle tentative dans la page fait aussi `FAILED → REQUIRES_ACTION` et rappelle `onPaymentRequiresAction` : l'email de VTC-044 est dédupliqué par tentative (`payment-action-required:{paymentId}:{attempt}`).
+- Ce que reçoit tout détenteur du lien (`client_secret`, `pm_…`) et pourquoi c'est accepté : `docs/architecture/security.md`.
+- **Rate limiting** de la route : relève d'INFRA-005 (#67), comme les autres routes publiques ; le jeton n'est pas devinable, la limite protège la base et Stripe.
+
+### Back-office
+
+Sur le détail d'une réservation, pour un `ADMIN` et un Payment courant `REQUIRES_ACTION` dont le lien est utilisable : bloc « Authentification du client requise » avec le lien (dans la langue du contact de la réservation) et un bouton « Copier le lien de régularisation », pour le transmettre à la main si l'email (VTC-044) échoue. `backOfficeRegularizationLink` revérifie le rôle (`ADMIN`, 2FA) et toutes les conditions du lien. `DISPATCHER` : pas de lien. Sans `PAYMENT_LINK_SECRET` : mention « lien indisponible ».
+
+### Rotation de `PAYMENT_LINK_SECRET`
+
+Changer la valeur invalide **tous** les liens en circulation (aucune clé précédente acceptée). Procédure : remplacer la valeur dans le secret manager, redéployer, puis copier un nouveau lien depuis le back-office pour chaque Payment `REQUIRES_ACTION` encore utile (ou le renvoyer par email, VTC-044).
+
+### Vérification manuelle de la régularisation (test mode)
+
+Prérequis de l'étape 2 (clés de test, `stripe listen`), plus `PAYMENT_LINK_SECRET` dans le `.env` local :
+
+1. Créer une demande avec la carte `4000 0027 6000 3184` (authentification toujours requise), l'accepter : Payment « Authentification client requise ».
+2. Sur le détail back-office (compte `ADMIN`), copier le lien de régularisation et l'ouvrir dans une fenêtre privée : référence, date, montant, bouton « Authentifier le paiement ».
+3. Valider l'authentification dans la fenêtre de test Stripe : « Paiement reçu » ; le webhook `payment_intent.succeeded` passe le Payment « Payé » et la réservation « Confirmée » (historique : « Acceptée → Confirmée » par Système).
+4. Rouvrir le lien : « Lien invalide ou expiré » (404). Variante : échouer l'authentification → message d'échec, puis Payment « Échec » par webhook.
+5. Logs : ni jeton, ni URL de lien, ni `client_secret`, ni id Stripe.
 
 ## Idempotence
 
