@@ -50,7 +50,7 @@ describe("PaymentActionRequiredEmail", () => {
 
       AUTHENTIFICATION DU PAIEMENT REQUISE
 
-      Votre banque demande une authentification pour régler votre course. Le montant est celui de votre réservation : il ne peut pas être modifié.
+      Votre banque demande une authentification pour régler votre course. Le montant est celui de votre réservation.
 
       Votre course
 
@@ -88,7 +88,7 @@ describe("PaymentActionRequiredEmail", () => {
 
       PAYMENT AUTHENTICATION REQUIRED
 
-      Your bank asks for authentication to pay for your ride. The amount is the one of your booking: it cannot be changed.
+      Your bank asks for authentication to pay for your ride. The amount is the one of your booking.
 
       Your ride
 

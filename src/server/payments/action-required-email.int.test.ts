@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 
 import Stripe from "stripe";
-import { afterAll, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 // Test-only value built at run time, set before the environment is first read: not a secret.
 const LINK_KEY = ["integration", "tests", "only", "payment-link-key-vtc044"].join("-");
@@ -17,7 +17,8 @@ vi.mock("@/lib/logger", () => ({ logger: () => log }));
 
 const { verifyRegularizationToken } = await import("@/domain/payment/regularization-token");
 const { db } = await import("@/server/db");
-const { latestPaymentActionEmail } = await import("@/server/admin/bookings");
+const { getBackOfficeBooking } = await import("@/server/admin/bookings");
+const { enrolTotp, signIn, staff } = await import("@/test/staff-session");
 const { bookingWithPayment, chargeState, fakePaymentIntents, resetChargeData } =
   await import("@/test/charge-fixtures");
 const { sendPaymentActionRequiredEmail } = await import("./action-required-email");
@@ -130,7 +131,33 @@ const logged = () =>
     log.debug.mock.calls,
   ]);
 
+let adminHeaders = new Headers();
+
+async function resetUsers() {
+  const client = db();
+  await client.session.deleteMany();
+  await client.account.deleteMany();
+  await client.twoFactor.deleteMany();
+  await client.verification.deleteMany();
+  await client.rateLimit.deleteMany();
+  await client.user.deleteMany();
+}
+
+/** What the back-office detail shows for the email, read as an ADMIN with 2FA. */
+async function backOfficeEmail(fixture: ChargeFixture) {
+  const detail = await getBackOfficeBooking(adminHeaders, fixture.reference);
+  if (!detail) throw new Error("booking not found");
+  return detail.paymentActionEmail;
+}
+
 describe("payment authentication email (integration)", () => {
+  beforeAll(async () => {
+    await resetUsers();
+    const { jar } = await signIn(await staff("ADMIN"));
+    await enrolTotp(jar);
+    adminHeaders = jar.headers();
+  });
+
   beforeEach(async () => {
     stripe = fakePaymentIntents();
     sent.length = 0;
@@ -140,6 +167,7 @@ describe("payment authentication email (integration)", () => {
 
   afterAll(async () => {
     await resetChargeData();
+    await resetUsers();
     await db().$disconnect();
   });
 
@@ -181,8 +209,8 @@ describe("payment authentication email (integration)", () => {
         attempts: 1,
       }),
     ]);
-    expect(await latestPaymentActionEmail(fixture.bookingId, fixture.paymentId)).toMatchObject({
-      status: "SENT",
+    expect(await backOfficeEmail(fixture)).toMatchObject({
+      state: "sent",
       attempt: 1,
       lastErrorCode: null,
     });
@@ -241,10 +269,7 @@ describe("payment authentication email (integration)", () => {
       `payment-action-required:${fixture.paymentId}:1`,
       `payment-action-required:${fixture.paymentId}:2`,
     ]);
-    expect(await latestPaymentActionEmail(fixture.bookingId, fixture.paymentId)).toMatchObject({
-      status: "SENT",
-      attempt: 2,
-    });
+    expect(await backOfficeEmail(fixture)).toMatchObject({ state: "sent", attempt: 2 });
   });
 
   it("writes in the language of the booking contact", async () => {
@@ -287,12 +312,65 @@ describe("payment authentication email (integration)", () => {
     ).resolves.toMatchObject({ outcome: "failed", code: "EMAIL_TIMEOUT" });
 
     expect(await rows(fixture)).toEqual(before);
-    expect(await latestPaymentActionEmail(fixture.bookingId, fixture.paymentId)).toMatchObject({
-      status: "FAILED",
+    expect(await backOfficeEmail(fixture)).toMatchObject({
+      state: "failed",
       attempt: 1,
       lastErrorCode: "EMAIL_TIMEOUT",
       sentAt: null,
     });
+  });
+
+  it("sends the email on a re-entry of the same attempt when the first send failed", async () => {
+    const fixture = await bookingWithPayment();
+    const intent = await requiresActionByWebhookOnly(fixture);
+    send.mockResolvedValueOnce({ ok: false, code: "EMAIL_PROVIDER_ERROR" });
+    await deliver(event("payment_intent.payment_failed", intent.id));
+    expect(sent).toHaveLength(0);
+    expect(await backOfficeEmail(fixture)).toMatchObject({ state: "failed", attempt: 1 });
+
+    // The customer fails 3-D Secure in the page, then tries again: same attempt, REQUIRES_ACTION
+    // again, the port runs again and the FAILED email of this attempt is retried.
+    stripe.update(intent.id, { lastPaymentErrorCode: "payment_intent_authentication_failure" });
+    await deliver(event("payment_intent.payment_failed", intent.id));
+    stripe.update(intent.id, { status: "requires_action", lastPaymentErrorCode: null });
+    await deliver(event("payment_intent.requires_action", intent.id));
+
+    expect((await chargeState(fixture)).payment).toMatchObject({
+      status: "REQUIRES_ACTION",
+      attempt: 1,
+    });
+    expect(send).toHaveBeenCalledTimes(2);
+    expect(sent).toHaveLength(1);
+    expect(await notifications(fixture)).toEqual([
+      expect.objectContaining({
+        dedupeKey: `payment-action-required:${fixture.paymentId}:1`,
+        status: "SENT",
+        attempts: 2,
+      }),
+    ]);
+    expect(await backOfficeEmail(fixture)).toMatchObject({ state: "sent", attempt: 1 });
+  });
+
+  it("shows a PENDING email older than the send lease as interrupted on the back-office", async () => {
+    const fixture = await bookingWithPayment();
+    await db().notification.create({
+      data: {
+        bookingId: fixture.bookingId,
+        kind: "PAYMENT_ACTION_REQUIRED",
+        locale: "fr",
+        dedupeKey: `payment-action-required:${fixture.paymentId}:1`,
+        status: "PENDING",
+        attempts: 1,
+        lastAttemptAt: new Date(Date.now() - 10 * 60_000),
+      },
+    });
+    expect(await backOfficeEmail(fixture)).toMatchObject({ state: "interrupted", attempt: 1 });
+
+    await db().notification.updateMany({
+      where: { bookingId: fixture.bookingId },
+      data: { lastAttemptAt: new Date() },
+    });
+    expect(await backOfficeEmail(fixture)).toMatchObject({ state: "sending", attempt: 1 });
   });
 
   it("never sends an email without a link (PAYMENT_LINK_SECRET missing)", async () => {
@@ -349,7 +427,7 @@ describe("payment authentication email (integration)", () => {
 
     expect(send).not.toHaveBeenCalled();
     expect(await notifications(fixture)).toEqual([]);
-    expect(await latestPaymentActionEmail(fixture.bookingId, fixture.paymentId)).toBeNull();
+    expect(await backOfficeEmail(fixture)).toBeNull();
   });
 
   it("never throws, even when the database fails", async () => {

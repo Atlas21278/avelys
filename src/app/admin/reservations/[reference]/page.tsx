@@ -319,8 +319,8 @@ function DateTime({ instant }: { instant: Date }) {
 function PaymentActionEmail({ email }: { email: PaymentActionEmailStatus | null }) {
   if (!email) return <span className="text-graphite">Aucun</span>;
   const attempt = email.attempt ? ` (tentative n° ${email.attempt})` : "";
-  switch (email.status) {
-    case "SENT":
+  switch (email.state) {
+    case "sent":
       return (
         <span>
           Envoyé
@@ -333,7 +333,7 @@ function PaymentActionEmail({ email }: { email: PaymentActionEmailStatus | null 
           <span className="text-sm text-graphite">{attempt}</span>
         </span>
       );
-    case "FAILED":
+    case "failed":
       return (
         <span className="border-l-2 border-rubric pl-2">
           <span className="font-semibold">Échec de l’envoi</span>
@@ -343,10 +343,18 @@ function PaymentActionEmail({ email }: { email: PaymentActionEmailStatus | null 
           </span>
         </span>
       );
-    case "PENDING":
+    case "sending":
       return (
         <span>
           En cours d’envoi<span className="text-sm text-graphite">{attempt}</span>
+        </span>
+      );
+    case "interrupted":
+      // PENDING older than the send lease: the attempt died, nothing is being sent (RB-04).
+      return (
+        <span className="border-l-2 border-rubric pl-2">
+          <span className="font-semibold">Envoi interrompu — à relancer</span>
+          <span className="text-sm text-graphite">{attempt}</span>
         </span>
       );
   }

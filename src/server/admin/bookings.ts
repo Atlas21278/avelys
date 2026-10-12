@@ -8,12 +8,15 @@ import { BOOKING_STATUSES, type BookingStatus } from "@/domain/booking/status";
 import type { BookingActor } from "@/domain/booking/transitions";
 import {
   attemptOfPaymentActionRequiredKey,
+  paymentActionEmailState,
   paymentActionRequiredKeyPrefix,
+  type PaymentActionEmailState,
 } from "@/domain/payment/action-required-email";
-import type { NotificationStatus, Prisma } from "@/generated/prisma/client";
+import type { Prisma } from "@/generated/prisma/client";
 import { parisDayEnd, parisDayStart } from "@/lib/dates";
 import { checkAccess, type StaffIdentity } from "@/server/auth/access";
 import { db } from "@/server/db";
+import { NOTIFICATION_DEFAULTS } from "@/server/notifications/send-notification";
 
 import { BOOKING_LIST_PAGE_SIZE, type BookingListQuery } from "./booking-list-query";
 
@@ -226,11 +229,11 @@ export interface BookingAuditEntry {
 
 /** Latest "payment authentication required" email of the current Payment (VTC-044). */
 export type PaymentActionEmailStatus = Readonly<{
-  status: NotificationStatus;
+  /** `interrupted`: PENDING older than the send lease, to be sent again. */
+  state: Exclude<PaymentActionEmailState, "none">;
   /** Charge attempt the email was for. */
   attempt: number | null;
   sentAt: Date | null;
-  lastAttemptAt: Date | null;
   /** Technical code of the latest failure (EMAIL_TIMEOUT…), never a message or an address. */
   lastErrorCode: string | null;
 }>;
@@ -338,10 +341,11 @@ export async function getBackOfficeBooking(
 
 /**
  * The latest `PAYMENT_ACTION_REQUIRED` notification of a Payment of `bookingId` (highest
- * attempt), or null when none was ever created. Status, dates and technical code only: no
- * address, no content (BR-60). No access check: callers check it.
+ * attempt), or null when none was ever created. State, dates and technical code only: no
+ * address, no content (BR-60). Module-private: reached through `getBackOfficeBooking`, which
+ * checks access.
  */
-export async function latestPaymentActionEmail(
+async function latestPaymentActionEmail(
   bookingId: string,
   paymentId: string,
 ): Promise<PaymentActionEmailStatus | null> {
@@ -361,10 +365,11 @@ export async function latestPaymentActionEmail(
   });
   // Keys of one Payment differ by their attempt only: the highest is the latest.
   const [latest] = rows
-    .map(({ dedupeKey, ...row }) => ({
-      ...row,
-      attempt: attemptOfPaymentActionRequiredKey(dedupeKey),
-    }))
+    .map((row) => ({ row, attempt: attemptOfPaymentActionRequiredKey(row.dedupeKey) }))
     .sort((a, b) => (b.attempt ?? 0) - (a.attempt ?? 0));
-  return latest ?? null;
+  if (!latest) return null;
+  const { row, attempt } = latest;
+  const state = paymentActionEmailState(row, new Date(), NOTIFICATION_DEFAULTS.leaseMs);
+  if (state === "none") return null;
+  return { state, attempt, sentAt: row.sentAt, lastErrorCode: row.lastErrorCode };
 }

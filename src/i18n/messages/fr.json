@@ -452,7 +452,7 @@
       "subject": "Authentification requise pour le paiement de votre course {reference}",
       "preview": "Votre banque demande une authentification pour régler votre course.",
       "title": "Authentification du paiement requise",
-      "lead": "Votre banque demande une authentification pour régler votre course. Le montant est celui de votre réservation : il ne peut pas être modifié.",
+      "lead": "Votre banque demande une authentification pour régler votre course. Le montant est celui de votre réservation.",
       "summaryTitle": "Votre course",
       "reference": "Référence",
       "pickup": "Prise en charge",

@@ -42,3 +42,34 @@ export function attemptOfPaymentActionRequiredKey(key: string): number | null {
   const attempt = Number(match[2]);
   return Number.isSafeInteger(attempt) ? attempt : null;
 }
+
+/** What the back-office shows for the latest email of the current Payment. */
+export type PaymentActionEmailState = "none" | "sent" | "failed" | "sending" | "interrupted";
+
+/**
+ * Display state of a notification. A `PENDING` row whose attempt started `leaseMs` ago or more
+ * (or never started) is no longer being sent: the attempt was interrupted and the email is to be
+ * sent again (the next call of the email service retries it). `leaseMs` is the send lease of the
+ * notification service, injected: no clock and no I/O here.
+ */
+export function paymentActionEmailState(
+  notification: Readonly<{
+    status: "PENDING" | "SENT" | "FAILED";
+    lastAttemptAt: Date | null;
+  }> | null,
+  now: Date,
+  leaseMs: number,
+): PaymentActionEmailState {
+  if (!notification) return "none";
+  switch (notification.status) {
+    case "SENT":
+      return "sent";
+    case "FAILED":
+      return "failed";
+    case "PENDING":
+      return notification.lastAttemptAt !== null &&
+        now.getTime() - notification.lastAttemptAt.getTime() < leaseMs
+        ? "sending"
+        : "interrupted";
+  }
+}

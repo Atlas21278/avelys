@@ -14,6 +14,7 @@ import {
 import { checkAccess } from "@/server/auth/access";
 import { databaseUnavailableReason } from "@/server/db-errors";
 
+import { sendPaymentActionRequiredEmailPort } from "./action-required-email";
 import {
   type ChargeRetryErrorCode,
   ChargeRetryError,
@@ -21,7 +22,6 @@ import {
   retryBookingCharge,
   type RetryChargeDeps,
 } from "./retry-charge";
-import { sendPaymentActionRequiredEmailPort } from "./action-required-email";
 
 /**
  * Body of the back-office "retry the charge" server action (VTC-041), kept out of the

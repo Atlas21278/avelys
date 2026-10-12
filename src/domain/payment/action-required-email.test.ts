@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   attemptOfPaymentActionRequiredKey,
   InvalidPaymentActionKeyError,
+  paymentActionEmailState,
   paymentActionRequiredDedupeKey,
   paymentActionRequiredKeyPrefix,
 } from "./action-required-email";
@@ -50,6 +51,46 @@ describe("paymentActionRequiredDedupeKey", () => {
       InvalidPaymentActionKeyError,
     );
     expect(() => paymentActionRequiredKeyPrefix(paymentId)).toThrow(InvalidPaymentActionKeyError);
+  });
+});
+
+describe("paymentActionEmailState", () => {
+  const NOW = new Date("2026-10-12T10:00:00Z");
+  const LEASE = 60_000;
+  const at = (msAgo: number) => new Date(NOW.getTime() - msAgo);
+
+  it("is none without a notification", () => {
+    expect(paymentActionEmailState(null, NOW, LEASE)).toBe("none");
+  });
+
+  it("maps SENT and FAILED", () => {
+    expect(paymentActionEmailState({ status: "SENT", lastAttemptAt: at(1) }, NOW, LEASE)).toBe(
+      "sent",
+    );
+    expect(paymentActionEmailState({ status: "FAILED", lastAttemptAt: at(1) }, NOW, LEASE)).toBe(
+      "failed",
+    );
+  });
+
+  it("is sending while the PENDING attempt is younger than the lease", () => {
+    expect(paymentActionEmailState({ status: "PENDING", lastAttemptAt: at(0) }, NOW, LEASE)).toBe(
+      "sending",
+    );
+    expect(
+      paymentActionEmailState({ status: "PENDING", lastAttemptAt: at(LEASE - 1) }, NOW, LEASE),
+    ).toBe("sending");
+  });
+
+  it("is interrupted once the PENDING attempt reaches the lease, or never started", () => {
+    expect(
+      paymentActionEmailState({ status: "PENDING", lastAttemptAt: at(LEASE) }, NOW, LEASE),
+    ).toBe("interrupted");
+    expect(
+      paymentActionEmailState({ status: "PENDING", lastAttemptAt: at(3_600_000) }, NOW, LEASE),
+    ).toBe("interrupted");
+    expect(paymentActionEmailState({ status: "PENDING", lastAttemptAt: null }, NOW, LEASE)).toBe(
+      "interrupted",
+    );
   });
 });
 

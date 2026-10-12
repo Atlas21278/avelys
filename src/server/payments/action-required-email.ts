@@ -31,9 +31,11 @@ import { paymentRegularizationUrl } from "./regularization-link";
  * - Called after the commit that moved a Payment to `REQUIRES_ACTION` (synchronous charge, retry,
  *   webhook), outside any transaction. It writes `Notification` only (through
  *   `sendNotification`), never `Booking` or `Payment` (BR-50, rule 10), and never throws.
- * - One email per Payment and attempt (`payment-action-required:{paymentId}:{attempt}`): a
- *   replayed webhook, or the same attempt entering `REQUIRES_ACTION` again from the regularisation
- *   page, sends nothing more; a retry (VTC-041, `attempt + 1`) sends a new link.
+ * - One email per Payment and attempt (`payment-action-required:{paymentId}:{attempt}`): once
+ *   the email of an attempt is `SENT`, a replayed webhook or the same attempt entering
+ *   `REQUIRES_ACTION` again from the regularisation page sends nothing more. If that email is
+ *   `FAILED` (or `PENDING` past the send lease), such a call retries it under the same key
+ *   (`sendNotification`). A retry of the charge (VTC-041, `attempt + 1`) sends a new link.
  * - Nothing is sent when the link would already be unusable (Payment no longer current or no
  *   longer `REQUIRES_ACTION`, booking no longer `ACCEPTED`, pickup passed): no dead link.
  * - Without `PAYMENT_LINK_SECRET` no link exists: the rendering refuses, the notification is

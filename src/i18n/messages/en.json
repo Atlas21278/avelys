@@ -452,7 +452,7 @@
       "subject": "Authentication required to pay for your ride {reference}",
       "preview": "Your bank asks for authentication to pay for your ride.",
       "title": "Payment authentication required",
-      "lead": "Your bank asks for authentication to pay for your ride. The amount is the one of your booking: it cannot be changed.",
+      "lead": "Your bank asks for authentication to pay for your ride. The amount is the one of your booking.",
       "summaryTitle": "Your ride",
       "reference": "Reference",
       "pickup": "Pick-up",
