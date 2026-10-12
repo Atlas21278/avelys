@@ -18,3 +18,9 @@ overrides:
   deepmerge-ts: ^8.0.2
   # GHSA-3f6p-5ww8-9rcr (high): via prisma; MySQL is not used by Avelys
   mysql2: ^3.24.4
+  # GHSA-68fv-2mgg-jv7q (high): via next>postcss and @prisma/config>c12>magicast.
+  # Remove when those packages depend on >=1.2.2.
+  source-map-js: ^1.2.2
+  # GHSA-wq5f-xc86-pv6w (high, librsvg): via next (optional image optimisation).
+  # Remove when next depends on >=0.35.5.
+  sharp: ^0.35.5
