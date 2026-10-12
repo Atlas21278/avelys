@@ -447,6 +447,23 @@
   "Email": {
     "layout": {
       "notice": "Vous recevez cet email au sujet de votre réservation Avelys."
+    },
+    "paymentActionRequired": {
+      "subject": "Authentification requise pour le paiement de votre course {reference}",
+      "preview": "Votre banque demande une authentification pour régler votre course.",
+      "title": "Authentification du paiement requise",
+      "lead": "Votre banque demande une authentification pour régler votre course. Le montant est celui de votre réservation : il ne peut pas être modifié.",
+      "summaryTitle": "Votre course",
+      "reference": "Référence",
+      "pickup": "Prise en charge",
+      "pickupHint": "heure de Paris",
+      "amount": "Montant TTC",
+      "action": "Authentifier le paiement",
+      "actionText": "Le bouton ouvre la page sécurisée où votre banque vous demande de valider le paiement avec la carte enregistrée lors de votre demande. Aucune nouvelle carte n’est demandée.",
+      "linkFallback": "Si le bouton ne fonctionne pas, copiez ce lien dans votre navigateur :",
+      "confirmation": "Votre réservation sera confirmée une fois le paiement validé. Si vous avez déjà finalisé votre paiement, vous n’avez rien d’autre à faire.",
+      "contact": "Une question ?",
+      "contactLink": "Nous contacter"
     }
   },
   "Regularization": {
