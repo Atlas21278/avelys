@@ -5,6 +5,7 @@ Plateforme de chauffeur privé premium à Paris : devis, réservation, paiement,
 - [`CLAUDE.md`](CLAUDE.md) — règles de travail, commandes, conventions.
 - [`DESIGN.md`](DESIGN.md) et [`PRODUCT.md`](PRODUCT.md) — système visuel et vérité produit.
 - [`docs/`](docs/) — produit, architecture, infra, ADR, processus, backlog.
+- [`docs/process/e2e.md`](docs/process/e2e.md) — tests de bout en bout Playwright (`pnpm test:e2e`).
 
 ## Dépôt privé associé
 

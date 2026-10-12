@@ -9,6 +9,16 @@ import {
   isWebhookSigningSecret,
 } from "@/integrations/stripe/keys";
 
+/** APP_ENV values where the end-to-end test switches may be set (VTC-048). */
+export const E2E_ALLOWED_APP_ENVS: ReadonlySet<string> = new Set(["local", "ci"]);
+
+const LOOPBACK_HOSTS = new Set(["127.0.0.1", "localhost", "[::1]"]);
+
+/** A URL on the local machine only: a test fake never runs on another host. */
+function isLoopbackUrl(value: string): boolean {
+  return LOOPBACK_HOSTS.has(new URL(value).hostname);
+}
+
 /** An empty value (as copied from .env.example) means "not configured". */
 const optionalString = (schema: z.ZodType<string>) =>
   z.preprocess((value) => (value === "" ? undefined : value), schema.optional());
@@ -112,6 +122,33 @@ export const serverEnvSchema = z
     LOG_LEVEL: z
       .enum(["fatal", "error", "warn", "info", "debug", "trace", "silent"])
       .default("info"),
+    // End-to-end test switches (VTC-048, docs/process/e2e.md). TEST ONLY: refused below unless
+    // APP_ENV is `local` or `ci`, so a staging or production deployment that sets them fails its
+    // first request instead of running on a fake. Off / empty by default everywhere.
+    // - E2E_FAKE_ROUTING: the server routing provider is a deterministic in-process table of
+    //   test places (src/integrations/maps/fake-routing.ts): Google is never called.
+    E2E_FAKE_ROUTING: z.preprocess(
+      (value) => (value === "" ? undefined : value),
+      z
+        .enum(["true", "false"])
+        .default("false")
+        .transform((value) => value === "true"),
+    ),
+    // - E2E_STRIPE_API_URL: base URL of the local fake Stripe API the server client talks to
+    //   instead of api.stripe.com (e2e/stubs/fake-stripe-server.ts). Loopback HTTP(S) only.
+    E2E_STRIPE_API_URL: optionalString(z.url({ protocol: /^https?$/ }).refine(isLoopbackUrl)),
+  })
+  // Test switches exist only where tests run (VTC-048): APP_ENV local or ci, and an app served
+  // on the local machine (a deployed APP_URL is never loopback). Reported by variable name only.
+  .superRefine((env, context) => {
+    if (E2E_ALLOWED_APP_ENVS.has(env.APP_ENV) && isLoopbackUrl(env.APP_URL)) return;
+    const message = "test-only switch, refused outside APP_ENV local/ci with a loopback APP_URL";
+    if (env.E2E_FAKE_ROUTING) {
+      context.addIssue({ code: "custom", path: ["E2E_FAKE_ROUTING"], message });
+    }
+    if (env.E2E_STRIPE_API_URL !== undefined) {
+      context.addIssue({ code: "custom", path: ["E2E_STRIPE_API_URL"], message });
+    }
   })
   // The payment link key must not reuse the auth secret (VTC-042): a leak or a rotation of one
   // must never affect the other. Reported by variable name only, never with a value.

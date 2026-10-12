@@ -70,6 +70,8 @@ Sentry (à venir) devra filtrer les URL `/paiement/*` et `/en/payment/*` (breadc
 
 Resend (VTC-043) : `RESEND_API_KEY` lue uniquement par `src/integrations/email` au premier envoi (jamais au build), masquée par le logger ; absente → `EMAIL_NOT_CONFIGURED`, sans effet sur la réservation. Les messages d'erreur du fournisseur (qui peuvent citer une adresse) ne sont ni journalisés ni stockés : seul un code technique l'est. Aucune adresse ni contenu d'email sur `Notification` (`docs/architecture/email.md`).
 
+Interrupteurs de test E2E (VTC-048, `docs/process/e2e.md`) : `E2E_FAKE_ROUTING` (routage par une table de lieux de test) et `E2E_STRIPE_API_URL` (client Stripe serveur dirigé vers une fausse API locale, URL loopback uniquement) sont **refusés par le schéma d'environnement** hors `APP_ENV` `local`/`ci` ou quand l'hôte d'`APP_URL` n'est pas loopback (`localhost`, `127.0.0.1`, `::1`) : un déploiement qui les poserait échoue à sa première requête au lieu de tourner sur un faux. Absents, aucun chemin de production ne change. Les valeurs de l'environnement E2E (`e2e/support/env.ts`) sont des marqueurs de test pour une base jetable, pas des secrets ; les clés Stripe factices sont assemblées à l'exécution (aucun littéral de clé dans le dépôt). Le mode Stripe test mode de la CI reçoit `STRIPE_SECRET_KEY_TEST` et `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY_TEST` (secrets du dépôt, clés **test** vérifiées par préfixe) aux seules étapes qui en ont besoin, jamais à `pnpm install` ; le secret de signature `stripe listen` est masqué et reste dans l'étape de test (jamais dans `$GITHUB_ENV`) ; la Stripe CLI est vérifiée par un SHA-256 épinglé dans le workflow.
+
 gitleaks en CI et en pre-commit recommandé. Claude ne lit ni n'affiche jamais une valeur de secret.
 
 ## RGPD

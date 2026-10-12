@@ -58,7 +58,9 @@ let paymentAuthentication: PaymentAuthenticationGateway | undefined;
  * call fails with a `StripeConfigError`. Tests mock this module rather than reach Stripe.
  */
 export function stripeClient(): Stripe {
-  client ??= createStripeClient(serverEnv().STRIPE_SECRET_KEY);
+  const env = serverEnv();
+  // `E2E_STRIPE_API_URL` is refused by the environment schema outside APP_ENV local/ci (VTC-048).
+  client ??= createStripeClient(env.STRIPE_SECRET_KEY, { apiBaseUrl: env.E2E_STRIPE_API_URL });
   return client;
 }
 

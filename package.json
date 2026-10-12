@@ -16,6 +16,8 @@
     "test:coverage": "vitest run --project unit --coverage",
     "postinstall": "prisma generate",
     "test:int": "vitest run --project integration",
+    "test:e2e": "playwright test",
+    "test:e2e:stripe": "playwright test --config playwright.stripe.config.ts",
     "db:up": "docker compose up -d db",
     "db:migrate": "prisma migrate dev",
     "db:deploy": "prisma migrate deploy",
@@ -46,6 +48,7 @@
     "zod": "^4.6.5"
   },
   "devDependencies": {
+    "@playwright/test": "1.64.0",
     "@tailwindcss/postcss": "^4",
     "@types/node": "^24",
     "@types/pg": "^8.23.1",

@@ -31,6 +31,8 @@ pnpm lint
 pnpm typecheck                   # next typegen + tsc --noEmit
 pnpm test                        # Vitest, projet unit
 pnpm test:int                    # Vitest, projet integration (base avelys_test, migrations appliquées)
+pnpm test:e2e                    # Playwright, Stripe simulé + Maps stubé (après pnpm build ; base avelys_e2e) → docs/process/e2e.md
+pnpm test:e2e:stripe             # idem en Stripe test mode, opt-in (clés de test + stripe listen ; sinon « skipped »)
 pnpm build                       # sans variables d'environnement : validées au premier usage
 ```
 
