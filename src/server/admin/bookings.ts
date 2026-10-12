@@ -197,8 +197,11 @@ const DETAIL_SELECT = {
   cancelledAt: true,
   completedAt: true,
   customer: { select: { name: true, email: true, phone: true, preferredLocale: true } },
-  // Current Payment (VTC-033): status read from Payment (BR-41), attempt and amount. No Stripe id.
-  currentPayment: { select: { status: true, attempt: true, amountCents: true, currency: true } },
+  // Current Payment (VTC-033): status read from Payment (BR-41), attempt and amount, and its
+  // version for the optimistic lock of the manual retry (VTC-041). No Stripe id.
+  currentPayment: {
+    select: { status: true, attempt: true, version: true, amountCents: true, currency: true },
+  },
 } as const satisfies Prisma.BookingSelect;
 
 type DetailRow = Prisma.BookingGetPayload<{ select: typeof DETAIL_SELECT }>;

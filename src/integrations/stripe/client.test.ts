@@ -1,7 +1,14 @@
 import Stripe from "stripe";
 import { describe, expect, it } from "vitest";
 
-import { createStripeClient, STRIPE_API_VERSION, StripeConfigError } from "./client";
+import {
+  createStripeClient,
+  STRIPE_API_VERSION,
+  STRIPE_MAX_NETWORK_RETRIES,
+  STRIPE_REQUEST_MAX_DURATION_MS,
+  STRIPE_TIMEOUT_MS,
+  StripeConfigError,
+} from "./client";
 
 const fake = (prefix: string) => `${prefix}${"A1b2".repeat(6)}`;
 
@@ -18,6 +25,14 @@ function reasonOf(fn: () => unknown): unknown {
 describe("createStripeClient", () => {
   it("pins the API version the SDK is typed for", () => {
     expect(STRIPE_API_VERSION).toBe(Stripe.API_VERSION);
+  });
+
+  it("pins the network settings the in-flight window of a charge is derived from", () => {
+    const client = createStripeClient(fake("sk_test_"));
+    expect(client.getApiField("timeout")).toBe(STRIPE_TIMEOUT_MS);
+    expect(client.getMaxNetworkRetries()).toBe(STRIPE_MAX_NETWORK_RETRIES);
+    // 3 tries of 80 s plus 2 retry delays of at most 5 s.
+    expect(STRIPE_REQUEST_MAX_DURATION_MS).toBe(250_000);
   });
 
   it("refuses a missing key", () => {
