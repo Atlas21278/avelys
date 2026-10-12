@@ -12,8 +12,11 @@ on:
       - "src/**"
       - "prisma/**"
       - "e2e/**"
+      - "public/**"
       - "playwright*.config.ts"
       - "next.config.ts"
+      - "tsconfig.json"
+      - ".nvmrc"
       - "package.json"
       - "pnpm-lock.yaml"
       - ".github/workflows/e2e.yml"
@@ -152,40 +155,41 @@ jobs:
         run: pnpm build
 
       - if: ${{ steps.keys.outputs.present == 'true' }}
-        name: Install the Stripe CLI (pinned, checksum verified)
+        name: Install the Stripe CLI (pinned version and SHA-256)
         env:
           STRIPE_CLI_VERSION: 1.53.1
+          # SHA-256 of stripe_1.53.1_linux_x86_64.tar.gz, computed on 2026-10-12 from the official
+          # release asset (github.com/stripe/stripe-cli/releases/tag/v1.53.1), matching the
+          # release's stripe-linux-checksums.txt. Pinned here rather than read from the release
+          # itself. Upgrading the CLI = new version and new hash, reviewed in a PR.
+          STRIPE_CLI_SHA256: 032fe0b849a9d6a222488bc846445bafeae993af1026b78a8121d02321ca1fd1
         run: |
-          base="https://github.com/stripe/stripe-cli/releases/download/v${STRIPE_CLI_VERSION}"
           archive="stripe_${STRIPE_CLI_VERSION}_linux_x86_64.tar.gz"
-          curl -fsSLO "${base}/${archive}"
-          curl -fsSLO "${base}/stripe-linux-checksums.txt"
-          grep " ${archive}\$" stripe-linux-checksums.txt | sha256sum --check --strict
+          curl -fsSLO "https://github.com/stripe/stripe-cli/releases/download/v${STRIPE_CLI_VERSION}/${archive}"
+          echo "${STRIPE_CLI_SHA256}  ${archive}" | sha256sum --check --strict
           mkdir -p "$RUNNER_TEMP/stripe-cli"
           tar -xzf "$archive" -C "$RUNNER_TEMP/stripe-cli" stripe
           echo "$RUNNER_TEMP/stripe-cli" >> "$GITHUB_PATH"
 
-      # Webhooks: `stripe listen` forwards the test mode events of this account to the app; its
-      # signing secret is specific to this session, masked, and handed to the app only.
-      - if: ${{ steps.keys.outputs.present == 'true' }}
-        name: Forward Stripe test mode webhooks to the app
-        env:
-          STRIPE_API_KEY: ${{ secrets.STRIPE_SECRET_KEY_TEST }}
-        run: |
-          secret="$(stripe listen --print-secret)"
-          echo "::add-mask::$secret"
-          echo "STRIPE_WEBHOOK_SECRET_TEST=$secret" >> "$GITHUB_ENV"
-          nohup stripe listen \
-            --events payment_intent.succeeded,payment_intent.payment_failed,payment_intent.requires_action,payment_intent.canceled \
-            --forward-to http://localhost:3100/api/webhooks/stripe \
-            > "$RUNNER_TEMP/stripe-listen.log" 2>&1 &
-
+      # Webhooks: `stripe listen` forwards the test mode events of this account to the app. Its
+      # signing secret is specific to this session: masked, kept in this step's shell only (never
+      # written to $GITHUB_ENV), and handed to the Playwright run alone.
       - if: ${{ steps.keys.outputs.present == 'true' }}
         name: E2E (Stripe test mode)
         env:
+          STRIPE_API_KEY: ${{ secrets.STRIPE_SECRET_KEY_TEST }}
           STRIPE_SECRET_KEY_TEST: ${{ secrets.STRIPE_SECRET_KEY_TEST }}
           NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY_TEST: ${{ secrets.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY_TEST }}
-        run: pnpm test:e2e:stripe
+        run: |
+          secret="$(stripe listen --print-secret)"
+          echo "::add-mask::$secret"
+          stripe listen \
+            --events payment_intent.succeeded,payment_intent.payment_failed,payment_intent.requires_action,payment_intent.canceled \
+            --forward-to http://localhost:3100/api/webhooks/stripe \
+            > "$RUNNER_TEMP/stripe-listen.log" 2>&1 &
+          listener=$!
+          trap 'kill "$listener" 2>/dev/null || true' EXIT
+          STRIPE_WEBHOOK_SECRET_TEST="$secret" pnpm test:e2e:stripe
 
       - name: Upload Playwright report, traces and screenshots
         if: ${{ failure() && steps.keys.outputs.present == 'true' }}

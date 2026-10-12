@@ -26,6 +26,10 @@ La connexion admin (`e2e/admin.setup.ts`) passe par l'écran de connexion puis l
 
 **Stripe test mode.** Mêmes scénarios, avec le vrai Stripe.js (iframes du Payment Element, page d'authentification de test Stripe) et l'API Stripe en test mode ; les webhooks arrivent par `stripe listen`. Sans les clés, le projet est rapporté « skipped » : ce n'est pas un test affaibli, les mêmes scénarios tournent toujours en mode simulé ; le mode test mode ajoute seulement la vérification contre le vrai Stripe.
 
+**Événements d'autres runs (compte de test partagé).** `stripe listen` relaie tous les événements `payment_intent.*` du compte de test, y compris ceux d'autres runs, du développement local ou du Dashboard. Le handler de production les traite sans effet : le PaymentIntent est relu chez Stripe puis rapproché par `stripePaymentIntentId`, sinon par `metadata.bookingRef` + même Customer + tentative courante. Une référence inconnue de la base E2E, un autre Customer ou une autre tentative donnent « ignored », réponse 200, aucune écriture Payment/Booking ; seul l'identifiant d'événement est enregistré (déduplication). Couvert en intégration (`src/server/payments/payment-webhooks.int.test.ts`, « ignores a PaymentIntent unknown to Stripe or to the application » et suivants). En mode simulé, la fausse API n'émet que les événements de son propre run.
+
+**Montant débité.** Les scénarios de paiement vérifient que le montant du PaymentIntent détenu par Stripe (faux ou test mode) est égal, en centimes entiers, au `Payment`, au total TTC figé de la réservation et au prix affiché au client.
+
 ## Google Maps : jamais appelé
 
 - Serveur : `E2E_FAKE_ROUTING=true` remplace le routage Google par une table fixe de lieux de test (`src/integrations/maps/fake-routing.ts`, `fake-places.ts`) ; une distance est une entrée de table, jamais un calcul à vol d'oiseau ; un lieu inconnu n'a pas de prix.
@@ -33,10 +37,10 @@ La connexion admin (`e2e/admin.setup.ts`) passe par l'écran de connexion puis l
 
 ## Interrupteurs de test (refusés hors local / CI)
 
-| Variable             | Effet                                                                  | Garde                                                                                         |
-| -------------------- | ---------------------------------------------------------------------- | --------------------------------------------------------------------------------------------- |
-| `E2E_FAKE_ROUTING`   | routage serveur par la table de test                                   | refusée par le schéma d'environnement si `APP_ENV` vaut `staging` ou `production`             |
-| `E2E_STRIPE_API_URL` | le client Stripe serveur vise la fausse API au lieu d'`api.stripe.com` | idem, et URL HTTP(S) **loopback** uniquement ; les clés restent soumises à la garde test mode |
+| Variable             | Effet                                                                  | Garde                                                                                                         |
+| -------------------- | ---------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------- |
+| `E2E_FAKE_ROUTING`   | routage serveur par la table de test                                   | refusée par le schéma d'environnement hors `APP_ENV` `local`/`ci` ou si l'hôte d'`APP_URL` n'est pas loopback |
+| `E2E_STRIPE_API_URL` | le client Stripe serveur vise la fausse API au lieu d'`api.stripe.com` | idem, et URL HTTP(S) **loopback** uniquement ; les clés restent soumises à la garde test mode                 |
 
 Une valeur posée par erreur en staging ou production fait échouer la validation de l'environnement (nom de la variable seulement, jamais sa valeur) : l'application ne démarre pas sur un faux. Tests unitaires : `src/lib/env/schema.test.ts`. Aucun chemin de production ne change de comportement : sans ces variables, routage et client Stripe sont ceux de production.
 
@@ -74,7 +78,7 @@ Une clé live est refusée par le schéma d'environnement, par l'adaptateur et p
 
 - Déclenchement : PR touchant `src/**`, `prisma/**`, `e2e/**`, la config Playwright, `next.config.ts`, `package.json`, `pnpm-lock.yaml` ou le workflow ; push sur `main` ; manuel.
 - Job **`e2e`** : PostgreSQL 17 en service (base `avelys_e2e`), `pnpm build`, `pnpm test:e2e`. Aucun secret. En cas d'échec : rapport HTML, traces et captures en artefact (7 jours) ; rapport JUnit toujours (14 jours). Données de test uniquement (adresses `example.com`, cartes de test, base jetable) ; l'état de session admin n'est pas publié.
-- Job **`e2e-stripe-test-mode`** : ne fait rien d'autre qu'une notice tant que les secrets manquent. Avec les secrets : vérification du préfixe test mode, Stripe CLI épinglée (somme de contrôle vérifiée), `stripe listen` (secret de signature de session masqué), `pnpm test:e2e:stripe`. Les secrets ne sont exposés qu'aux étapes qui en ont besoin, jamais à `pnpm install`. Pas de trace Playwright dans ce mode (captures seulement).
+- Job **`e2e-stripe-test-mode`** : ne fait rien d'autre qu'une notice tant que les secrets manquent. Avec les secrets : vérification du préfixe test mode, Stripe CLI épinglée (version et SHA-256 codés en dur dans le workflow, calculés depuis l’asset officiel de la release), `stripe listen` et `pnpm test:e2e:stripe` dans la même étape (secret de signature de session masqué, jamais écrit dans `$GITHUB_ENV`, transmis au seul run Playwright ; absent alors que les clés sont présentes → échec, pas « skipped »). Les secrets ne sont exposés qu'aux étapes qui en ont besoin, jamais à `pnpm install`. Pas de trace Playwright dans ce mode (captures seulement).
 - Passer ces jobs en check requis relève du ruleset (propriétaire).
 
 ### Action propriétaire : secrets du mode Stripe test mode

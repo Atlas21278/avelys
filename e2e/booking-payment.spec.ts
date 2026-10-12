@@ -1,8 +1,8 @@
 import type { Page } from "@playwright/test";
 
 import { expect, test } from "./base";
-import { countBookingsForEmail } from "./support/db";
-import { stripeTestModeKeys } from "./support/env";
+import { chargedAmounts, countBookingsForEmail } from "./support/db";
+import { stripeTestModeKeys, type StripeMode } from "./support/env";
 import {
   acceptBooking,
   expectStatuses,
@@ -12,6 +12,7 @@ import {
   sendRequest,
   testEmail,
 } from "./support/flows";
+import { stripePaymentIntentAmount } from "./support/stripe-amount";
 import { stripeDriver } from "./support/stripe-driver";
 import { TEST_CARDS } from "./stubs/cards";
 
@@ -36,6 +37,25 @@ async function expectAmount(adminPage: Page, total: string) {
   expect(digits(await paymentFact(adminPage, "Montant").textContent())).toBe(digits(total));
 }
 
+/**
+ * The amount Stripe was asked to take is the server quote, in integer cents (BR-10, BR-12): the
+ * PaymentIntent held by Stripe (fake or test mode) = the Payment row = the booking's frozen TTC
+ * total = the price the visitor was shown.
+ */
+async function expectChargedQuote(mode: StripeMode, reference: string, shownTotal: string) {
+  const amounts = await chargedAmounts(reference);
+  expect(amounts.stripePaymentIntentId).toMatch(/^pi_/);
+  const intent = await stripePaymentIntentAmount(mode, amounts.stripePaymentIntentId ?? "");
+  expect(Number.isInteger(amounts.bookingTotalTtcCents)).toBe(true);
+  expect(intent).toEqual({
+    amount: amounts.bookingTotalTtcCents,
+    currency: amounts.bookingCurrency,
+  });
+  expect(amounts.paymentAmountCents).toBe(amounts.bookingTotalTtcCents);
+  expect(amounts.paymentCurrency).toBe(amounts.bookingCurrency);
+  expect(String(amounts.bookingTotalTtcCents)).toBe(digits(shownTotal));
+}
+
 test("scénario 1 : débit hors session réussi à l'acceptation → Payé, Confirmée", async ({
   page,
   adminPage,
@@ -58,6 +78,7 @@ test("scénario 1 : débit hors session réussi à l'acceptation → Payé, Conf
   await expectStatuses(adminPage, reference, { booking: "Confirmée", payment: "Payé" });
   await expect(paymentFact(adminPage, "Tentative de débit")).toHaveText("n° 1");
   await expectAmount(adminPage, total);
+  await expectChargedQuote(stripeMode, reference, total);
 });
 
 test("scénario 1 bis : carte authentifiée à l'enregistrement, débit hors session réussi", async ({
@@ -66,7 +87,7 @@ test("scénario 1 bis : carte authentifiée à l'enregistrement, débit hors ses
   stripeMode,
 }) => {
   const card = TEST_CARDS.authenticateOnSetup;
-  await getQuote(page);
+  const total = await getQuote(page);
   const reference = await sendRequest(page, stripeDriver(stripeMode), {
     email: testEmail("setup-sca"),
     cardNumber: card.number,
@@ -75,6 +96,7 @@ test("scénario 1 bis : carte authentifiée à l'enregistrement, débit hors ses
 
   await acceptBooking(adminPage, reference);
   await expectStatuses(adminPage, reference, { booking: "Confirmée", payment: "Payé" });
+  await expectChargedQuote(stripeMode, reference, total);
 });
 
 test("scénario 2 : SCA → authentification requise, lien de régularisation → Confirmée", async ({
@@ -121,6 +143,7 @@ test("scénario 2 : SCA → authentification requise, lien de régularisation �
 
   // The webhook confirms the booking; the page itself never writes a status.
   await expectStatuses(adminPage, reference, { booking: "Confirmée", payment: "Payé" });
+  await expectChargedQuote(stripeMode, reference, total);
 
   // Once paid, the link no longer offers a payment: a fresh visitor gets the generic 404.
   const stranger = await browser.newPage();

@@ -346,6 +346,28 @@ describe("parseServerEnv", () => {
       }
     });
 
+    it("are refused when the app is not served on the local machine, even in local or ci", () => {
+      for (const APP_URL of ["https://avelys.example", "http://10.0.0.5:3000"]) {
+        for (const APP_ENV of ["local", "ci"]) {
+          expect(() =>
+            parseServerEnv({ ...valid, APP_ENV, APP_URL, E2E_FAKE_ROUTING: "true" }),
+          ).toThrowError(/E2E_FAKE_ROUTING \(custom\)/);
+          expect(() =>
+            parseServerEnv({ ...valid, APP_ENV, APP_URL, E2E_STRIPE_API_URL: stripeUrl }),
+          ).toThrowError(/E2E_STRIPE_API_URL \(custom\)/);
+        }
+      }
+      for (const APP_URL of [
+        "http://127.0.0.1:3100",
+        "http://localhost:3100",
+        "http://[::1]:3100",
+      ]) {
+        expect(
+          parseServerEnv({ ...valid, APP_URL, E2E_FAKE_ROUTING: "true" }).E2E_FAKE_ROUTING,
+        ).toBe(true);
+      }
+    });
+
     it("accept only a loopback HTTP(S) URL for the fake Stripe API", () => {
       for (const value of ["http://localhost:12111", "https://[::1]:8443/"]) {
         expect(parseServerEnv({ ...valid, E2E_STRIPE_API_URL: value }).E2E_STRIPE_API_URL).toBe(

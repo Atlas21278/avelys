@@ -28,6 +28,19 @@ const CI = Boolean(process.env.CI);
 
 export function e2eConfig(mode: StripeMode) {
   // The opt-in project without its keys: nothing is started, every scenario reports "skipped".
+  // Keys present without the `stripe listen` signing secret is a broken setup (in CI, the job
+  // step lost it): fail rather than skip.
+  if (
+    mode === "stripe-test" &&
+    process.env.STRIPE_SECRET_KEY_TEST &&
+    process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY_TEST &&
+    !process.env.STRIPE_WEBHOOK_SECRET_TEST
+  ) {
+    throw new Error(
+      "STRIPE_WEBHOOK_SECRET_TEST is missing while the Stripe test mode keys are set: run " +
+        "`stripe listen --print-secret` first (docs/process/e2e.md)",
+    );
+  }
   const runnable = mode === "fake" || stripeTestModeKeys() !== null;
 
   const app = {

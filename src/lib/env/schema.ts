@@ -138,22 +138,16 @@ export const serverEnvSchema = z
     //   instead of api.stripe.com (e2e/stubs/fake-stripe-server.ts). Loopback HTTP(S) only.
     E2E_STRIPE_API_URL: optionalString(z.url({ protocol: /^https?$/ }).refine(isLoopbackUrl)),
   })
-  // Test switches exist only where tests run (VTC-048): reported by variable name only.
+  // Test switches exist only where tests run (VTC-048): APP_ENV local or ci, and an app served
+  // on the local machine (a deployed APP_URL is never loopback). Reported by variable name only.
   .superRefine((env, context) => {
-    if (E2E_ALLOWED_APP_ENVS.has(env.APP_ENV)) return;
+    if (E2E_ALLOWED_APP_ENVS.has(env.APP_ENV) && isLoopbackUrl(env.APP_URL)) return;
+    const message = "test-only switch, refused outside APP_ENV local/ci with a loopback APP_URL";
     if (env.E2E_FAKE_ROUTING) {
-      context.addIssue({
-        code: "custom",
-        path: ["E2E_FAKE_ROUTING"],
-        message: "test-only switch, refused outside APP_ENV local or ci",
-      });
+      context.addIssue({ code: "custom", path: ["E2E_FAKE_ROUTING"], message });
     }
     if (env.E2E_STRIPE_API_URL !== undefined) {
-      context.addIssue({
-        code: "custom",
-        path: ["E2E_STRIPE_API_URL"],
-        message: "test-only switch, refused outside APP_ENV local or ci",
-      });
+      context.addIssue({ code: "custom", path: ["E2E_STRIPE_API_URL"], message });
     }
   })
   // The payment link key must not reuse the auth secret (VTC-042): a leak or a rotation of one
